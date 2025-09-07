@@ -109,6 +109,10 @@
                 <button id="request-camera" class="btn-primary w-full text-lg py-4 mb-4 rounded-xl font-medium">
                     🚀 Enable Camera Access
                 </button>
+                
+                <button onclick="location.reload()" class="w-full bg-dark-600 hover:bg-dark-500 text-white py-3 px-6 rounded-xl transition-colors text-sm mb-4">
+                    🔄 Reset Permissions
+                </button>
 
                 <div class="text-sm text-dark-400 space-y-1">
                     <p>✅ No downloads required - runs entirely in your browser</p>
@@ -158,9 +162,17 @@
                 <div class="lg:col-span-2 space-y-6">
                     <!-- Camera Feed -->
                     <div class="glass rounded-2xl p-6">
-                        <div class="aspect-video bg-dark-800 rounded-xl overflow-hidden relative">
+                        <div id="camera-container" class="aspect-video bg-dark-800 rounded-xl overflow-hidden relative cursor-crosshair">
                             <video id="camera-feed" autoplay muted playsinline class="w-full h-full object-cover"></video>
-                            <canvas id="crop-overlay" class="absolute inset-0 pointer-events-none w-full h-full"></canvas>
+                            <canvas id="crop-overlay" class="absolute inset-0 w-full h-full"></canvas>
+                            
+                            <!-- Crop Instructions Overlay -->
+                            <div id="crop-instructions" class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                <div class="glass rounded-xl p-4 text-center">
+                                    <p class="text-sm text-dark-300 mb-1">Click and drag to select text area</p>
+                                    <p class="text-xs text-dark-400">Crop area will be highlighted in blue</p>
+                                </div>
+                            </div>
                             
                             <!-- Processing State -->
                             <div id="processing-state" class="absolute inset-0 bg-black/50 flex items-center justify-center hidden">
@@ -169,6 +181,21 @@
                                     <p class="text-lg font-medium">Processing Text...</p>
                                     <p id="ocr-progress" class="text-sm text-dark-300 mt-2">0%</p>
                                 </div>
+                            </div>
+                        </div>
+
+                        <!-- Zoom Controls (directly below camera) -->
+                        <div class="flex items-center justify-between mt-4">
+                            <div class="flex items-center gap-4">
+                                <span class="text-sm font-medium text-dark-300">Zoom:</span>
+                                <input id="camera-zoom" type="range" min="1.0" max="5.0" step="0.1" value="1.0" class="w-24 h-2 bg-dark-600 rounded-lg">
+                                <span id="zoom-value" class="text-sm font-mono text-primary-400">1.0x</span>
+                            </div>
+                            <div class="flex gap-2">
+                                <button onclick="setCrop(0.25, 0.25, 0.5, 0.5)" class="bg-dark-600 hover:bg-dark-500 px-3 py-1 rounded text-xs transition-colors">Center</button>
+                                <button onclick="setCrop(0, 0, 1, 0.5)" class="bg-dark-600 hover:bg-dark-500 px-3 py-1 rounded text-xs transition-colors">Top</button>
+                                <button onclick="setCrop(0, 0.5, 1, 0.5)" class="bg-dark-600 hover:bg-dark-500 px-3 py-1 rounded text-xs transition-colors">Bottom</button>
+                                <button onclick="setCrop(0, 0, 1, 1)" class="bg-dark-600 hover:bg-dark-500 px-3 py-1 rounded text-xs transition-colors">Full</button>
                             </div>
                         </div>
 
@@ -221,40 +248,6 @@
                         </button>
                     </div>
 
-                    <!-- Crop Selector -->
-                    <div class="glass rounded-2xl p-6">
-                        <h3 class="text-lg font-semibold mb-4 text-primary-300">Crop Selection</h3>
-                        
-                        <!-- Interactive Crop Area -->
-                        <div id="crop-selector" class="relative bg-dark-700 rounded-xl aspect-video cursor-crosshair overflow-hidden mb-4">
-                            <!-- Grid -->
-                            <div class="absolute inset-0 opacity-30">
-                                <div class="absolute left-1/3 top-0 bottom-0 w-px bg-dark-500"></div>
-                                <div class="absolute left-2/3 top-0 bottom-0 w-px bg-dark-500"></div>
-                                <div class="absolute top-1/3 left-0 right-0 h-px bg-dark-500"></div>
-                                <div class="absolute top-2/3 left-0 right-0 h-px bg-dark-500"></div>
-                            </div>
-                            
-                            <!-- Crop Area -->
-                            <div id="crop-area" class="absolute border-2 border-primary-400 bg-primary-400/10 hidden" style="left: 25%; top: 25%; width: 50%; height: 50%;"></div>
-                            
-                            <!-- Instructions -->
-                            <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                <div class="text-center text-dark-400 text-sm">
-                                    <p>Click and drag to select crop area</p>
-                                    <p class="text-xs opacity-75">This area will be scanned for text</p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Preset Buttons -->
-                        <div class="grid grid-cols-2 gap-2">
-                            <button onclick="setCrop(0.25, 0.25, 0.5, 0.5)" class="bg-dark-600 hover:bg-dark-500 px-3 py-2 rounded-lg text-sm transition-colors">Center</button>
-                            <button onclick="setCrop(0, 0, 1, 0.5)" class="bg-dark-600 hover:bg-dark-500 px-3 py-2 rounded-lg text-sm transition-colors">Top Half</button>
-                            <button onclick="setCrop(0, 0.5, 1, 0.5)" class="bg-dark-600 hover:bg-dark-500 px-3 py-2 rounded-lg text-sm transition-colors">Bottom Half</button>
-                            <button onclick="setCrop(0, 0, 1, 1)" class="bg-dark-600 hover:bg-dark-500 px-3 py-2 rounded-lg text-sm transition-colors">Full Screen</button>
-                        </div>
-                    </div>
 
                     <!-- Settings -->
                     <div class="glass rounded-2xl p-6">
@@ -274,14 +267,15 @@
                             </div>
 
                             <div>
-                                <label class="block text-sm font-medium mb-2">OCR Sensitivity: <span id="sensitivity-value">70</span>%</label>
-                                <input id="sensitivity" type="range" min="10" max="100" step="5" value="70" class="w-full h-2 bg-dark-600 rounded-lg">
+                                <label class="block text-sm font-medium mb-2">OCR Sensitivity: <span id="sensitivity-value">30</span>%</label>
+                                <input id="sensitivity" type="range" min="10" max="100" step="5" value="30" class="w-full h-2 bg-dark-600 rounded-lg">
                             </div>
 
                             <div>
-                                <label class="block text-sm font-medium mb-2">Camera Zoom: <span id="zoom-value">1.0</span>x</label>
-                                <input id="camera-zoom" type="range" min="1.0" max="5.0" step="0.1" value="1.0" class="w-full h-2 bg-dark-600 rounded-lg">
+                                <label class="block text-sm font-medium mb-2">Image Threshold: <span id="threshold-value">150</span></label>
+                                <input id="threshold-slider" type="range" min="50" max="250" step="10" value="150" class="w-full h-2 bg-dark-600 rounded-lg">
                             </div>
+
                         </div>
                     </div>
                 </div>
@@ -299,17 +293,42 @@
         let currentCrop = { x: 0.25, y: 0.25, width: 0.5, height: 0.5 };
         let autoRead = true;
         let speechRate = 1.0;
-        let sensitivity = 70;
+        let sensitivity = 30; // Lowered for debugging - will catch more text
         let lastText = '';
         let cameraZoom = 1.0;
         let mediaStreamTrack = null;
+        let imageThreshold = 150;
 
         // Initialize app
         async function init() {
             console.log('🔧 Setting up event listeners...');
             setupEventListeners();
             await initOCR();
+            checkSecureContext();
             console.log('✅ CaptnReverse ready!');
+        }
+
+        function checkSecureContext() {
+            if (!window.isSecureContext) {
+                console.warn('⚠️ Not in secure context - camera may not work');
+                const setupCard = document.querySelector('#setup-screen .glass');
+                setupCard.innerHTML = `
+                    <div class="w-20 h-20 bg-yellow-600/20 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <svg class="w-10 h-10 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                        </svg>
+                    </div>
+                    <h2 class="text-2xl font-semibold mb-4 text-yellow-300">HTTPS Required</h2>
+                    <p class="text-dark-300 mb-6">Camera access requires a secure connection (HTTPS) or localhost. Please access the app via HTTPS or localhost for full functionality.</p>
+                    <div class="text-sm text-dark-400 space-y-1">
+                        <p>💡 Try: https://localhost:3000 (if you have SSL)</p>
+                        <p>🔧 Or use: http://127.0.0.1:3000</p>
+                        <p>🌐 For production: Deploy to HTTPS hosting</p>
+                    </div>
+                `;
+            } else {
+                console.log('✅ Secure context confirmed - camera should work');
+            }
         }
 
         function setupEventListeners() {
@@ -357,6 +376,13 @@
                 document.getElementById('sensitivity-value').textContent = sensitivity;
             });
 
+            // Threshold control
+            document.getElementById('threshold-slider').addEventListener('input', (e) => {
+                imageThreshold = parseInt(e.target.value);
+                document.getElementById('threshold-value').textContent = imageThreshold;
+                console.log(`🎛️ Image threshold adjusted to: ${imageThreshold}`);
+            });
+
             // Camera zoom
             document.getElementById('camera-zoom').addEventListener('input', (e) => {
                 cameraZoom = parseFloat(e.target.value);
@@ -386,21 +412,26 @@
         }
 
         function setupCropSelector() {
-            const selector = document.getElementById('crop-selector');
+            const container = document.getElementById('camera-container');
             let isDragging = false;
             let startX = 0, startY = 0;
 
-            selector.addEventListener('mousedown', (e) => {
-                const rect = selector.getBoundingClientRect();
+            container.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                const rect = container.getBoundingClientRect();
                 startX = (e.clientX - rect.left) / rect.width;
                 startY = (e.clientY - rect.top) / rect.height;
                 isDragging = true;
+                
+                // Hide instructions when user starts interacting
+                document.getElementById('crop-instructions').style.opacity = '0';
             });
 
-            selector.addEventListener('mousemove', (e) => {
+            container.addEventListener('mousemove', (e) => {
                 if (!isDragging) return;
+                e.preventDefault();
                 
-                const rect = selector.getBoundingClientRect();
+                const rect = container.getBoundingClientRect();
                 const endX = (e.clientX - rect.left) / rect.width;
                 const endY = (e.clientY - rect.top) / rect.height;
 
@@ -414,26 +445,107 @@
                 updateCropDisplay();
             });
 
-            selector.addEventListener('mouseup', () => {
+            container.addEventListener('mouseup', () => {
+                isDragging = false;
+                // Save crop to localStorage
+                localStorage.setItem('captn-reverse-crop', JSON.stringify(currentCrop));
+            });
+
+            container.addEventListener('mouseleave', () => {
                 isDragging = false;
             });
 
-            // Show default crop
-            setCrop(0.25, 0.25, 0.5, 0.5);
+            // Touch support for mobile
+            container.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                const touch = e.touches[0];
+                const rect = container.getBoundingClientRect();
+                startX = (touch.clientX - rect.left) / rect.width;
+                startY = (touch.clientY - rect.top) / rect.height;
+                isDragging = true;
+                document.getElementById('crop-instructions').style.opacity = '0';
+            });
+
+            container.addEventListener('touchmove', (e) => {
+                if (!isDragging) return;
+                e.preventDefault();
+                
+                const touch = e.touches[0];
+                const rect = container.getBoundingClientRect();
+                const endX = (touch.clientX - rect.left) / rect.width;
+                const endY = (touch.clientY - rect.top) / rect.height;
+
+                currentCrop = {
+                    x: Math.min(startX, endX),
+                    y: Math.min(startY, endY),
+                    width: Math.abs(endX - startX),
+                    height: Math.abs(endY - startY)
+                };
+
+                updateCropDisplay();
+            });
+
+            container.addEventListener('touchend', () => {
+                isDragging = false;
+                localStorage.setItem('captn-reverse-crop', JSON.stringify(currentCrop));
+            });
+
+            // Load saved crop or show default
+            const savedCrop = localStorage.getItem('captn-reverse-crop');
+            if (savedCrop) {
+                try {
+                    currentCrop = JSON.parse(savedCrop);
+                } catch (e) {
+                    setCrop(0.25, 0.25, 0.5, 0.5);
+                }
+            } else {
+                setCrop(0.25, 0.25, 0.5, 0.5);
+            }
         }
 
         function setCrop(x, y, width, height) {
             currentCrop = { x, y, width, height };
-            updateCropDisplay();
+            // Hide instructions once user selects a crop area
+            document.getElementById('crop-instructions').style.opacity = '0';
+            localStorage.setItem('captn-reverse-crop', JSON.stringify(currentCrop));
         }
 
-        function updateCropDisplay() {
-            const cropEl = document.getElementById('crop-area');
-            cropEl.style.left = `${currentCrop.x * 100}%`;
-            cropEl.style.top = `${currentCrop.y * 100}%`;
-            cropEl.style.width = `${currentCrop.width * 100}%`;
-            cropEl.style.height = `${currentCrop.height * 100}%`;
-            cropEl.classList.remove('hidden');
+        function showDebugCanvas(canvas) {
+            // Remove any existing debug canvas
+            const existing = document.getElementById('debug-canvas');
+            if (existing) existing.remove();
+            
+            // Create debug display
+            const debugCanvas = canvas.cloneNode();
+            const debugCtx = debugCanvas.getContext('2d');
+            debugCtx.drawImage(canvas, 0, 0);
+            
+            debugCanvas.id = 'debug-canvas';
+            debugCanvas.style.position = 'fixed';
+            debugCanvas.style.top = '80px';
+            debugCanvas.style.right = '10px';
+            debugCanvas.style.width = '200px';
+            debugCanvas.style.height = 'auto';
+            debugCanvas.style.border = '2px solid #0ea5e9';
+            debugCanvas.style.borderRadius = '8px';
+            debugCanvas.style.zIndex = '9999';
+            debugCanvas.style.background = 'white';
+            
+            document.body.appendChild(debugCanvas);
+            
+            // Add label
+            const label = document.createElement('div');
+            label.textContent = 'Debug: OCR Input';
+            label.style.position = 'fixed';
+            label.style.top = '60px';
+            label.style.right = '10px';
+            label.style.color = '#0ea5e9';
+            label.style.fontSize = '12px';
+            label.style.fontWeight = 'bold';
+            label.style.zIndex = '9999';
+            document.body.appendChild(label);
+            
+            console.log('🔍 Debug canvas displayed - this is what OCR sees');
         }
 
         async function initOCR() {
@@ -451,8 +563,10 @@
                 });
 
                 await ocrWorker.setParameters({
-                    tessedit_pageseg_mode: '6',
-                    tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 .,!?;:-()[]{}"\''
+                    tessedit_pageseg_mode: '3', // Fully automatic page segmentation (more flexible)
+                    tessedit_char_blacklist: '', // Remove char restrictions for debugging
+                    tessedit_ocr_engine_mode: '1', // Neural nets LSTM engine only
+                    preserve_interword_spaces: '1' // Better word spacing
                 });
 
                 console.log('✅ OCR Worker ready');
@@ -464,35 +578,86 @@
         async function requestCamera() {
             try {
                 console.log('📸 Requesting camera permission...');
+                
+                // First check if camera is already available
+                if (stream) {
+                    console.log('📷 Camera already active, proceeding to main app');
+                    showMainApp();
+                    return;
+                }
+                
+                // Request camera permission with detailed constraints
                 stream = await navigator.mediaDevices.getUserMedia({
                     video: {
-                        facingMode: 'environment',
+                        facingMode: { ideal: 'environment' },
                         width: { ideal: 1920, min: 640 },
                         height: { ideal: 1080, min: 480 },
-                        zoom: { ideal: 1.0, min: 1.0, max: 5.0 }
-                    }
+                        frameRate: { ideal: 30, min: 15 }
+                    },
+                    audio: false
                 });
 
-                const video = document.getElementById('camera-feed');
-                video.srcObject = stream;
-                
-                // Get camera track for zoom control
-                mediaStreamTrack = stream.getVideoTracks()[0];
-                
-                // Start crop overlay rendering
-                startCropOverlay();
-                
-                // Hide setup, show main app
-                document.getElementById('setup-screen').classList.add('hidden');
-                document.getElementById('main-app').classList.remove('hidden');
-                
-                console.log('✅ Camera access granted!');
-                updateStatus('Camera active', 'bg-green-400');
+                console.log('✅ Camera permission granted!');
+                showMainApp();
 
             } catch (error) {
                 console.error('❌ Camera access denied:', error);
-                alert('Camera access required for CaptnReverse to function. Please allow camera access and try again.');
+                
+                let errorMessage = 'Camera access is required for CaptnReverse to function.';
+                
+                if (error.name === 'NotAllowedError') {
+                    errorMessage = 'Camera permission was denied. Please refresh the page and allow camera access.';
+                } else if (error.name === 'NotFoundError') {
+                    errorMessage = 'No camera found. Please connect a camera and try again.';
+                } else if (error.name === 'NotSupportedError') {
+                    errorMessage = 'Camera is not supported in this browser. Try Chrome or Edge.';
+                } else {
+                    errorMessage = `Camera error: ${error.message}`;
+                }
+                
+                // Update UI to show error
+                const setupCard = document.querySelector('#setup-screen .glass');
+                setupCard.innerHTML = `
+                    <div class="w-20 h-20 bg-red-600/20 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <svg class="w-10 h-10 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                        </svg>
+                    </div>
+                    <h2 class="text-2xl font-semibold mb-4 text-red-300">Camera Access Required</h2>
+                    <p class="text-dark-300 mb-6">${errorMessage}</p>
+                    <button id="retry-camera" class="btn-primary w-full text-lg py-4 mb-4">
+                        🔄 Try Again
+                    </button>
+                    <div class="text-sm text-dark-400 space-y-1">
+                        <p>💡 Make sure you're using HTTPS or localhost</p>
+                        <p>🔒 Your privacy is protected - all processing is local</p>
+                        <p>🌐 Works best in Chrome, Edge, or Firefox</p>
+                    </div>
+                `;
+                
+                // Add retry event listener
+                document.getElementById('retry-camera').addEventListener('click', requestCamera);
             }
+        }
+
+        function showMainApp() {
+            const video = document.getElementById('camera-feed');
+            video.srcObject = stream;
+            
+            // Get camera track for zoom control
+            mediaStreamTrack = stream.getVideoTracks()[0];
+            
+            // Wait for video to start playing
+            video.onloadedmetadata = () => {
+                console.log('📹 Video metadata loaded, starting overlay');
+                startCropOverlay();
+            };
+            
+            // Hide setup, show main app
+            document.getElementById('setup-screen').classList.add('hidden');
+            document.getElementById('main-app').classList.remove('hidden');
+            
+            updateStatus('Camera active', 'bg-green-400');
         }
 
         async function applyCameraZoom() {
@@ -625,6 +790,30 @@
                 cropCanvas.width = width;
                 cropCanvas.height = height;
                 cropCtx.drawImage(canvas, x, y, width, height, 0, 0, width, height);
+
+                // *** CRITICAL: Image preprocessing for OCR ***
+                const imageData = cropCtx.getImageData(0, 0, cropCanvas.width, cropCanvas.height);
+                const data = imageData.data;
+
+                // Convert to grayscale and apply binarization (thresholding)
+                for (let i = 0; i < data.length; i += 4) {
+                    // Grayscale conversion (simple average)
+                    const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+                    
+                    // Binarization - use adjustable threshold for different lighting conditions  
+                    const value = avg > imageThreshold ? 255 : 0;
+                    
+                    data[i] = value;     // Red
+                    data[i + 1] = value; // Green  
+                    data[i + 2] = value; // Blue
+                    // Alpha channel (data[i + 3]) remains unchanged
+                }
+                
+                // Apply the processed image data back to canvas
+                cropCtx.putImageData(imageData, 0, 0);
+
+                // DEBUG: Show processed crop image (remove in production)
+                showDebugCanvas(cropCanvas);
 
                 // Show processing state
                 document.getElementById('processing-state').classList.remove('hidden');
