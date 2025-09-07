@@ -71,7 +71,7 @@
     </header>
 
     <!-- Main Content -->
-    <main class="pt-20 min-h-screen bg-gradient-to-br from-dark-900 via-dark-800 to-dark-900">
+    <main class="pt-20 min-h-screen max-h-screen overflow-y-auto bg-gradient-to-br from-dark-900 via-dark-800 to-dark-900">
         <!-- Setup Screen -->
         <div id="setup-screen" class="container mx-auto px-4 py-8 max-w-4xl">
             <!-- Header -->
@@ -156,8 +156,8 @@
         </div>
 
         <!-- Main App (hidden initially) -->
-        <div id="main-app" class="container mx-auto px-4 py-6 max-w-6xl hidden">
-            <div class="grid lg:grid-cols-3 gap-6">
+        <div id="main-app" class="container mx-auto px-4 py-4 max-w-6xl h-[calc(100vh-5rem)] hidden">
+            <div class="grid lg:grid-cols-3 gap-4 h-full">
                 <!-- Camera View -->
                 <div class="lg:col-span-2 space-y-6">
                     <!-- Camera Feed -->
@@ -239,7 +239,7 @@
                 </div>
 
                 <!-- Controls Panel -->
-                <div class="space-y-6">
+                <div class="space-y-4 overflow-y-auto">
                     <!-- Monitoring Control -->
                     <div class="glass rounded-2xl p-6">
                         <h3 class="text-lg font-semibold mb-4 text-primary-300">Control Center</h3>
@@ -511,31 +511,41 @@
         }
 
         function showDebugCanvas(canvas) {
-            // Remove any existing debug canvas
-            const existing = document.getElementById('debug-canvas');
-            if (existing) existing.remove();
+            // Remove any existing debug elements
+            const existingCanvas = document.getElementById('debug-canvas');
+            const existingLabel = document.getElementById('debug-label');
+            const existingText = document.getElementById('debug-text');
+            if (existingCanvas) existingCanvas.remove();
+            if (existingLabel) existingLabel.remove();
+            if (existingText) existingText.remove();
             
-            // Create debug display
-            const debugCanvas = canvas.cloneNode();
+            // Create debug display - this should show ONLY the cropped area
+            const debugCanvas = document.createElement('canvas');
             const debugCtx = debugCanvas.getContext('2d');
+            
+            // Copy the processed canvas exactly as it will be sent to OCR
+            debugCanvas.width = canvas.width;
+            debugCanvas.height = canvas.height;
             debugCtx.drawImage(canvas, 0, 0);
             
             debugCanvas.id = 'debug-canvas';
             debugCanvas.style.position = 'fixed';
             debugCanvas.style.top = '80px';
             debugCanvas.style.right = '10px';
-            debugCanvas.style.width = '200px';
-            debugCanvas.style.height = 'auto';
+            debugCanvas.style.maxWidth = '200px';
+            debugCanvas.style.maxHeight = '150px';
             debugCanvas.style.border = '2px solid #0ea5e9';
             debugCanvas.style.borderRadius = '8px';
             debugCanvas.style.zIndex = '9999';
             debugCanvas.style.background = 'white';
+            debugCanvas.style.imageRendering = 'pixelated'; // Show crisp pixels
             
             document.body.appendChild(debugCanvas);
             
             // Add label
             const label = document.createElement('div');
-            label.textContent = 'Debug: OCR Input';
+            label.id = 'debug-label';
+            label.textContent = `Debug: OCR Input (${canvas.width}×${canvas.height}px)`;
             label.style.position = 'fixed';
             label.style.top = '60px';
             label.style.right = '10px';
@@ -543,9 +553,38 @@
             label.style.fontSize = '12px';
             label.style.fontWeight = 'bold';
             label.style.zIndex = '9999';
+            label.style.textShadow = '0 0 4px black';
             document.body.appendChild(label);
             
-            console.log('🔍 Debug canvas displayed - this is what OCR sees');
+            // Add text display area for debug
+            const textDisplay = document.createElement('div');
+            textDisplay.id = 'debug-text';
+            textDisplay.style.position = 'fixed';
+            textDisplay.style.top = '250px';
+            textDisplay.style.right = '10px';
+            textDisplay.style.maxWidth = '200px';
+            textDisplay.style.background = 'rgba(15, 23, 42, 0.9)';
+            textDisplay.style.color = '#0ea5e9';
+            textDisplay.style.padding = '8px';
+            textDisplay.style.borderRadius = '8px';
+            textDisplay.style.fontSize = '11px';
+            textDisplay.style.border = '1px solid #0ea5e9';
+            textDisplay.style.zIndex = '9999';
+            textDisplay.textContent = 'Waiting for OCR result...';
+            document.body.appendChild(textDisplay);
+            
+            console.log(`🔍 Debug canvas: ${canvas.width}×${canvas.height}px - this exact image goes to OCR`);
+        }
+
+        function updateDebugText(text, confidence) {
+            const debugText = document.getElementById('debug-text');
+            if (debugText) {
+                debugText.innerHTML = `
+                    <strong>OCR Result:</strong><br>
+                    "${text}"<br>
+                    <small>Confidence: ${Math.round(confidence)}%</small>
+                `;
+            }
         }
 
         async function initOCR() {
@@ -563,7 +602,7 @@
                 });
 
                 await ocrWorker.setParameters({
-                    tessedit_pageseg_mode: '3', // Fully automatic page segmentation (more flexible)
+                    tessedit_pageseg_mode: '6', // Single uniform block of text (better for focused crops)
                     tessedit_char_blacklist: '', // Remove char restrictions for debugging
                     tessedit_ocr_engine_mode: '1', // Neural nets LSTM engine only
                     preserve_interword_spaces: '1' // Better word spacing
@@ -778,18 +817,54 @@
 
                 ctx.drawImage(video, 0, 0);
 
-                // Apply crop
+                // Apply crop based on video dimensions and crop area
                 const cropCanvas = document.createElement('canvas');
                 const cropCtx = cropCanvas.getContext('2d');
                 
-                const x = currentCrop.x * canvas.width;
-                const y = currentCrop.y * canvas.height;
-                const width = currentCrop.width * canvas.width;
-                const height = currentCrop.height * canvas.height;
+                // Get actual video element dimensions for proper crop calculation
+                const videoEl = document.getElementById('camera-feed');
+                const videoRect = videoEl.getBoundingClientRect();
+                
+                // Calculate crop coordinates based on video's actual dimensions
+                const scaleX = canvas.width / videoRect.width;
+                const scaleY = canvas.height / videoRect.height;
+                
+                const cropX = currentCrop.x * canvas.width;
+                const cropY = currentCrop.y * canvas.height;  
+                const cropWidth = currentCrop.width * canvas.width;
+                const cropHeight = currentCrop.height * canvas.height;
 
-                cropCanvas.width = width;
-                cropCanvas.height = height;
-                cropCtx.drawImage(canvas, x, y, width, height, 0, 0, width, height);
+                console.log(`🔲 Crop area: x=${Math.round(cropX)}, y=${Math.round(cropY)}, w=${Math.round(cropWidth)}, h=${Math.round(cropHeight)}`);
+                console.log(`📐 Video: ${canvas.width}x${canvas.height}, Display: ${Math.round(videoRect.width)}x${Math.round(videoRect.height)}`);
+
+                // Set crop canvas to exact crop size
+                cropCanvas.width = Math.max(cropWidth, 50); // Minimum 50px width
+                cropCanvas.height = Math.max(cropHeight, 50); // Minimum 50px height
+                
+                // Draw only the cropped portion
+                cropCtx.drawImage(canvas, cropX, cropY, cropWidth, cropHeight, 0, 0, cropCanvas.width, cropCanvas.height);
+
+                // OPTIMIZATION: Rescale cropCanvas for optimal OCR resolution (20-40px character height)
+                const OCR_TARGET_HEIGHT = 800; // Optimal height for Tesseract.js accuracy
+                if (cropCanvas.height > 0 && cropCanvas.height !== OCR_TARGET_HEIGHT) {
+                    const aspectRatio = cropCanvas.width / cropCanvas.height;
+                    const scaledWidth = OCR_TARGET_HEIGHT * aspectRatio;
+                    
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = scaledWidth;
+                    tempCanvas.height = OCR_TARGET_HEIGHT;
+                    const tempCtx = tempCanvas.getContext('2d');
+                    
+                    // Scale the cropped image to optimal resolution
+                    tempCtx.drawImage(cropCanvas, 0, 0, tempCanvas.width, tempCanvas.height);
+                    
+                    // Copy scaled image back to cropCanvas
+                    cropCanvas.width = tempCanvas.width;
+                    cropCanvas.height = tempCanvas.height;
+                    cropCtx.drawImage(tempCanvas, 0, 0);
+                    
+                    console.log(`📏 Scaled crop to optimal OCR size: ${Math.round(scaledWidth)}×${OCR_TARGET_HEIGHT}px`);
+                }
 
                 // *** CRITICAL: Image preprocessing for OCR ***
                 const imageData = cropCtx.getImageData(0, 0, cropCanvas.width, cropCanvas.height);
@@ -825,9 +900,15 @@
                 // Hide processing state
                 document.getElementById('processing-state').classList.add('hidden');
 
-                console.log(`🔍 OCR Result: "${result.data.text.trim()}" (confidence: ${Math.round(result.data.confidence)}%)`);
+                const ocrText = result.data.text.trim();
+                const ocrConfidence = result.data.confidence;
                 
-                if (result.data.confidence > sensitivity) {
+                console.log(`🔍 OCR Result: "${ocrText}" (confidence: ${Math.round(ocrConfidence)}%)`);
+                
+                // Update debug display with OCR result
+                updateDebugText(ocrText, ocrConfidence);
+                
+                if (ocrConfidence > sensitivity) {
                     const text = result.data.text.trim();
                     if (text && text.length > 2 && text !== lastText) {
                         displayText(text, result.data.confidence, processingTime);
