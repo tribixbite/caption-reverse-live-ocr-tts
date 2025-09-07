@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CaptnReverse - Advanced OCR & TTS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#f0f9ff', 100: '#e0f2fe', 200: '#bae6fd', 300: '#7dd3fc',
+                            400: '#38bdf8', 500: '#0ea5e9', 600: '#0284c7', 700: '#0369a1',
+                            800: '#075985', 900: '#0c4a6e', 950: '#082f49'
+                        },
+                        dark: {
+                            50: '#f8fafc', 100: '#f1f5f9', 200: '#e2e8f0', 300: '#cbd5e1',
+                            400: '#94a3b8', 500: '#64748b', 600: '#475569', 700: '#334155',
+                            800: '#1e293b', 900: '#0f172a', 950: '#020617'
+                        }
+                    },
+                    fontFamily: {
+                        mono: ['JetBrains Mono', 'Fira Code', 'Menlo', 'Monaco', 'Consolas', 'monospace']
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .glass {
+            background: rgba(30, 41, 59, 0.5);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(51, 65, 85, 0.5);
+        }
+        .card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #0284c7 0%, #0ea5e9 100%);
+            transition: all 0.2s ease;
+        }
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #0369a1 0%, #0284c7 100%);
+            transform: translateY(-1px);
+            box-shadow: 0 10px 20px rgba(14, 165, 233, 0.25);
+        }
+    </style>
+</head>
+<body class="bg-dark-900 text-white min-h-screen font-mono">
+    <div id="app"></div>
+
+    <script type="module">
+        // Modern CaptnReverse Web App
+        class CaptnReverse {
+            constructor() {
+                this.isMonitoring = false;
+                this.lastReadText = '';
+                this.cropArea = null;
+                this.stream = null;
+                this.ocrWorker = null;
+                this.settings = this.loadSettings();
+                this.init();
+            }
+
+            async init() {
+                this.setupUI();
+                await this.initOCR();
+                this.setupEventListeners();
+            }
+
+            loadSettings() {
+                try {
+                    const stored = localStorage.getItem('captn-reverse-settings');
+                    return stored ? { ...this.defaultSettings(), ...JSON.parse(stored) } : this.defaultSettings();
+                } catch {
+                    return this.defaultSettings();
+                }
+            }
+
+            defaultSettings() {
+                return {
+                    autoRead: true,
+                    readingDelay: 2000,
+                    sensitivity: 70,
+                    speechRate: 1.0,
+                    speechPitch: 1.0,
+                    speechVolume: 1.0,
+                    cameraWidth: 1920,
+                    cameraHeight: 1080,
+                    facingMode: 'environment'
+                };
+            }
+
+            saveSettings() {
+                localStorage.setItem('captn-reverse-settings', JSON.stringify(this.settings));
+            }
+
+            setupUI() {
+                document.getElementById('app').innerHTML = `
+                    <!-- Status Bar -->
+                    <header class="glass fixed top-0 left-0 right-0 z-50 border-b border-dark-700/50">
+                        <div class="container mx-auto px-4 h-16 flex items-center justify-between">
+                            <div class="flex items-center gap-4">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center">
+                                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                        </svg>
+                                    </div>
+                                    <span class="font-semibold text-lg">CaptnReverse</span>
+                                </div>
+                                <div class="hidden md:flex items-center gap-2">
+                                    <div id="status-dot" class="w-2 h-2 rounded-full bg-dark-500"></div>
+                                    <span id="status-text" class="text-sm text-dark-300">Ready</span>
+                                </div>
+                            </div>
+                            <button id="settings-btn" class="p-2 hover:bg-dark-700 rounded-lg transition-colors">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                </svg>
+                            </button>
+                        </div>
+                    </header>
+
+                    <!-- Main Content -->
+                    <main class="pt-20 min-h-screen bg-gradient-to-br from-dark-900 via-dark-800 to-dark-900">
+                        <div class="container mx-auto px-4 py-6 max-w-6xl">
+                            <div class="grid lg:grid-cols-3 gap-6">
+                                <!-- Camera View -->
+                                <div class="lg:col-span-2 space-y-6">
+                                    <!-- Camera Feed -->
+                                    <div class="card rounded-2xl p-6">
+                                        <div class="aspect-video bg-dark-800 rounded-xl overflow-hidden relative">
+                                            <video id="camera-feed" autoplay muted playsinline class="w-full h-full object-cover hidden"></video>
+                                            <canvas id="crop-overlay" class="absolute inset-0 pointer-events-none hidden"></canvas>
+                                            
+                                            <!-- Camera Inactive State -->
+                                            <div id="camera-inactive" class="absolute inset-0 bg-dark-800 flex items-center justify-center">
+                                                <div class="text-center">
+                                                    <div class="w-16 h-16 bg-dark-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                                                        <svg class="w-8 h-8 text-dark-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                        </svg>
+                                                    </div>
+                                                    <p class="text-dark-300 text-lg mb-2">Camera Ready</p>
+                                                    <p class="text-dark-500 text-sm">Click Start Monitoring to begin text recognition</p>
+                                                </div>
+                                            </div>
+
+                                            <!-- Processing State -->
+                                            <div id="processing-state" class="absolute inset-0 bg-black/50 flex items-center justify-center hidden">
+                                                <div class="glass rounded-xl p-6 text-center">
+                                                    <div class="w-12 h-12 border-3 border-primary-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                                                    <p class="text-lg font-medium">Processing Text...</p>
+                                                    <p id="ocr-progress" class="text-sm text-dark-300 mt-2">0%</p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Camera Controls -->
+                                        <div class="flex items-center justify-between mt-6">
+                                            <div class="flex items-center gap-2">
+                                                <div id="camera-status-dot" class="w-2 h-2 rounded-full bg-dark-500"></div>
+                                                <span id="camera-status-text" class="text-sm text-dark-300">Camera ready</span>
+                                            </div>
+                                            
+                                            <div class="flex gap-3">
+                                                <button id="read-now-btn" class="btn-primary px-4 py-2 rounded-lg text-sm font-medium">
+                                                    📖 Read Now
+                                                </button>
+                                                <button id="stop-speech-btn" class="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors hidden">
+                                                    🔇 Stop Speech
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Detected Text Display -->
+                                    <div id="text-display" class="card rounded-2xl p-6 hidden">
+                                        <div class="flex items-start justify-between mb-4">
+                                            <h3 class="text-lg font-semibold text-primary-300">Detected Text</h3>
+                                            <button id="speak-text-btn" class="p-2 hover:bg-dark-700 rounded-lg transition-colors">
+                                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072M18.364 5.636a9 9 0 010 12.728M7 18h3l3.586-3.586a1 1 0 01.707-.293V9.879a1 1 0 00-.707-.293L10 6H7v12z" />
+                                                </svg>
+                                            </button>
+                                        </div>
+                                        <p id="detected-text" class="text-dark-100 leading-relaxed text-lg"></p>
+                                        <div class="mt-4 text-sm text-dark-400">
+                                            <span>Confidence: <span id="confidence-score">0</span>%</span>
+                                            <span class="ml-4">Processing time: <span id="processing-time">0</span>ms</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Controls Panel -->
+                                <div class="space-y-6">
+                                    <!-- Monitoring Control -->
+                                    <div class="card rounded-2xl p-6">
+                                        <h3 class="text-lg font-semibold mb-4 text-primary-300">Control Center</h3>
+                                        <button id="monitor-toggle" class="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-4 px-6 rounded-xl transition-all duration-200 transform hover:scale-105">
+                                            ▶️ Start Monitoring
+                                        </button>
+                                    </div>
+
+                                    <!-- Crop Selector -->
+                                    <div class="card rounded-2xl p-6">
+                                        <h3 class="text-lg font-semibold mb-4 text-primary-300">Crop Selection</h3>
+                                        
+                                        <!-- Interactive Crop Area -->
+                                        <div id="crop-selector" class="relative bg-dark-700 rounded-xl aspect-video cursor-crosshair overflow-hidden mb-4">
+                                            <!-- Grid Lines -->
+                                            <div class="absolute inset-0 opacity-30">
+                                                <div class="absolute left-1/3 top-0 bottom-0 w-px bg-dark-500"></div>
+                                                <div class="absolute left-2/3 top-0 bottom-0 w-px bg-dark-500"></div>
+                                                <div class="absolute top-1/3 left-0 right-0 h-px bg-dark-500"></div>
+                                                <div class="absolute top-2/3 left-0 right-0 h-px bg-dark-500"></div>
+                                            </div>
+                                            
+                                            <!-- Crop Area -->
+                                            <div id="crop-area" class="absolute border-2 border-primary-400 bg-primary-400/10 hidden"></div>
+                                            
+                                            <!-- Instructions -->
+                                            <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                                <div class="text-center text-dark-400 text-sm">
+                                                    <p>Click and drag to select crop area</p>
+                                                    <p class="text-xs opacity-75">This area will be scanned for text</p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Preset Buttons -->
+                                        <div class="grid grid-cols-2 gap-2 mb-4">
+                                            <button data-preset="center" class="preset-btn bg-dark-600 hover:bg-dark-500 px-3 py-2 rounded-lg text-sm transition-colors">Center</button>
+                                            <button data-preset="top" class="preset-btn bg-dark-600 hover:bg-dark-500 px-3 py-2 rounded-lg text-sm transition-colors">Top Half</button>
+                                            <button data-preset="bottom" class="preset-btn bg-dark-600 hover:bg-dark-500 px-3 py-2 rounded-lg text-sm transition-colors">Bottom Half</button>
+                                            <button data-preset="full" class="preset-btn bg-dark-600 hover:bg-dark-500 px-3 py-2 rounded-lg text-sm transition-colors">Full Screen</button>
+                                        </div>
+
+                                        <!-- Crop Info -->
+                                        <div id="crop-info" class="text-sm text-dark-300 hidden">
+                                            <div class="flex justify-between">
+                                                <span>Position: <span id="crop-position">0%, 0%</span></span>
+                                                <span>Size: <span id="crop-size">0% × 0%</span></span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Quick Settings -->
+                                    <div class="card rounded-2xl p-6">
+                                        <h3 class="text-lg font-semibold mb-4 text-primary-300">Quick Settings</h3>
+                                        
+                                        <div class="space-y-4">
+                                            <div class="flex items-center justify-between">
+                                                <label class="text-sm font-medium">Auto Read</label>
+                                                <button id="auto-read-toggle" class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 bg-dark-600">
+                                                    <span class="inline-block h-4 w-4 transform rounded-full bg-white transition translate-x-1"></span>
+                                                </button>
+                                            </div>
+
+                                            <div>
+                                                <label class="block text-sm font-medium mb-2">Reading Delay: <span id="delay-value">${this.settings.readingDelay}</span>ms</label>
+                                                <input id="reading-delay" type="range" min="500" max="5000" step="100" value="${this.settings.readingDelay}" class="w-full h-2 bg-dark-600 rounded-lg">
+                                            </div>
+
+                                            <div>
+                                                <label class="block text-sm font-medium mb-2">OCR Sensitivity: <span id="sensitivity-value">${this.settings.sensitivity}</span>%</label>
+                                                <input id="sensitivity" type="range" min="10" max="100" step="5" value="${this.settings.sensitivity}" class="w-full h-2 bg-dark-600 rounded-lg">
+                                            </div>
+
+                                            <div>
+                                                <label class="block text-sm font-medium mb-2">Speech Rate: <span id="rate-value">${this.settings.speechRate}</span>x</label>
+                                                <input id="speech-rate" type="range" min="0.5" max="2.0" step="0.1" value="${this.settings.speechRate}" class="w-full h-2 bg-dark-600 rounded-lg">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Permission Setup Screen -->
+                            <div id="setup-screen" class="fixed inset-0 bg-dark-900 flex items-center justify-center">
+                                <div class="text-center max-w-2xl px-6">
+                                    <div class="inline-flex items-center gap-3 mb-6">
+                                        <div class="w-16 h-16 bg-primary-600 rounded-2xl flex items-center justify-center">
+                                            <svg class="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                            </svg>
+                                        </div>
+                                        <h1 class="text-5xl font-bold bg-gradient-to-r from-primary-400 to-primary-600 bg-clip-text text-transparent">
+                                            CaptnReverse
+                                        </h1>
+                                    </div>
+                                    
+                                    <p class="text-dark-300 text-xl mb-8 max-w-xl mx-auto">
+                                        Advanced OCR and Text-to-Speech powered by cutting-edge browser APIs
+                                    </p>
+
+                                    <div class="card rounded-2xl p-8 max-w-lg mx-auto">
+                                        <div class="w-20 h-20 bg-primary-600/20 rounded-full flex items-center justify-center mx-auto mb-6">
+                                            <svg class="w-10 h-10 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                                            </svg>
+                                        </div>
+                                        
+                                        <h2 class="text-2xl font-semibold mb-4">Camera Access Required</h2>
+                                        <p class="text-dark-300 mb-6">
+                                            CaptnReverse needs camera access to read text from your environment. 
+                                            Your privacy is protected - all processing happens locally in your browser.
+                                        </p>
+
+                                        <button id="request-camera" class="btn-primary w-full text-lg py-4 mb-4">
+                                            🚀 Enable Camera Access
+                                        </button>
+
+                                        <div class="text-sm text-dark-400 space-y-1">
+                                            <p>✅ No downloads required</p>
+                                            <p>🔒 Your data never leaves your device</p>  
+                                            <p>🚀 Powered by WebAssembly & modern APIs</p>
+                                        </div>
+                                    </div>
+
+                                    <!-- Feature Grid -->
+                                    <div class="grid md:grid-cols-3 gap-6 mt-12">
+                                        <div class="glass rounded-2xl p-6">
+                                            <div class="w-12 h-12 bg-primary-600/20 rounded-xl flex items-center justify-center mx-auto mb-4">
+                                                <svg class="w-6 h-6 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                                                </svg>
+                                            </div>
+                                            <h3 class="font-semibold mb-2 text-white">Advanced OCR</h3>
+                                            <p class="text-dark-300 text-sm">Tesseract.js with WebAssembly acceleration</p>
+                                        </div>
+
+                                        <div class="glass rounded-2xl p-6">
+                                            <div class="w-12 h-12 bg-primary-600/20 rounded-xl flex items-center justify-center mx-auto mb-4">
+                                                <svg class="w-6 h-6 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                                                </svg>
+                                            </div>
+                                            <h3 class="font-semibold mb-2 text-white">Natural TTS</h3>
+                                            <p class="text-dark-300 text-sm">Web Speech API with voice selection</p>
+                                        </div>
+
+                                        <div class="glass rounded-2xl p-6">
+                                            <div class="w-12 h-12 bg-primary-600/20 rounded-xl flex items-center justify-center mx-auto mb-4">
+                                                <svg class="w-6 h-6 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                                </svg>
+                                            </div>
+                                            <h3 class="font-semibold mb-2 text-white">Real-time</h3>
+                                            <p class="text-dark-300 text-sm">Live processing with intelligent cropping</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </main>
+                `;
+
+                // Set initial states
+                this.updateAutoReadToggle();
+                if (this.cropArea) {
+                    this.updateCropDisplay();
+                }
+            }
+
+            updateAutoReadToggle() {
+                const toggle = document.getElementById('auto-read-toggle');
+                const thumb = toggle.querySelector('span');
+                
+                if (this.settings.autoRead) {
+                    toggle.classList.remove('bg-dark-600');
+                    toggle.classList.add('bg-primary-600');
+                    thumb.classList.remove('translate-x-1');
+                    thumb.classList.add('translate-x-6');
+                } else {
+                    toggle.classList.remove('bg-primary-600');
+                    toggle.classList.add('bg-dark-600');
+                    thumb.classList.remove('translate-x-6');
+                    thumb.classList.add('translate-x-1');
+                }
+            }
+
+            async initOCR() {
+                try {
+                    this.ocrWorker = await Tesseract.createWorker('eng', 1, {
+                        logger: ({ status, progress }) => {
+                            if (status === 'recognizing text') {
+                                const progressEl = document.getElementById('ocr-progress');
+                                if (progressEl) {
+                                    progressEl.textContent = \`\${Math.round(progress * 100)}%\`;
+                                }
+                            }
+                        }
+                    });
+
+                    // Optimize for speed and accuracy
+                    await this.ocrWorker.setParameters({
+                        tessedit_pageseg_mode: '6', // Uniform block of text
+                        tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 .,!?;:-()[]{}"\''
+                    });
+
+                    console.log('🤖 OCR Worker initialized successfully');
+                } catch (error) {
+                    console.error('OCR initialization failed:', error);
+                    this.showError('Failed to initialize OCR engine');
+                }
+            }
+
+            setupEventListeners() {
+                // Camera permission request
+                document.getElementById('request-camera').addEventListener('click', async () => {
+                    await this.requestCameraPermission();
+                });
+
+                // Monitoring toggle
+                document.getElementById('monitor-toggle').addEventListener('click', () => {
+                    this.toggleMonitoring();
+                });
+
+                // Read now button
+                document.getElementById('read-now-btn').addEventListener('click', () => {
+                    this.readTextNow();
+                });
+
+                // Stop speech button
+                document.getElementById('stop-speech-btn').addEventListener('click', () => {
+                    speechSynthesis.cancel();
+                    this.updateSpeechButton(false);
+                });
+
+                // Speak text button
+                document.getElementById('speak-text-btn').addEventListener('click', () => {
+                    const text = document.getElementById('detected-text').textContent;
+                    if (text) this.speak(text);
+                });
+
+                // Auto-read toggle
+                document.getElementById('auto-read-toggle').addEventListener('click', () => {
+                    this.settings.autoRead = !this.settings.autoRead;
+                    this.updateAutoReadToggle();
+                    this.saveSettings();
+                });
+
+                // Settings controls
+                document.getElementById('reading-delay').addEventListener('input', (e) => {
+                    this.settings.readingDelay = parseInt(e.target.value);
+                    document.getElementById('delay-value').textContent = e.target.value;
+                    this.saveSettings();
+                });
+
+                document.getElementById('sensitivity').addEventListener('input', (e) => {
+                    this.settings.sensitivity = parseInt(e.target.value);
+                    document.getElementById('sensitivity-value').textContent = e.target.value;
+                    this.saveSettings();
+                });
+
+                document.getElementById('speech-rate').addEventListener('input', (e) => {
+                    this.settings.speechRate = parseFloat(e.target.value);
+                    document.getElementById('rate-value').textContent = e.target.value;
+                    this.saveSettings();
+                });
+
+                // Crop selector
+                this.setupCropSelector();
+
+                // Preset crop buttons
+                document.querySelectorAll('.preset-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const preset = e.target.getAttribute('data-preset');
+                        this.applyPresetCrop(preset);
+                    });
+                });
+            }
+
+            setupCropSelector() {
+                const selector = document.getElementById('crop-selector');
+                let isDragging = false;
+                let startX = 0, startY = 0;
+
+                selector.addEventListener('mousedown', (e) => {
+                    const rect = selector.getBoundingClientRect();
+                    startX = (e.clientX - rect.left) / rect.width;
+                    startY = (e.clientY - rect.top) / rect.height;
+                    isDragging = true;
+                });
+
+                selector.addEventListener('mousemove', (e) => {
+                    if (!isDragging) return;
+                    
+                    const rect = selector.getBoundingClientRect();
+                    const endX = (e.clientX - rect.left) / rect.width;
+                    const endY = (e.clientY - rect.top) / rect.height;
+
+                    this.cropArea = {
+                        x: Math.min(startX, endX),
+                        y: Math.min(startY, endY),
+                        width: Math.abs(endX - startX),
+                        height: Math.abs(endY - startY)
+                    };
+
+                    this.updateCropDisplay();
+                });
+
+                selector.addEventListener('mouseup', () => {
+                    isDragging = false;
+                    if (this.cropArea) {
+                        localStorage.setItem('captn-reverse-crop', JSON.stringify(this.cropArea));
+                    }
+                });
+            }
+
+            updateCropDisplay() {
+                if (!this.cropArea) return;
+
+                const cropEl = document.getElementById('crop-area');
+                const infoEl = document.getElementById('crop-info');
+                const positionEl = document.getElementById('crop-position');
+                const sizeEl = document.getElementById('crop-size');
+
+                cropEl.style.left = \`\${this.cropArea.x * 100}%\`;
+                cropEl.style.top = \`\${this.cropArea.y * 100}%\`;
+                cropEl.style.width = \`\${this.cropArea.width * 100}%\`;
+                cropEl.style.height = \`\${this.cropArea.height * 100}%\`;
+                
+                cropEl.classList.remove('hidden');
+                infoEl.classList.remove('hidden');
+                
+                positionEl.textContent = \`\${Math.round(this.cropArea.x * 100)}%, \${Math.round(this.cropArea.y * 100)}%\`;
+                sizeEl.textContent = \`\${Math.round(this.cropArea.width * 100)}% × \${Math.round(this.cropArea.height * 100)}%\`;
+            }
+
+            applyPresetCrop(preset) {
+                const presets = {
+                    center: { x: 0.25, y: 0.25, width: 0.5, height: 0.5 },
+                    top: { x: 0, y: 0, width: 1, height: 0.5 },
+                    bottom: { x: 0, y: 0.5, width: 1, height: 0.5 },
+                    full: { x: 0, y: 0, width: 1, height: 1 }
+                };
+
+                this.cropArea = presets[preset];
+                this.updateCropDisplay();
+                localStorage.setItem('captn-reverse-crop', JSON.stringify(this.cropArea));
+            }
+
+            async requestCameraPermission() {
+                try {
+                    this.stream = await navigator.mediaDevices.getUserMedia({
+                        video: {
+                            facingMode: this.settings.facingMode,
+                            width: { ideal: this.settings.cameraWidth },
+                            height: { ideal: this.settings.cameraHeight }
+                        }
+                    });
+
+                    const videoEl = document.getElementById('camera-feed');
+                    videoEl.srcObject = this.stream;
+                    
+                    // Hide setup screen, show main app
+                    document.getElementById('setup-screen').classList.add('hidden');
+                    videoEl.classList.remove('hidden');
+                    document.getElementById('camera-inactive').classList.add('hidden');
+                    document.getElementById('crop-overlay').classList.remove('hidden');
+
+                    this.updateStatus('Camera active', 'bg-green-400');
+
+                    // Auto-set center crop if none exists
+                    if (!this.cropArea) {
+                        this.applyPresetCrop('center');
+                    }
+
+                } catch (error) {
+                    console.error('Camera permission denied:', error);
+                    this.showError('Camera access denied. Please allow camera access and try again.');
+                }
+            }
+
+            toggleMonitoring() {
+                this.isMonitoring = !this.isMonitoring;
+                const btn = document.getElementById('monitor-toggle');
+                
+                if (this.isMonitoring) {
+                    btn.textContent = '⏸️ Pause Monitoring';
+                    btn.classList.remove('bg-green-600', 'hover:bg-green-700');
+                    btn.classList.add('bg-red-600', 'hover:bg-red-700');
+                    this.updateStatus('Monitoring active', 'bg-green-400 animate-pulse');
+                    this.startMonitoringLoop();
+                } else {
+                    btn.textContent = '▶️ Start Monitoring';
+                    btn.classList.remove('bg-red-600', 'hover:bg-red-700');
+                    btn.classList.add('bg-green-600', 'hover:bg-green-700');
+                    this.updateStatus('Monitoring paused', 'bg-yellow-400');
+                    this.stopMonitoringLoop();
+                }
+            }
+
+            startMonitoringLoop() {
+                this.monitoringInterval = setInterval(() => {
+                    this.processFrame();
+                }, this.settings.readingDelay);
+            }
+
+            stopMonitoringLoop() {
+                if (this.monitoringInterval) {
+                    clearInterval(this.monitoringInterval);
+                    this.monitoringInterval = null;
+                }
+            }
+
+            async processFrame() {
+                if (!this.stream || !this.ocrWorker) return;
+
+                const videoEl = document.getElementById('camera-feed');
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+
+                canvas.width = videoEl.videoWidth;
+                canvas.height = videoEl.videoHeight;
+                ctx.drawImage(videoEl, 0, 0);
+
+                // Apply crop if set
+                if (this.cropArea) {
+                    const cropCanvas = document.createElement('canvas');
+                    const cropCtx = cropCanvas.getContext('2d');
+                    
+                    const x = this.cropArea.x * canvas.width;
+                    const y = this.cropArea.y * canvas.height;
+                    const width = this.cropArea.width * canvas.width;
+                    const height = this.cropArea.height * canvas.height;
+
+                    cropCanvas.width = width;
+                    cropCanvas.height = height;
+                    cropCtx.drawImage(canvas, x, y, width, height, 0, 0, width, height);
+                    
+                    try {
+                        await this.recognizeText(cropCanvas);
+                    } catch (error) {
+                        console.error('OCR processing error:', error);
+                    }
+                } else {
+                    try {
+                        await this.recognizeText(canvas);
+                    } catch (error) {
+                        console.error('OCR processing error:', error);
+                    }
+                }
+            }
+
+            async readTextNow() {
+                if (!this.stream || !this.ocrWorker) return;
+                await this.processFrame();
+            }
+
+            async recognizeText(imageSource) {
+                if (!this.ocrWorker) return;
+
+                const startTime = Date.now();
+                document.getElementById('processing-state').classList.remove('hidden');
+
+                try {
+                    const result = await this.ocrWorker.recognize(imageSource);
+                    const processingTime = Date.now() - startTime;
+                    
+                    document.getElementById('processing-state').classList.add('hidden');
+
+                    if (result.data.confidence > this.settings.sensitivity) {
+                        const text = result.data.text.trim();
+                        if (text && text !== this.lastReadText) {
+                            this.displayDetectedText(text, result.data.confidence, processingTime);
+                            this.lastReadText = text;
+                            
+                            if (this.settings.autoRead) {
+                                this.speak(text);
+                            }
+                        }
+                    }
+                } catch (error) {
+                    document.getElementById('processing-state').classList.add('hidden');
+                    console.error('OCR recognition error:', error);
+                }
+            }
+
+            displayDetectedText(text, confidence, processingTime) {
+                const displayEl = document.getElementById('text-display');
+                const textEl = document.getElementById('detected-text');
+                const confidenceEl = document.getElementById('confidence-score');
+                const timeEl = document.getElementById('processing-time');
+
+                textEl.textContent = text;
+                confidenceEl.textContent = Math.round(confidence);
+                timeEl.textContent = processingTime;
+                
+                displayEl.classList.remove('hidden');
+                displayEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+
+            speak(text) {
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.rate = this.settings.speechRate;
+                utterance.pitch = this.settings.speechPitch;
+                utterance.volume = this.settings.speechVolume;
+
+                utterance.onstart = () => this.updateSpeechButton(true);
+                utterance.onend = () => this.updateSpeechButton(false);
+
+                speechSynthesis.speak(utterance);
+            }
+
+            updateSpeechButton(speaking) {
+                const stopBtn = document.getElementById('stop-speech-btn');
+                if (speaking) {
+                    stopBtn.classList.remove('hidden');
+                } else {
+                    stopBtn.classList.add('hidden');
+                }
+            }
+
+            updateStatus(text, dotClass) {
+                document.getElementById('status-text').textContent = text;
+                const dot = document.getElementById('status-dot');
+                dot.className = \`w-2 h-2 rounded-full \${dotClass}\`;
+            }
+
+            showError(message) {
+                // You can implement a toast notification system here
+                alert(message);
+            }
+        }
+
+        // Initialize app when DOM is ready
+        document.addEventListener('DOMContentLoaded', () => {
+            window.captnReverse = new CaptnReverse();
+        });
+
+        // Development live reload (checks for file changes every 2 seconds)
+        if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+            let lastModified = null;
+            setInterval(async () => {
+                try {
+                    const response = await fetch(location.href, { method: 'HEAD' });
+                    const modified = response.headers.get('Last-Modified');
+                    if (lastModified && modified !== lastModified) {
+                        console.log('🔄 File updated, reloading...');
+                        location.reload();
+                    }
+                    lastModified = modified;
+                } catch (error) {
+                    // Ignore network errors
+                }
+            }, 2000);
+        }
+
+        // Load saved crop area
+        try {
+            const savedCrop = localStorage.getItem('captn-reverse-crop');
+            if (savedCrop) {
+                const app = window.captnReverse;
+                if (app) {
+                    app.cropArea = JSON.parse(savedCrop);
+                }
+            }
+        } catch (error) {
+            console.warn('Failed to load saved crop area:', error);
+        }
+    </script>
+</body>
+</html>
