@@ -160,7 +160,7 @@
                     <div class="glass rounded-2xl p-6">
                         <div class="aspect-video bg-dark-800 rounded-xl overflow-hidden relative">
                             <video id="camera-feed" autoplay muted playsinline class="w-full h-full object-cover"></video>
-                            <canvas id="crop-overlay" class="absolute inset-0 pointer-events-none"></canvas>
+                            <canvas id="crop-overlay" class="absolute inset-0 pointer-events-none w-full h-full"></canvas>
                             
                             <!-- Processing State -->
                             <div id="processing-state" class="absolute inset-0 bg-black/50 flex items-center justify-center hidden">
@@ -182,6 +182,9 @@
                             <div class="flex gap-3">
                                 <button id="read-now-btn" class="btn-primary px-4 py-2 rounded-lg text-sm font-medium">
                                     📖 Read Now
+                                </button>
+                                <button id="test-tts-btn" class="bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                                    🔊 Test TTS
                                 </button>
                                 <button id="stop-speech-btn" class="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors hidden">
                                     🔇 Stop Speech
@@ -274,6 +277,11 @@
                                 <label class="block text-sm font-medium mb-2">OCR Sensitivity: <span id="sensitivity-value">70</span>%</label>
                                 <input id="sensitivity" type="range" min="10" max="100" step="5" value="70" class="w-full h-2 bg-dark-600 rounded-lg">
                             </div>
+
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Camera Zoom: <span id="zoom-value">1.0</span>x</label>
+                                <input id="camera-zoom" type="range" min="1.0" max="5.0" step="0.1" value="1.0" class="w-full h-2 bg-dark-600 rounded-lg">
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -293,6 +301,8 @@
         let speechRate = 1.0;
         let sensitivity = 70;
         let lastText = '';
+        let cameraZoom = 1.0;
+        let mediaStreamTrack = null;
 
         // Initialize app
         async function init() {
@@ -312,10 +322,22 @@
             // Read now
             document.getElementById('read-now-btn').addEventListener('click', readNow);
             
+            // Test TTS
+            document.getElementById('test-tts-btn').addEventListener('click', () => {
+                speak("CaptnReverse text-to-speech is working perfectly! This is a test of the speech synthesis system.");
+            });
+            
             // Stop speech
             document.getElementById('stop-speech-btn').addEventListener('click', () => {
                 speechSynthesis.cancel();
                 document.getElementById('stop-speech-btn').classList.add('hidden');
+                updateStatus(isMonitoring ? 'Monitoring active' : 'Ready', 'bg-green-400');
+            });
+
+            // Speak detected text button
+            document.getElementById('speak-text-btn').addEventListener('click', () => {
+                const text = document.getElementById('detected-text').textContent;
+                if (text) speak(text);
             });
 
             // Auto-read toggle
@@ -333,6 +355,13 @@
             document.getElementById('sensitivity').addEventListener('input', (e) => {
                 sensitivity = parseInt(e.target.value);
                 document.getElementById('sensitivity-value').textContent = sensitivity;
+            });
+
+            // Camera zoom
+            document.getElementById('camera-zoom').addEventListener('input', (e) => {
+                cameraZoom = parseFloat(e.target.value);
+                document.getElementById('zoom-value').textContent = cameraZoom.toFixed(1);
+                applyCameraZoom();
             });
 
             // Crop selector
@@ -439,12 +468,19 @@
                     video: {
                         facingMode: 'environment',
                         width: { ideal: 1920, min: 640 },
-                        height: { ideal: 1080, min: 480 }
+                        height: { ideal: 1080, min: 480 },
+                        zoom: { ideal: 1.0, min: 1.0, max: 5.0 }
                     }
                 });
 
                 const video = document.getElementById('camera-feed');
                 video.srcObject = stream;
+                
+                // Get camera track for zoom control
+                mediaStreamTrack = stream.getVideoTracks()[0];
+                
+                // Start crop overlay rendering
+                startCropOverlay();
                 
                 // Hide setup, show main app
                 document.getElementById('setup-screen').classList.add('hidden');
@@ -457,6 +493,72 @@
                 console.error('❌ Camera access denied:', error);
                 alert('Camera access required for CaptnReverse to function. Please allow camera access and try again.');
             }
+        }
+
+        async function applyCameraZoom() {
+            if (!mediaStreamTrack) return;
+            
+            try {
+                const capabilities = mediaStreamTrack.getCapabilities();
+                if (capabilities.zoom) {
+                    await mediaStreamTrack.applyConstraints({
+                        zoom: { ideal: cameraZoom }
+                    });
+                    console.log(`📷 Applied zoom: ${cameraZoom}x`);
+                }
+            } catch (error) {
+                console.warn('⚠️ Camera zoom not supported:', error);
+            }
+        }
+
+        function startCropOverlay() {
+            const video = document.getElementById('camera-feed');
+            const canvas = document.getElementById('crop-overlay');
+            const ctx = canvas.getContext('2d');
+            
+            function drawOverlay() {
+                if (video.videoWidth === 0 || video.videoHeight === 0) {
+                    requestAnimationFrame(drawOverlay);
+                    return;
+                }
+                
+                // Set canvas size to match video
+                const rect = video.getBoundingClientRect();
+                canvas.width = rect.width;
+                canvas.height = rect.height;
+                
+                // Clear canvas
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                // Draw semi-transparent overlay
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                // Clear crop area
+                const x = currentCrop.x * canvas.width;
+                const y = currentCrop.y * canvas.height;
+                const width = currentCrop.width * canvas.width;
+                const height = currentCrop.height * canvas.height;
+                
+                ctx.clearRect(x, y, width, height);
+                
+                // Draw crop border
+                ctx.strokeStyle = '#0ea5e9';
+                ctx.lineWidth = 3;
+                ctx.strokeRect(x, y, width, height);
+                
+                // Draw corner handles
+                const handleSize = 8;
+                ctx.fillStyle = '#0ea5e9';
+                ctx.fillRect(x - handleSize/2, y - handleSize/2, handleSize, handleSize);
+                ctx.fillRect(x + width - handleSize/2, y - handleSize/2, handleSize, handleSize);
+                ctx.fillRect(x - handleSize/2, y + height - handleSize/2, handleSize, handleSize);
+                ctx.fillRect(x + width - handleSize/2, y + height - handleSize/2, handleSize, handleSize);
+                
+                requestAnimationFrame(drawOverlay);
+            }
+            
+            drawOverlay();
         }
 
         function toggleMonitoring() {
@@ -534,16 +636,27 @@
                 // Hide processing state
                 document.getElementById('processing-state').classList.add('hidden');
 
+                console.log(`🔍 OCR Result: "${result.data.text.trim()}" (confidence: ${Math.round(result.data.confidence)}%)`);
+                
                 if (result.data.confidence > sensitivity) {
                     const text = result.data.text.trim();
-                    if (text && text !== lastText) {
+                    if (text && text.length > 2 && text !== lastText) {
                         displayText(text, result.data.confidence, processingTime);
                         lastText = text;
                         
+                        console.log(`📝 New text detected: "${text}"`);
+                        
                         if (autoRead) {
+                            console.log(`🔊 Auto-reading enabled, speaking text...`);
                             speak(text);
                         }
+                    } else if (text === lastText) {
+                        console.log(`🔄 Same text as before, skipping...`);
+                    } else {
+                        console.log(`📏 Text too short (${text.length} chars), skipping...`);
                     }
+                } else {
+                    console.log(`🎯 Confidence ${Math.round(result.data.confidence)}% below threshold ${sensitivity}%`);
                 }
             } catch (error) {
                 document.getElementById('processing-state').classList.add('hidden');
@@ -559,20 +672,50 @@
         }
 
         function speak(text) {
+            if (!text || !text.trim()) return;
+            
+            // Cancel any current speech
+            speechSynthesis.cancel();
+            
             const utterance = new SpeechSynthesisUtterance(text);
             utterance.rate = speechRate;
             utterance.pitch = 1.0;
             utterance.volume = 1.0;
+            
+            // Try to get a voice
+            const voices = speechSynthesis.getVoices();
+            if (voices.length > 0) {
+                // Prefer English voices
+                const englishVoice = voices.find(voice => voice.lang.startsWith('en')) || voices[0];
+                utterance.voice = englishVoice;
+            }
 
             utterance.onstart = () => {
+                console.log('🔊 Speaking:', text.substring(0, 50) + '...');
                 document.getElementById('stop-speech-btn').classList.remove('hidden');
+                updateStatus('Speaking...', 'bg-blue-400 animate-pulse');
             };
             
             utterance.onend = () => {
+                console.log('🔇 Speech completed');
                 document.getElementById('stop-speech-btn').classList.add('hidden');
+                updateStatus(isMonitoring ? 'Monitoring active' : 'Ready', 'bg-green-400');
+            };
+            
+            utterance.onerror = (event) => {
+                console.error('🔇 Speech error:', event.error);
+                document.getElementById('stop-speech-btn').classList.add('hidden');
+                updateStatus('Speech error', 'bg-red-400');
             };
 
-            speechSynthesis.speak(utterance);
+            // Ensure voices are loaded before speaking
+            if (voices.length === 0) {
+                speechSynthesis.addEventListener('voiceschanged', () => {
+                    speechSynthesis.speak(utterance);
+                }, { once: true });
+            } else {
+                speechSynthesis.speak(utterance);
+            }
         }
 
         function updateStatus(text, dotClass) {
