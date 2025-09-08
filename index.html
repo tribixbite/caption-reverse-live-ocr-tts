@@ -377,23 +377,111 @@
     <script>
         console.log('🚀 CaptnReverse initializing...');
         
-        // Global state
-        let isMonitoring = false;
-        let stream = null;
-        let ocrWorker = null;
-        let currentCrop = { x: 0.25, y: 0.25, width: 0.5, height: 0.5 };
-        let autoRead = true;
-        let speechRate = 1.0;
-        let sensitivity = 60; // Increased default for better quality filtering
-        let lastText = '';
-        let cameraZoom = 1.0;
-        let mediaStreamTrack = null;
-        let imageThreshold = 150;
-        let currentOCREngine = 'tesseract'; // 'tesseract' or 'paddle'
-        let paddleOCRLoaded = false;
-        let showDebugCanvas = true;
-        let processingInterval = 2000;
-        let cameraRequestInProgress = false;
+        // Application State Management
+        const AppState = {
+            // Core functionality state
+            isMonitoring: false,
+            stream: null,
+            ocrWorker: null,
+            lastText: '',
+            cameraRequestInProgress: false,
+            
+            // Camera and media state
+            mediaStreamTrack: null,
+            cameraZoom: 1.0,
+            currentCrop: { x: 0.25, y: 0.25, width: 0.5, height: 0.5 },
+            
+            // OCR engine state
+            currentOCREngine: 'tesseract', // 'tesseract' or 'paddle'
+            paddleOCRLoaded: false,
+            
+            // Voice/TTS state
+            voices: [],
+            voicesLoaded: false,
+            
+            // User settings
+            settings: {
+                autoRead: true,
+                speechRate: 1.0,
+                sensitivity: 60, // Increased default for better quality filtering
+                imageThreshold: 150,
+                processingInterval: 2000,
+                showDebugCanvas: true
+            }
+        };
+
+        // Legacy global variables for compatibility (gradually remove these)
+        let isMonitoring = AppState.isMonitoring;
+        let stream = AppState.stream;
+        let ocrWorker = AppState.ocrWorker;
+        let currentCrop = AppState.currentCrop;
+        let autoRead = AppState.settings.autoRead;
+        let speechRate = AppState.settings.speechRate;
+        let sensitivity = AppState.settings.sensitivity;
+        let lastText = AppState.lastText;
+        let cameraZoom = AppState.cameraZoom;
+        let mediaStreamTrack = AppState.mediaStreamTrack;
+        let imageThreshold = AppState.settings.imageThreshold;
+        let currentOCREngine = AppState.currentOCREngine;
+        let paddleOCRLoaded = AppState.paddleOCRLoaded;
+        let showDebugCanvas = AppState.settings.showDebugCanvas;
+        let processingInterval = AppState.settings.processingInterval;
+        let cameraRequestInProgress = AppState.cameraRequestInProgress;
+        let voices = AppState.voices;
+        let voicesLoaded = AppState.voicesLoaded;
+
+        // Logger service for debug console
+        let debugLogs = [];
+        const logger = {
+            log: (...args) => logMessage('log', ...args),
+            warn: (...args) => logMessage('warn', ...args),
+            error: (...args) => logMessage('error', ...args),
+            info: (...args) => logMessage('info', ...args),
+        };
+
+        function logMessage(type, ...args) {
+            // Call the original console method
+            console[type](...args);
+
+            // Push to our debug array
+            debugLogs.push({
+                type: type,
+                timestamp: new Date().toISOString(),
+                message: args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ')
+            });
+            
+            if (debugLogs.length > 200) debugLogs.shift(); // Keep last 200 logs
+            updateDebugDisplay(); // This will only work if debug console is open
+        }
+
+        function updateDebugDisplay() {
+            const content = document.querySelector('#debug-console > div:nth-child(2)');
+            if (!content) return; // Debug console not open
+            
+            content.innerHTML = debugLogs.map(log => `
+                <div style="margin-bottom: 4px; padding: 4px; background: ${
+                    log.type === 'error' ? 'rgba(239, 68, 68, 0.1)' :
+                    log.type === 'warn' ? 'rgba(245, 158, 11, 0.1)' :
+                    log.type === 'info' ? 'rgba(59, 130, 246, 0.1)' :
+                    'rgba(16, 185, 129, 0.1)'
+                }; border-left: 3px solid ${
+                    log.type === 'error' ? '#ef4444' :
+                    log.type === 'warn' ? '#f59e0b' :
+                    log.type === 'info' ? '#3b82f6' :
+                    '#10b981'
+                }; border-radius: 4px;">
+                    <span style="color: #64748b; font-size: 10px;">[${log.timestamp.split('T')[1].split('.')[0]}]</span>
+                    <span style="color: ${
+                        log.type === 'error' ? '#ef4444' :
+                        log.type === 'warn' ? '#f59e0b' :
+                        log.type === 'info' ? '#3b82f6' :
+                        '#10b981'
+                    }; font-weight: bold; margin: 0 8px;">${log.type.toUpperCase()}</span>
+                    <span style="color: #e2e8f0;">${log.message}</span>
+                </div>
+            `).join('');
+            content.scrollTop = content.scrollHeight;
+        }
 
         // Load persistent settings
         function loadSettings() {
@@ -436,12 +524,36 @@
 
         // Initialize app
         async function init() {
-            console.log('🔧 Setting up event listeners...');
+            console.log('🔧 Initializing CaptnReverse...');
             loadSettings(); // Load saved settings first
             setupEventListeners();
+            initVoices(); // Initialize voice loading
             await initOCR();
             checkSecureContext();
             console.log('✅ CaptnReverse ready!');
+        }
+
+        // Initialize voice loading with proper async handling
+        function initVoices() {
+            // Load voices immediately if available
+            voices = speechSynthesis.getVoices();
+            if (voices.length > 0) {
+                voicesLoaded = true;
+                console.log('🗣️ Voices loaded immediately:', voices.length);
+            }
+
+            // Set up listener for when voices become available
+            speechSynthesis.addEventListener('voiceschanged', () => {
+                voices = speechSynthesis.getVoices();
+                voicesLoaded = true;
+                console.log('🗣️ Voices loaded via voiceschanged:', voices.length);
+                
+                // Update voice select if settings modal is open
+                const settingsModal = document.getElementById('settings-modal');
+                if (settingsModal && !settingsModal.classList.contains('hidden')) {
+                    populateVoiceSelect();
+                }
+            });
         }
 
         function checkSecureContext() {
@@ -489,111 +601,113 @@
         }
 
         function setupEventListeners() {
-            console.log('🔧 Setting up event listeners...');
+            console.log('🔧 Setting up event listeners with event delegation...');
             
-            // Camera permission
-            const requestCameraBtn = document.getElementById('request-camera');
-            if (requestCameraBtn) {
-                requestCameraBtn.addEventListener('click', requestCamera);
-                console.log('✅ Camera request button listener added');
-            }
-            
-            // Monitoring toggle
-            const monitorToggleBtn = document.getElementById('monitor-toggle');
-            if (monitorToggleBtn) {
-                monitorToggleBtn.addEventListener('click', toggleMonitoring);
-                console.log('✅ Monitor toggle button listener added');
-            }
-            
-            // Read now
-            const readNowBtn = document.getElementById('read-now-btn');
-            if (readNowBtn) {
-                readNowBtn.addEventListener('click', readNow);
-                console.log('✅ Read now button listener added');
-            }
-            
-            // Test TTS
-            const testTTSBtn = document.getElementById('test-tts-btn');
-            if (testTTSBtn) {
-                testTTSBtn.addEventListener('click', () => {
+            // Single event delegation handler for all click events
+            document.body.addEventListener('click', (e) => {
+                // Settings Button
+                if (e.target.closest('#settings-btn')) {
+                    e.preventDefault();
+                    console.log('⚙️ Opening settings modal...');
+                    const settingsModal = document.getElementById('settings-modal');
+                    if (settingsModal) {
+                        try {
+                            settingsModal.classList.remove('hidden');
+                            populateVoiceSelect();
+                            updateSettingsModalValues();
+                            updateStatus('Settings opened', 'bg-blue-400');
+                        } catch (error) {
+                            console.error('❌ Settings modal error:', error);
+                            updateStatus('Settings error', 'bg-red-400');
+                        }
+                    }
+                    return;
+                }
+
+                // Close Settings Button
+                if (e.target.closest('#close-settings')) {
+                    e.preventDefault();
+                    console.log('✖️ Closing settings modal...');
+                    const settingsModal = document.getElementById('settings-modal');
+                    if (settingsModal) {
+                        settingsModal.classList.add('hidden');
+                        updateStatus('Settings closed', 'bg-green-400');
+                    }
+                    return;
+                }
+
+                // Camera Permission Request
+                if (e.target.closest('#request-camera') || e.target.closest('#retry-camera')) {
+                    e.preventDefault();
+                    requestCamera();
+                    return;
+                }
+
+                // Basic Camera Retry
+                if (e.target.closest('#retry-basic')) {
+                    e.preventDefault();
+                    requestBasicCamera();
+                    return;
+                }
+
+                // Monitoring Toggle
+                if (e.target.closest('#monitor-toggle')) {
+                    e.preventDefault();
+                    toggleMonitoring();
+                    return;
+                }
+
+                // Read Now Button
+                if (e.target.closest('#read-now-btn')) {
+                    e.preventDefault();
+                    readNow();
+                    return;
+                }
+
+                // Test TTS Button
+                if (e.target.closest('#test-tts-btn')) {
+                    e.preventDefault();
                     speak("CaptnReverse text-to-speech is working perfectly! This is a test of the speech synthesis system.");
-                });
-                console.log('✅ Test TTS button listener added');
-            }
-            
-            // Stop speech
-            const stopSpeechBtn = document.getElementById('stop-speech-btn');
-            if (stopSpeechBtn) {
-                stopSpeechBtn.addEventListener('click', () => {
+                    return;
+                }
+
+                // Stop Speech Button
+                if (e.target.closest('#stop-speech-btn')) {
+                    e.preventDefault();
                     speechSynthesis.cancel();
                     document.getElementById('stop-speech-btn').classList.add('hidden');
                     updateStatus(isMonitoring ? 'Monitoring active' : 'Ready', 'bg-green-400');
-                });
-                console.log('✅ Stop speech button listener added');
-            }
-
-            // Speak detected text button (only exists after camera is active)
-            setTimeout(() => {
-                const speakBtn = document.getElementById('speak-text-btn');
-                if (speakBtn) {
-                    speakBtn.addEventListener('click', () => {
-                        const text = document.getElementById('detected-text').textContent;
-                        if (text) speak(text);
-                    });
-                    console.log('✅ Speak text button listener added');
+                    return;
                 }
-            }, 100);
 
-            // Settings modal - CRITICAL FIX
-            const settingsBtn = document.getElementById('settings-btn');
-            const settingsModal = document.getElementById('settings-modal');
-            const closeSettingsBtn = document.getElementById('close-settings');
-            
-            if (settingsBtn && settingsModal) {
-                settingsBtn.addEventListener('click', (e) => {
+                // Speak Text Button (dynamically created)
+                if (e.target.closest('#speak-text-btn')) {
                     e.preventDefault();
-                    console.log('⚙️ Opening settings modal...');
-                    try {
-                        settingsModal.classList.remove('hidden');
-                        populateVoiceSelect();
-                        updateSettingsModalValues();
-                        updateStatus('Settings opened', 'bg-blue-400');
-                    } catch (error) {
-                        console.error('❌ Settings modal error:', error);
-                        updateStatus('Settings error', 'bg-red-400');
-                    }
-                });
-                console.log('✅ Settings button listener added');
-            } else {
-                console.error('❌ Settings button or modal not found!');
-            }
-            
-            if (closeSettingsBtn && settingsModal) {
-                closeSettingsBtn.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    console.log('✖️ Closing settings modal...');
-                    settingsModal.classList.add('hidden');
-                    updateStatus('Settings closed', 'bg-green-400');
-                });
-                console.log('✅ Close settings button listener added');
-            } else {
-                console.error('❌ Close settings button not found!');
-            }
+                    const text = document.getElementById('detected-text').textContent;
+                    if (text) speak(text);
+                    return;
+                }
 
-            // Alternative click handler for settings (fallback)
-            document.addEventListener('click', (e) => {
-                if (e.target.closest('#settings-btn') || e.target.id === 'settings-btn') {
+                // Debug Console Button
+                if (e.target.closest('#show-console')) {
                     e.preventDefault();
-                    e.stopPropagation();
-                    console.log('⚙️ Settings button clicked via fallback handler');
-                    const modal = document.getElementById('settings-modal');
-                    if (modal) {
-                        modal.classList.remove('hidden');
-                        populateVoiceSelect();
-                        updateSettingsModalValues();
-                    }
+                    toggleDebugConsole();
+                    return;
+                }
+
+                // Release Camera Button
+                if (e.target.closest('#release-camera')) {
+                    e.preventDefault();
+                    cleanupCamera();
+                    document.getElementById('main-app').classList.add('hidden');
+                    document.getElementById('setup-screen').classList.remove('hidden');
+                    document.getElementById('settings-modal').classList.add('hidden');
+                    updateStatus('Camera released', 'bg-yellow-400');
+                    return;
                 }
             });
+
+            console.log('✅ Event delegation listener added');
 
             // Camera zoom
             document.getElementById('camera-zoom').addEventListener('input', (e) => {
@@ -1021,28 +1135,33 @@
                         </div>
                     `;
                     
-                    // Add retry event listeners
-                    const retryBtn = document.getElementById('retry-camera');
-                    const retryBasicBtn = document.getElementById('retry-basic');
-                    
-                    if (retryBtn) {
-                        retryBtn.addEventListener('click', requestCamera);
-                    }
-                    
-                    if (retryBasicBtn) {
-                        retryBasicBtn.addEventListener('click', async () => {
-                            try {
-                                console.log('📱 Trying basic camera constraints...');
-                                stream = await navigator.mediaDevices.getUserMedia({
-                                    video: true // Minimal constraints
-                                });
-                                showMainApp();
-                            } catch (basicError) {
-                                console.error('❌ Basic camera also failed:', basicError);
-                            }
-                        });
-                    }
+                    // Note: retry handlers now managed by event delegation
                 }
+            }
+        }
+
+        async function requestBasicCamera() {
+            try {
+                console.log('📱 Trying basic camera constraints...');
+                updateStatus('Trying basic camera...', 'bg-yellow-400 animate-pulse');
+                
+                // Cleanup any existing stream first
+                if (stream) {
+                    stream.getTracks().forEach(track => track.stop());
+                    stream = null;
+                    mediaStreamTrack = null;
+                }
+                
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: true // Minimal constraints
+                });
+                
+                console.log('✅ Basic camera access granted!');
+                showMainApp();
+                
+            } catch (basicError) {
+                console.error('❌ Basic camera also failed:', basicError);
+                updateStatus('Basic camera failed', 'bg-red-400');
             }
         }
 
@@ -1485,16 +1604,30 @@
 
         function populateVoiceSelect() {
             const select = document.getElementById('voice-select');
-            const voices = speechSynthesis.getVoices();
+            if (!select) {
+                console.warn('⚠️ Voice select element not found');
+                return;
+            }
+            
+            // Use cached voices or get fresh ones
+            const currentVoices = voicesLoaded ? voices : speechSynthesis.getVoices();
+            
+            if (currentVoices.length === 0) {
+                console.warn('⚠️ No voices available yet');
+                select.innerHTML = '<option value="">Loading voices...</option>';
+                return;
+            }
             
             select.innerHTML = '<option value="">Default Voice</option>';
             
-            voices.forEach((voice, index) => {
+            currentVoices.forEach((voice, index) => {
                 const option = document.createElement('option');
                 option.value = index;
                 option.textContent = `${voice.name} (${voice.lang})`;
                 select.appendChild(option);
             });
+            
+            console.log(`🗣️ Populated voice select with ${currentVoices.length} voices`);
         }
 
         function updateModalAutoReadToggle() {
@@ -1730,51 +1863,8 @@
             
             debugConsole = { closed: false };
             
-            // Override console methods to capture logs
-            ['log', 'error', 'warn', 'info'].forEach(method => {
-                const original = console[method];
-                console[method] = function(...args) {
-                    original.apply(console, args);
-                    debugLogs.push({
-                        type: method,
-                        timestamp: new Date().toISOString(),
-                        message: args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ')
-                    });
-                    if (debugLogs.length > 200) debugLogs.shift(); // Keep last 200 logs
-                    updateDebugDisplay();
-                };
-            });
-            
+            // Initial display update
             updateDebugDisplay();
-            
-            function updateDebugDisplay() {
-                const content = document.querySelector('#debug-console > div:nth-child(2)');
-                if (content) {
-                    content.innerHTML = debugLogs.map(log => `
-                        <div style="margin-bottom: 4px; padding: 4px; background: ${
-                            log.type === 'error' ? 'rgba(239, 68, 68, 0.1)' :
-                            log.type === 'warn' ? 'rgba(245, 158, 11, 0.1)' :
-                            log.type === 'info' ? 'rgba(59, 130, 246, 0.1)' :
-                            'rgba(16, 185, 129, 0.1)'
-                        }; border-left: 3px solid ${
-                            log.type === 'error' ? '#ef4444' :
-                            log.type === 'warn' ? '#f59e0b' :
-                            log.type === 'info' ? '#3b82f6' :
-                            '#10b981'
-                        }; border-radius: 4px;">
-                            <span style="color: #64748b; font-size: 10px;">[${log.timestamp.split('T')[1].split('.')[0]}]</span>
-                            <span style="color: ${
-                                log.type === 'error' ? '#ef4444' :
-                                log.type === 'warn' ? '#f59e0b' :
-                                log.type === 'info' ? '#3b82f6' :
-                                '#10b981'
-                            }; font-weight: bold; margin: 0 8px;">${log.type.toUpperCase()}</span>
-                            <span style="color: #e2e8f0;">${log.message}</span>
-                        </div>
-                    `).join('');
-                    content.scrollTop = content.scrollHeight;
-                }
-            }
         }
         
         function testSettingsButton() {
