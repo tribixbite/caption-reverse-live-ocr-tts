@@ -501,6 +501,7 @@
                 console.log('⚙️ Opening settings modal...');
                 document.getElementById('settings-modal').classList.remove('hidden');
                 populateVoiceSelect();
+                updateSettingsModalValues();
             });
             
             document.getElementById('close-settings').addEventListener('click', () => {
@@ -596,6 +597,7 @@
                         if (el) el.remove();
                     });
                 }
+                saveSettings();
             });
 
             // Release camera button
@@ -1204,6 +1206,15 @@
                     }
                 } else {
                     console.log(`🎯 Confidence ${Math.round(result.data.confidence)}% below threshold ${sensitivity}%`);
+                    
+                    // Enhanced user feedback for low confidence OCR results
+                    if (ocrConfidence < 20) {
+                        updateStatus('No readable text found', 'bg-red-400');
+                        updateDebugText('No clear text detected. Try adjusting lighting, focus, or crop area.', ocrConfidence);
+                    } else if (ocrConfidence < sensitivity) {
+                        updateStatus('Text detected but low quality', 'bg-yellow-400');
+                        updateDebugText(`Text detected but confidence (${Math.round(ocrConfidence)}%) below threshold (${sensitivity}%). Consider lowering sensitivity.`, ocrConfidence);
+                    }
                 }
             } catch (error) {
                 document.getElementById('processing-state').classList.add('hidden');
@@ -1373,6 +1384,36 @@
                 toggle.classList.add('bg-dark-600');
                 thumb.classList.remove('translate-x-6');
                 thumb.classList.add('translate-x-1');
+            }
+        }
+
+        function updateSettingsModalValues() {
+            // Update all modal controls with current values
+            document.getElementById('speech-rate-modal').value = speechRate;
+            document.getElementById('rate-value-modal').textContent = speechRate;
+            
+            document.getElementById('sensitivity-modal').value = sensitivity;
+            document.getElementById('sensitivity-value-modal').textContent = sensitivity;
+            
+            document.getElementById('threshold-slider-modal').value = imageThreshold;
+            document.getElementById('threshold-value-modal').textContent = imageThreshold;
+            
+            document.getElementById('processing-interval').value = processingInterval;
+            document.getElementById('interval-value').textContent = processingInterval;
+            
+            // Update toggles
+            updateModalAutoReadToggle();
+            updateDebugToggle();
+            
+            // Update OCR engine buttons
+            const tesseractBtn = document.getElementById('ocr-tesseract');
+            const paddleBtn = document.getElementById('ocr-paddle');
+            if (currentOCREngine === 'tesseract') {
+                tesseractBtn.className = 'flex-1 py-3 px-4 rounded-xl font-medium transition-all bg-primary-600 text-white';
+                paddleBtn.className = 'flex-1 py-3 px-4 rounded-xl font-medium transition-all bg-dark-600 hover:bg-dark-500 text-white';
+            } else {
+                tesseractBtn.className = 'flex-1 py-3 px-4 rounded-xl font-medium transition-all bg-dark-600 hover:bg-dark-500 text-white';
+                paddleBtn.className = 'flex-1 py-3 px-4 rounded-xl font-medium transition-all bg-primary-600 text-white';
             }
         }
 
