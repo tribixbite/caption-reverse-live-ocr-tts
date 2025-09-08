@@ -445,19 +445,26 @@
                 updateStatus(isMonitoring ? 'Monitoring active' : 'Ready', 'bg-green-400');
             });
 
-            // Speak detected text button
-            document.getElementById('speak-text-btn').addEventListener('click', () => {
-                const text = document.getElementById('detected-text').textContent;
-                if (text) speak(text);
-            });
+            // Speak detected text button (only exists after camera is active)
+            setTimeout(() => {
+                const speakBtn = document.getElementById('speak-text-btn');
+                if (speakBtn) {
+                    speakBtn.addEventListener('click', () => {
+                        const text = document.getElementById('detected-text').textContent;
+                        if (text) speak(text);
+                    });
+                }
+            }, 100);
 
-            // Settings modal
+            // Settings modal (critical - this was missing!)
             document.getElementById('settings-btn').addEventListener('click', () => {
+                console.log('⚙️ Opening settings modal...');
                 document.getElementById('settings-modal').classList.remove('hidden');
                 populateVoiceSelect();
             });
             
             document.getElementById('close-settings').addEventListener('click', () => {
+                console.log('✖️ Closing settings modal...');
                 document.getElementById('settings-modal').classList.add('hidden');
             });
 
