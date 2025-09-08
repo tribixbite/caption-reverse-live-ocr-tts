@@ -391,9 +391,49 @@
         let processingInterval = 2000;
         let cameraRequestInProgress = false;
 
+        // Load persistent settings
+        function loadSettings() {
+            try {
+                const savedSettings = localStorage.getItem('captn-reverse-settings');
+                if (savedSettings) {
+                    const settings = JSON.parse(savedSettings);
+                    autoRead = settings.autoRead ?? autoRead;
+                    speechRate = settings.speechRate ?? speechRate;
+                    sensitivity = settings.sensitivity ?? sensitivity;
+                    imageThreshold = settings.imageThreshold ?? imageThreshold;
+                    processingInterval = settings.processingInterval ?? processingInterval;
+                    showDebugCanvas = settings.showDebugCanvas ?? showDebugCanvas;
+                    currentOCREngine = settings.currentOCREngine ?? currentOCREngine;
+                    console.log('💾 Loaded saved settings');
+                }
+            } catch (error) {
+                console.warn('⚠️ Failed to load settings:', error);
+            }
+        }
+
+        // Save persistent settings
+        function saveSettings() {
+            try {
+                const settings = {
+                    autoRead,
+                    speechRate,
+                    sensitivity,
+                    imageThreshold,
+                    processingInterval,
+                    showDebugCanvas,
+                    currentOCREngine
+                };
+                localStorage.setItem('captn-reverse-settings', JSON.stringify(settings));
+                console.log('💾 Settings saved');
+            } catch (error) {
+                console.warn('⚠️ Failed to save settings:', error);
+            }
+        }
+
         // Initialize app
         async function init() {
             console.log('🔧 Setting up event listeners...');
+            loadSettings(); // Load saved settings first
             setupEventListeners();
             await initOCR();
             checkSecureContext();
@@ -504,29 +544,34 @@
                 autoRead = !autoRead;
                 updateAutoReadToggle();
                 updateModalAutoReadToggle();
+                saveSettings();
             });
 
             // Speech settings (modal)
             document.getElementById('speech-rate-modal').addEventListener('input', (e) => {
                 speechRate = parseFloat(e.target.value);
                 document.getElementById('rate-value-modal').textContent = speechRate;
+                saveSettings();
             });
 
             document.getElementById('speech-volume').addEventListener('input', (e) => {
                 const volume = parseInt(e.target.value);
                 document.getElementById('volume-value').textContent = volume;
                 // Volume will be applied in speak function
+                saveSettings();
             });
 
             // OCR settings (modal)
             document.getElementById('sensitivity-modal').addEventListener('input', (e) => {
                 sensitivity = parseInt(e.target.value);
                 document.getElementById('sensitivity-value-modal').textContent = sensitivity;
+                saveSettings();
             });
 
             document.getElementById('threshold-slider-modal').addEventListener('input', (e) => {
                 imageThreshold = parseInt(e.target.value);
                 document.getElementById('threshold-value-modal').textContent = imageThreshold;
+                saveSettings();
             });
 
             document.getElementById('processing-interval').addEventListener('input', (e) => {
@@ -536,6 +581,7 @@
                     stopMonitoring();
                     startMonitoring(); // Restart with new interval
                 }
+                saveSettings();
             });
 
             // Debug toggle
@@ -1070,18 +1116,47 @@
                 const imageData = cropCtx.getImageData(0, 0, cropCanvas.width, cropCanvas.height);
                 const data = imageData.data;
 
-                // Convert to grayscale and apply binarization (thresholding)
+                // Advanced adaptive thresholding for better OCR accuracy
+                const blockSize = 32; // Size of neighborhood to consider
+                const C = 5; // Constant subtracted from mean
+                
+                // First pass: convert to grayscale
                 for (let i = 0; i < data.length; i += 4) {
-                    // Grayscale conversion (simple average)
                     const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
-                    
-                    // Binarization - use adjustable threshold for different lighting conditions  
-                    const value = avg > imageThreshold ? 255 : 0;
-                    
-                    data[i] = value;     // Red
-                    data[i + 1] = value; // Green  
-                    data[i + 2] = value; // Blue
-                    // Alpha channel (data[i + 3]) remains unchanged
+                    data[i] = avg;
+                    data[i + 1] = avg;
+                    data[i + 2] = avg;
+                }
+                
+                // Second pass: adaptive thresholding
+                for (let y = 0; y < cropCanvas.height; y++) {
+                    for (let x = 0; x < cropCanvas.width; x++) {
+                        let sum = 0;
+                        let count = 0;
+                        
+                        // Calculate local mean for block around (x,y)
+                        const startY = Math.max(0, y - Math.floor(blockSize / 2));
+                        const endY = Math.min(cropCanvas.height, y + Math.floor(blockSize / 2));
+                        const startX = Math.max(0, x - Math.floor(blockSize / 2));
+                        const endX = Math.min(cropCanvas.width, x + Math.floor(blockSize / 2));
+                        
+                        for (let by = startY; by < endY; by++) {
+                            for (let bx = startX; bx < endX; bx++) {
+                                const pixelIndex = (by * cropCanvas.width + bx) * 4;
+                                sum += data[pixelIndex]; // Already grayscale
+                                count++;
+                            }
+                        }
+                        
+                        const localThreshold = (sum / count) - C;
+                        const pixelIndex = (y * cropCanvas.width + x) * 4;
+                        const pixelValue = data[pixelIndex];
+                        const value = pixelValue > localThreshold ? 255 : 0;
+                        
+                        data[pixelIndex] = value;
+                        data[pixelIndex + 1] = value;
+                        data[pixelIndex + 2] = value;
+                    }
                 }
                 
                 // Apply the processed image data back to canvas
