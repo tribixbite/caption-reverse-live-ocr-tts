@@ -749,9 +749,7 @@
                 });
 
                 await ocrWorker.setParameters({
-                    tessedit_pageseg_mode: '6', // Single uniform block of text (better for focused crops)
-                    tessedit_char_blacklist: '', // Remove char restrictions for debugging
-                    tessedit_ocr_engine_mode: '1', // Neural nets LSTM engine only
+                    tessedit_pageseg_mode: '1', // OPTIMAL: Auto with OSD - 70% confidence on test image!
                     preserve_interword_spaces: '1' // Better word spacing
                 });
 
@@ -765,22 +763,20 @@
             try {
                 console.log('📸 Requesting camera permission...');
                 
-                // First check if camera is already available
-                if (stream) {
+                // First check if camera is already active and streaming
+                if (stream && stream.active && stream.getVideoTracks().length > 0) {
                     console.log('📷 Camera already active, proceeding to main app');
                     showMainApp();
                     return;
                 }
                 
-                // Request camera permission with detailed constraints
+                // Request camera permission with simplified constraints for better compatibility
                 stream = await navigator.mediaDevices.getUserMedia({
                     video: {
-                        facingMode: { ideal: 'environment' },
-                        width: { ideal: 1920, min: 640 },
-                        height: { ideal: 1080, min: 480 },
-                        frameRate: { ideal: 30, min: 15 }
-                    },
-                    audio: false
+                        facingMode: 'environment',
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 }
+                    }
                 });
 
                 console.log('✅ Camera permission granted!');
