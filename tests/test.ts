@@ -26,11 +26,11 @@ async function testOCRPipeline() {
         console.log('✅ OCR Worker configured');
 
         // Load test image
-        const imagePath = path.join(__dirname, 'test.png');
+        const imagePath = path.join(__dirname, 'test2.png');
         console.log(`📸 Loading test image: ${imagePath}`);
         
         if (!fs.existsSync(imagePath)) {
-            console.error('❌ test.png not found in tests/ directory');
+            console.error('❌ test2.png not found in tests/ directory');
             process.exit(1);
         }
 
@@ -45,7 +45,7 @@ async function testOCRPipeline() {
         console.log(`📝 Detected Text: "${result.data.text.trim()}"`);
         console.log(`🎯 Confidence: ${Math.round(result.data.confidence)}%`);
         console.log(`⏱️ Processing Time: ${processingTime}ms`);
-        console.log(`📊 Word Count: ${result.data.words.length}`);
+        console.log(`📊 Word Count: ${result.data.words ? result.data.words.length : 'N/A'}`);
         
         // Test with same sensitivity as web app (60%)
         const sensitivity = 60;
@@ -69,11 +69,13 @@ async function testOCRPipeline() {
         }
 
         // Test word-by-word confidence
-        console.log('\n📋 Word-by-Word Analysis:');
-        console.log('==========================');
-        result.data.words.forEach((word, index) => {
-            console.log(`Word ${index + 1}: "${word.text}" (confidence: ${Math.round(word.confidence)}%)`);
-        });
+        if (result.data.words && result.data.words.length > 0) {
+            console.log('\n📋 Word-by-Word Analysis:');
+            console.log('==========================');
+            result.data.words.forEach((word, index) => {
+                console.log(`Word ${index + 1}: "${word.text}" (confidence: ${Math.round(word.confidence)}%)`);
+            });
+        }
 
         // Cleanup
         await ocrWorker.terminate();
