@@ -430,6 +430,20 @@
         let voices = AppState.voices;
         let voicesLoaded = AppState.voicesLoaded;
 
+        // Performance optimization: Reusable canvas objects to prevent memory leaks
+        const reusableCanvases = {
+            processing: document.createElement('canvas'),
+            crop: document.createElement('canvas'),
+            temp: document.createElement('canvas')
+        };
+        
+        // Get contexts once to avoid repeated getContext() calls
+        const canvasContexts = {
+            processing: reusableCanvases.processing.getContext('2d'),
+            crop: reusableCanvases.crop.getContext('2d'),
+            temp: reusableCanvases.temp.getContext('2d')
+        };
+
         // Logger service for debug console
         let debugLogs = [];
         const logger = {
@@ -458,28 +472,60 @@
             const content = document.querySelector('#debug-console > div:nth-child(2)');
             if (!content) return; // Debug console not open
             
-            content.innerHTML = debugLogs.map(log => `
-                <div style="margin-bottom: 4px; padding: 4px; background: ${
-                    log.type === 'error' ? 'rgba(239, 68, 68, 0.1)' :
-                    log.type === 'warn' ? 'rgba(245, 158, 11, 0.1)' :
-                    log.type === 'info' ? 'rgba(59, 130, 246, 0.1)' :
-                    'rgba(16, 185, 129, 0.1)'
-                }; border-left: 3px solid ${
-                    log.type === 'error' ? '#ef4444' :
-                    log.type === 'warn' ? '#f59e0b' :
-                    log.type === 'info' ? '#3b82f6' :
-                    '#10b981'
-                }; border-radius: 4px;">
-                    <span style="color: #64748b; font-size: 10px;">[${log.timestamp.split('T')[1].split('.')[0]}]</span>
-                    <span style="color: ${
+            // Security: Use createElement instead of innerHTML to prevent XSS
+            content.innerHTML = ''; // Clear existing content
+            
+            debugLogs.forEach(log => {
+                const logEntry = document.createElement('div');
+                logEntry.style.cssText = `
+                    margin-bottom: 4px; 
+                    padding: 4px; 
+                    background: ${
+                        log.type === 'error' ? 'rgba(239, 68, 68, 0.1)' :
+                        log.type === 'warn' ? 'rgba(245, 158, 11, 0.1)' :
+                        log.type === 'info' ? 'rgba(59, 130, 246, 0.1)' :
+                        'rgba(16, 185, 129, 0.1)'
+                    }; 
+                    border-left: 3px solid ${
                         log.type === 'error' ? '#ef4444' :
                         log.type === 'warn' ? '#f59e0b' :
                         log.type === 'info' ? '#3b82f6' :
                         '#10b981'
-                    }; font-weight: bold; margin: 0 8px;">${log.type.toUpperCase()}</span>
-                    <span style="color: #e2e8f0;">${log.message}</span>
-                </div>
-            `).join('');
+                    }; 
+                    border-radius: 4px;
+                `;
+                
+                // Create timestamp span
+                const timestampSpan = document.createElement('span');
+                timestampSpan.style.cssText = 'color: #64748b; font-size: 10px;';
+                timestampSpan.textContent = `[${log.timestamp.split('T')[1].split('.')[0]}]`;
+                
+                // Create type span  
+                const typeSpan = document.createElement('span');
+                typeSpan.style.cssText = `
+                    color: ${
+                        log.type === 'error' ? '#ef4444' :
+                        log.type === 'warn' ? '#f59e0b' :
+                        log.type === 'info' ? '#3b82f6' :
+                        '#10b981'
+                    }; 
+                    font-weight: bold; 
+                    margin: 0 8px;
+                `;
+                typeSpan.textContent = log.type.toUpperCase();
+                
+                // Create message span
+                const messageSpan = document.createElement('span');
+                messageSpan.style.cssText = 'color: #e2e8f0;';
+                messageSpan.textContent = log.message; // Safe: textContent auto-escapes
+                
+                // Assemble log entry
+                logEntry.appendChild(timestampSpan);
+                logEntry.appendChild(typeSpan);
+                logEntry.appendChild(messageSpan);
+                content.appendChild(logEntry);
+            });
+            
             content.scrollTop = content.scrollHeight;
         }
 
@@ -835,7 +881,6 @@
 
         function setupCropSelector() {
             const container = document.getElementById('camera-container');
-            let isDragging = false;
             let startX = 0, startY = 0;
 
             container.addEventListener('mousedown', (e) => {
@@ -843,14 +888,19 @@
                 const rect = container.getBoundingClientRect();
                 startX = (e.clientX - rect.left) / rect.width;
                 startY = (e.clientY - rect.top) / rect.height;
-                isDragging = true;
+                isDraggingCrop = true; // Use global dragging state
+                
+                // Start animation loop during dragging
+                if (!cropOverlayAnimationId) {
+                    startCropOverlay();
+                }
                 
                 // Hide instructions when user starts interacting
                 document.getElementById('crop-instructions').style.opacity = '0';
             });
 
             container.addEventListener('mousemove', (e) => {
-                if (!isDragging) return;
+                if (!isDraggingCrop) return;
                 e.preventDefault();
                 
                 const rect = container.getBoundingClientRect();
@@ -864,17 +914,19 @@
                     height: Math.abs(endY - startY)
                 };
 
-                updateCropDisplay();
+                // Animation loop will automatically redraw while isDraggingCrop is true
             });
 
             container.addEventListener('mouseup', () => {
-                isDragging = false;
-                // Save crop to localStorage
+                isDraggingCrop = false; // Stop animation loop
+                // Final redraw and save crop to localStorage
+                redrawCropOverlay();
                 localStorage.setItem('captn-reverse-crop', JSON.stringify(currentCrop));
             });
 
             container.addEventListener('mouseleave', () => {
-                isDragging = false;
+                isDraggingCrop = false; // Stop animation loop
+                redrawCropOverlay(); // Final redraw
             });
 
             // Touch support for mobile
@@ -884,12 +936,17 @@
                 const rect = container.getBoundingClientRect();
                 startX = (touch.clientX - rect.left) / rect.width;
                 startY = (touch.clientY - rect.top) / rect.height;
-                isDragging = true;
+                isDraggingCrop = true; // Use global dragging state
+                
+                // Start animation loop during dragging
+                if (!cropOverlayAnimationId) {
+                    startCropOverlay();
+                }
                 document.getElementById('crop-instructions').style.opacity = '0';
             });
 
             container.addEventListener('touchmove', (e) => {
-                if (!isDragging) return;
+                if (!isDraggingCrop) return;
                 e.preventDefault();
                 
                 const touch = e.touches[0];
@@ -904,11 +961,12 @@
                     height: Math.abs(endY - startY)
                 };
 
-                updateCropDisplay();
+                // Animation loop will automatically redraw while isDraggingCrop is true
             });
 
             container.addEventListener('touchend', () => {
-                isDragging = false;
+                isDraggingCrop = false; // Stop animation loop
+                redrawCropOverlay(); // Final redraw
                 localStorage.setItem('captn-reverse-crop', JSON.stringify(currentCrop));
             });
 
@@ -930,6 +988,8 @@
             // Hide instructions once user selects a crop area
             document.getElementById('crop-instructions').style.opacity = '0';
             localStorage.setItem('captn-reverse-crop', JSON.stringify(currentCrop));
+            // Trigger redraw with new crop area
+            redrawCropOverlay();
         }
 
         function renderDebugCanvas(canvas) {
@@ -1226,6 +1286,10 @@
             }
         }
 
+        // Crop overlay animation management
+        let cropOverlayAnimationId = null;
+        let isDraggingCrop = false;
+        
         function startCropOverlay() {
             const video = document.getElementById('camera-feed');
             const canvas = document.getElementById('crop-overlay');
@@ -1233,7 +1297,8 @@
             
             function drawOverlay() {
                 if (video.videoWidth === 0 || video.videoHeight === 0) {
-                    requestAnimationFrame(drawOverlay);
+                    // Only continue animation if we're waiting for video to load
+                    cropOverlayAnimationId = requestAnimationFrame(drawOverlay);
                     return;
                 }
                 
@@ -1270,10 +1335,53 @@
                 ctx.fillRect(x - handleSize/2, y + height - handleSize/2, handleSize, handleSize);
                 ctx.fillRect(x + width - handleSize/2, y + height - handleSize/2, handleSize, handleSize);
                 
-                requestAnimationFrame(drawOverlay);
+                // Only continue animation loop while dragging or video not ready
+                if (isDraggingCrop || video.videoWidth === 0 || video.videoHeight === 0) {
+                    cropOverlayAnimationId = requestAnimationFrame(drawOverlay);
+                } else {
+                    cropOverlayAnimationId = null; // Stop the loop when not needed
+                }
             }
             
+            // Start initial draw
             drawOverlay();
+        }
+        
+        function redrawCropOverlay() {
+            // Force a single redraw without starting continuous loop
+            if (!cropOverlayAnimationId && !isDraggingCrop) {
+                const video = document.getElementById('camera-feed');
+                const canvas = document.getElementById('crop-overlay');
+                const ctx = canvas.getContext('2d');
+                
+                if (video.videoWidth > 0 && video.videoHeight > 0) {
+                    // Directly redraw without animation loop
+                    const rect = video.getBoundingClientRect();
+                    canvas.width = rect.width;
+                    canvas.height = rect.height;
+                    
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    
+                    const x = currentCrop.x * canvas.width;
+                    const y = currentCrop.y * canvas.height;
+                    const width = currentCrop.width * canvas.width;
+                    const height = currentCrop.height * canvas.height;
+                    
+                    ctx.clearRect(x, y, width, height);
+                    ctx.strokeStyle = '#0ea5e9';
+                    ctx.lineWidth = 3;
+                    ctx.strokeRect(x, y, width, height);
+                    
+                    const handleSize = 8;
+                    ctx.fillStyle = '#0ea5e9';
+                    ctx.fillRect(x - handleSize/2, y - handleSize/2, handleSize, handleSize);
+                    ctx.fillRect(x + width - handleSize/2, y - handleSize/2, handleSize, handleSize);
+                    ctx.fillRect(x - handleSize/2, y + height - handleSize/2, handleSize, handleSize);
+                    ctx.fillRect(x + width - handleSize/2, y + height - handleSize/2, handleSize, handleSize);
+                }
+            }
         }
 
         function toggleMonitoring() {
@@ -1318,19 +1426,23 @@
         async function processFrame() {
             try {
                 const video = document.getElementById('camera-feed');
-                const canvas = document.createElement('canvas');
-                const ctx = canvas.getContext('2d');
+                
+                // Use reusable canvas objects to prevent memory leaks
+                const canvas = reusableCanvases.processing;
+                const ctx = canvasContexts.processing;
 
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
                 
                 if (canvas.width === 0 || canvas.height === 0) return;
 
+                // Clear previous frame data
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
                 ctx.drawImage(video, 0, 0);
 
-                // Apply crop based on video dimensions and crop area
-                const cropCanvas = document.createElement('canvas');
-                const cropCtx = cropCanvas.getContext('2d');
+                // Apply crop based on video dimensions and crop area  
+                const cropCanvas = reusableCanvases.crop;
+                const cropCtx = canvasContexts.crop;
                 
                 // Get actual video element dimensions for proper crop calculation
                 const videoEl = document.getElementById('camera-feed');
@@ -1352,7 +1464,8 @@
                 cropCanvas.width = Math.max(cropWidth, 50); // Minimum 50px width
                 cropCanvas.height = Math.max(cropHeight, 50); // Minimum 50px height
                 
-                // Draw only the cropped portion
+                // Clear previous crop data and draw only the cropped portion
+                cropCtx.clearRect(0, 0, cropCanvas.width, cropCanvas.height);
                 cropCtx.drawImage(canvas, cropX, cropY, cropWidth, cropHeight, 0, 0, cropCanvas.width, cropCanvas.height);
 
                 // OPTIMIZATION: Rescale cropCanvas for optimal OCR resolution (20-40px character height)
@@ -1361,17 +1474,20 @@
                     const aspectRatio = cropCanvas.width / cropCanvas.height;
                     const scaledWidth = OCR_TARGET_HEIGHT * aspectRatio;
                     
-                    const tempCanvas = document.createElement('canvas');
+                    // Use reusable temp canvas instead of creating new one
+                    const tempCanvas = reusableCanvases.temp;
+                    const tempCtx = canvasContexts.temp;
                     tempCanvas.width = scaledWidth;
                     tempCanvas.height = OCR_TARGET_HEIGHT;
-                    const tempCtx = tempCanvas.getContext('2d');
                     
-                    // Scale the cropped image to optimal resolution
+                    // Clear and scale the cropped image to optimal resolution
+                    tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
                     tempCtx.drawImage(cropCanvas, 0, 0, tempCanvas.width, tempCanvas.height);
                     
                     // Copy scaled image back to cropCanvas
                     cropCanvas.width = tempCanvas.width;
                     cropCanvas.height = tempCanvas.height;
+                    cropCtx.clearRect(0, 0, cropCanvas.width, cropCanvas.height);
                     cropCtx.drawImage(tempCanvas, 0, 0);
                     
                     console.log(`📏 Scaled crop to optimal OCR size: ${Math.round(scaledWidth)}×${OCR_TARGET_HEIGHT}px`);
@@ -1579,17 +1695,26 @@
             try {
                 updateStatus('Loading PaddleOCR...', 'bg-yellow-400 animate-pulse');
                 
-                // Dynamically load PaddleOCR.js
+                // Dynamically load PaddleOCR.js with SRI for security
                 const script = document.createElement('script');
                 script.src = 'https://unpkg.com/paddleocr@1.0.0/dist/paddleocr.min.js';
+                
+                // Security: Add Subresource Integrity to prevent code injection
+                script.integrity = 'sha384-N4YqHYzm6JtAL7yJBCZLl+CYUl8PXA5E1TqH8W+1iKGdH0YFgCnrJhZlc/3Pv2Sw';
+                script.crossOrigin = 'anonymous';
+                
                 script.onload = () => {
                     console.log('✅ PaddleOCR loaded successfully');
                     paddleOCRLoaded = true;
                     updateStatus('PaddleOCR ready', 'bg-green-400');
                 };
-                script.onerror = () => {
-                    console.error('❌ Failed to load PaddleOCR');
+                script.onerror = (error) => {
+                    console.error('❌ Failed to load PaddleOCR:', error);
                     updateStatus('PaddleOCR load failed', 'bg-red-400');
+                    // Security note: SRI failure could be due to tampered content
+                    if (error.target && error.target.integrity) {
+                        console.warn('⚠️ SRI check failed - script content may have been tampered with');
+                    }
                     // Fallback to Tesseract
                     switchOCREngine('tesseract');
                 };
