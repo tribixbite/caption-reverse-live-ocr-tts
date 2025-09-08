@@ -364,6 +364,10 @@
                         <button id="release-camera" class="w-full bg-red-600 hover:bg-red-700 text-white py-3 px-4 rounded-xl font-medium transition-colors">
                             🛑 Release Camera Resources
                         </button>
+                        
+                        <button id="show-console" class="w-full bg-gray-600 hover:bg-gray-700 text-white py-3 px-4 rounded-xl font-medium transition-colors">
+                            🔍 Show Debug Console
+                        </button>
                     </div>
                 </section>
             </div>
@@ -441,49 +445,92 @@
         }
 
         function checkSecureContext() {
+            console.log('🔒 Checking secure context...', {
+                isSecureContext: window.isSecureContext,
+                protocol: window.location.protocol,
+                hostname: window.location.hostname,
+                userAgent: navigator.userAgent.substring(0, 100)
+            });
+            
             if (!window.isSecureContext) {
                 console.warn('⚠️ Not in secure context - camera may not work');
                 const setupCard = document.querySelector('#setup-screen .glass');
-                setupCard.innerHTML = `
-                    <div class="w-20 h-20 bg-yellow-600/20 rounded-full flex items-center justify-center mx-auto mb-6">
-                        <svg class="w-10 h-10 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                        </svg>
-                    </div>
-                    <h2 class="text-2xl font-semibold mb-4 text-yellow-300">HTTPS Required</h2>
-                    <p class="text-dark-300 mb-6">Camera access requires a secure connection (HTTPS) or localhost. Please access the app via HTTPS or localhost for full functionality.</p>
-                    <div class="text-sm text-dark-400 space-y-1">
-                        <p>💡 Try: https://localhost:3000 (if you have SSL)</p>
-                        <p>🔧 Or use: http://127.0.0.1:3000</p>
-                        <p>🌐 For production: Deploy to HTTPS hosting</p>
-                    </div>
-                `;
+                if (setupCard) {
+                    setupCard.innerHTML = `
+                        <div class="w-20 h-20 bg-yellow-600/20 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <svg class="w-10 h-10 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                            </svg>
+                        </div>
+                        <h2 class="text-2xl font-semibold mb-4 text-yellow-300">HTTPS Required</h2>
+                        <p class="text-dark-300 mb-6">Camera access requires a secure connection (HTTPS) or localhost. Please access the app via HTTPS or localhost for full functionality.</p>
+                        <button onclick="location.reload()" class="btn-primary w-full text-lg py-4 mb-4">
+                            🔄 Reload Page
+                        </button>
+                        <div class="text-sm text-dark-400 space-y-1">
+                            <p>💡 Current: ${window.location.protocol}//${window.location.host}</p>
+                            <p>🔧 Required: HTTPS or localhost</p>
+                            <p>🌐 GitHub Pages automatically uses HTTPS</p>
+                        </div>
+                    `;
+                }
             } else {
                 console.log('✅ Secure context confirmed - camera should work');
+                
+                // Additional permission checks
+                if (!navigator.mediaDevices) {
+                    console.error('❌ navigator.mediaDevices not available');
+                } else if (!navigator.mediaDevices.getUserMedia) {
+                    console.error('❌ getUserMedia not available');
+                } else {
+                    console.log('✅ getUserMedia API available');
+                }
             }
         }
 
         function setupEventListeners() {
+            console.log('🔧 Setting up event listeners...');
+            
             // Camera permission
-            document.getElementById('request-camera').addEventListener('click', requestCamera);
+            const requestCameraBtn = document.getElementById('request-camera');
+            if (requestCameraBtn) {
+                requestCameraBtn.addEventListener('click', requestCamera);
+                console.log('✅ Camera request button listener added');
+            }
             
             // Monitoring toggle
-            document.getElementById('monitor-toggle').addEventListener('click', toggleMonitoring);
+            const monitorToggleBtn = document.getElementById('monitor-toggle');
+            if (monitorToggleBtn) {
+                monitorToggleBtn.addEventListener('click', toggleMonitoring);
+                console.log('✅ Monitor toggle button listener added');
+            }
             
             // Read now
-            document.getElementById('read-now-btn').addEventListener('click', readNow);
+            const readNowBtn = document.getElementById('read-now-btn');
+            if (readNowBtn) {
+                readNowBtn.addEventListener('click', readNow);
+                console.log('✅ Read now button listener added');
+            }
             
             // Test TTS
-            document.getElementById('test-tts-btn').addEventListener('click', () => {
-                speak("CaptnReverse text-to-speech is working perfectly! This is a test of the speech synthesis system.");
-            });
+            const testTTSBtn = document.getElementById('test-tts-btn');
+            if (testTTSBtn) {
+                testTTSBtn.addEventListener('click', () => {
+                    speak("CaptnReverse text-to-speech is working perfectly! This is a test of the speech synthesis system.");
+                });
+                console.log('✅ Test TTS button listener added');
+            }
             
             // Stop speech
-            document.getElementById('stop-speech-btn').addEventListener('click', () => {
-                speechSynthesis.cancel();
-                document.getElementById('stop-speech-btn').classList.add('hidden');
-                updateStatus(isMonitoring ? 'Monitoring active' : 'Ready', 'bg-green-400');
-            });
+            const stopSpeechBtn = document.getElementById('stop-speech-btn');
+            if (stopSpeechBtn) {
+                stopSpeechBtn.addEventListener('click', () => {
+                    speechSynthesis.cancel();
+                    document.getElementById('stop-speech-btn').classList.add('hidden');
+                    updateStatus(isMonitoring ? 'Monitoring active' : 'Ready', 'bg-green-400');
+                });
+                console.log('✅ Stop speech button listener added');
+            }
 
             // Speak detected text button (only exists after camera is active)
             setTimeout(() => {
@@ -493,20 +540,59 @@
                         const text = document.getElementById('detected-text').textContent;
                         if (text) speak(text);
                     });
+                    console.log('✅ Speak text button listener added');
                 }
             }, 100);
 
-            // Settings modal (critical - this was missing!)
-            document.getElementById('settings-btn').addEventListener('click', () => {
-                console.log('⚙️ Opening settings modal...');
-                document.getElementById('settings-modal').classList.remove('hidden');
-                populateVoiceSelect();
-                updateSettingsModalValues();
-            });
+            // Settings modal - CRITICAL FIX
+            const settingsBtn = document.getElementById('settings-btn');
+            const settingsModal = document.getElementById('settings-modal');
+            const closeSettingsBtn = document.getElementById('close-settings');
             
-            document.getElementById('close-settings').addEventListener('click', () => {
-                console.log('✖️ Closing settings modal...');
-                document.getElementById('settings-modal').classList.add('hidden');
+            if (settingsBtn && settingsModal) {
+                settingsBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    console.log('⚙️ Opening settings modal...');
+                    try {
+                        settingsModal.classList.remove('hidden');
+                        populateVoiceSelect();
+                        updateSettingsModalValues();
+                        updateStatus('Settings opened', 'bg-blue-400');
+                    } catch (error) {
+                        console.error('❌ Settings modal error:', error);
+                        updateStatus('Settings error', 'bg-red-400');
+                    }
+                });
+                console.log('✅ Settings button listener added');
+            } else {
+                console.error('❌ Settings button or modal not found!');
+            }
+            
+            if (closeSettingsBtn && settingsModal) {
+                closeSettingsBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    console.log('✖️ Closing settings modal...');
+                    settingsModal.classList.add('hidden');
+                    updateStatus('Settings closed', 'bg-green-400');
+                });
+                console.log('✅ Close settings button listener added');
+            } else {
+                console.error('❌ Close settings button not found!');
+            }
+
+            // Alternative click handler for settings (fallback)
+            document.addEventListener('click', (e) => {
+                if (e.target.closest('#settings-btn') || e.target.id === 'settings-btn') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log('⚙️ Settings button clicked via fallback handler');
+                    const modal = document.getElementById('settings-modal');
+                    if (modal) {
+                        modal.classList.remove('hidden');
+                        populateVoiceSelect();
+                        updateSettingsModalValues();
+                    }
+                }
             });
 
             // Camera zoom
@@ -608,6 +694,11 @@
                 document.getElementById('setup-screen').classList.remove('hidden');
                 document.getElementById('settings-modal').classList.add('hidden');
                 updateStatus('Camera released', 'bg-yellow-400');
+            });
+
+            // Show debug console button
+            document.getElementById('show-console').addEventListener('click', () => {
+                toggleDebugConsole();
             });
         }
 
@@ -839,6 +930,12 @@
 
                 cameraRequestInProgress = true;
                 console.log('📸 Requesting camera permission...');
+                updateStatus('Requesting camera...', 'bg-yellow-400 animate-pulse');
+                
+                // Check if getUserMedia is available
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    throw new Error('getUserMedia not supported in this browser');
+                }
                 
                 // Cleanup any existing stream first
                 if (stream) {
@@ -846,6 +943,16 @@
                     stream.getTracks().forEach(track => track.stop());
                     stream = null;
                     mediaStreamTrack = null;
+                }
+                
+                // Check permission first (if supported)
+                if (navigator.permissions) {
+                    try {
+                        const permission = await navigator.permissions.query({name: 'camera'});
+                        console.log('📋 Camera permission status:', permission.state);
+                    } catch (permError) {
+                        console.log('⚠️ Could not query camera permission:', permError.message);
+                    }
                 }
                 
                 // Request camera permission with simplified constraints for better compatibility
@@ -866,39 +973,76 @@
                 console.error('❌ Camera access denied:', error);
                 
                 let errorMessage = 'Camera access is required for CaptnReverse to function.';
+                let debugInfo = `Error: ${error.name} - ${error.message}`;
                 
                 if (error.name === 'NotAllowedError') {
-                    errorMessage = 'Camera permission was denied. Please refresh the page and allow camera access.';
+                    errorMessage = 'Camera permission was denied. Please refresh and allow camera access, or check your browser settings.';
                 } else if (error.name === 'NotFoundError') {
                     errorMessage = 'No camera found. Please connect a camera and try again.';
                 } else if (error.name === 'NotSupportedError') {
-                    errorMessage = 'Camera is not supported in this browser. Try Chrome or Edge.';
+                    errorMessage = 'Camera is not supported in this browser. Try Chrome, Edge, or Firefox.';
+                } else if (error.name === 'OverconstrainedError') {
+                    errorMessage = 'Camera constraints not supported. Trying with basic settings...';
                 } else {
                     errorMessage = `Camera error: ${error.message}`;
                 }
                 
+                updateStatus('Camera error', 'bg-red-400');
+                
                 // Update UI to show error
                 const setupCard = document.querySelector('#setup-screen .glass');
-                setupCard.innerHTML = `
-                    <div class="w-20 h-20 bg-red-600/20 rounded-full flex items-center justify-center mx-auto mb-6">
-                        <svg class="w-10 h-10 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                        </svg>
-                    </div>
-                    <h2 class="text-2xl font-semibold mb-4 text-red-300">Camera Access Required</h2>
-                    <p class="text-dark-300 mb-6">${errorMessage}</p>
-                    <button id="retry-camera" class="btn-primary w-full text-lg py-4 mb-4">
-                        🔄 Try Again
-                    </button>
-                    <div class="text-sm text-dark-400 space-y-1">
-                        <p>💡 Make sure you're using HTTPS or localhost</p>
-                        <p>🔒 Your privacy is protected - all processing is local</p>
-                        <p>🌐 Works best in Chrome, Edge, or Firefox</p>
-                    </div>
-                `;
-                
-                // Add retry event listener
-                document.getElementById('retry-camera').addEventListener('click', requestCamera);
+                if (setupCard) {
+                    setupCard.innerHTML = `
+                        <div class="w-20 h-20 bg-red-600/20 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <svg class="w-10 h-10 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                            </svg>
+                        </div>
+                        <h2 class="text-2xl font-semibold mb-4 text-red-300">Camera Access Required</h2>
+                        <p class="text-dark-300 mb-6">${errorMessage}</p>
+                        <button id="retry-camera" class="btn-primary w-full text-lg py-4 mb-4">
+                            🔄 Try Again
+                        </button>
+                        <button id="retry-basic" class="w-full bg-purple-600 hover:bg-purple-700 text-white py-3 px-6 rounded-xl transition-colors text-sm mb-4">
+                            📱 Try Basic Camera
+                        </button>
+                        <details class="text-xs text-dark-400 mt-4">
+                            <summary class="cursor-pointer hover:text-dark-300">Debug Info</summary>
+                            <div class="mt-2 p-2 bg-dark-800 rounded font-mono">
+                                <p>URL: ${window.location.href}</p>
+                                <p>Secure: ${window.isSecureContext}</p>
+                                <p>${debugInfo}</p>
+                            </div>
+                        </details>
+                        <div class="text-sm text-dark-400 space-y-1 mt-4">
+                            <p>💡 Make sure you're using HTTPS or localhost</p>
+                            <p>🔒 Your privacy is protected - all processing is local</p>
+                            <p>🌐 Works best in Chrome, Edge, or Firefox</p>
+                        </div>
+                    `;
+                    
+                    // Add retry event listeners
+                    const retryBtn = document.getElementById('retry-camera');
+                    const retryBasicBtn = document.getElementById('retry-basic');
+                    
+                    if (retryBtn) {
+                        retryBtn.addEventListener('click', requestCamera);
+                    }
+                    
+                    if (retryBasicBtn) {
+                        retryBasicBtn.addEventListener('click', async () => {
+                            try {
+                                console.log('📱 Trying basic camera constraints...');
+                                stream = await navigator.mediaDevices.getUserMedia({
+                                    video: true // Minimal constraints
+                                });
+                                showMainApp();
+                            } catch (basicError) {
+                                console.error('❌ Basic camera also failed:', basicError);
+                            }
+                        });
+                    }
+                }
             }
         }
 
@@ -1464,6 +1608,209 @@
                 toggleMonitoring(); // Stop monitoring to reduce resource usage
             }
         });
+
+        // Debug console functionality
+        let debugConsole = null;
+        let debugLogs = [];
+        
+        function toggleDebugConsole() {
+            if (debugConsole && !debugConsole.closed) {
+                debugConsole.close();
+                debugConsole = null;
+                return;
+            }
+            
+            createDebugConsole();
+        }
+        
+        function createDebugConsole() {
+            // Create floating debug console
+            const consoleDiv = document.createElement('div');
+            consoleDiv.id = 'debug-console';
+            consoleDiv.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                width: 80vw;
+                max-width: 600px;
+                height: 70vh;
+                background: rgba(15, 23, 42, 0.95);
+                border: 2px solid #0ea5e9;
+                border-radius: 12px;
+                z-index: 10000;
+                display: flex;
+                flex-direction: column;
+                font-family: 'JetBrains Mono', monospace;
+                backdrop-filter: blur(12px);
+            `;
+            
+            const header = document.createElement('div');
+            header.style.cssText = `
+                padding: 12px 16px;
+                background: #0ea5e9;
+                color: white;
+                font-weight: bold;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                border-radius: 10px 10px 0 0;
+            `;
+            header.innerHTML = `
+                <span>🔍 CaptnReverse Debug Console</span>
+                <button id="close-debug" style="background: none; border: none; color: white; font-size: 18px; cursor: pointer;">✖️</button>
+            `;
+            
+            const content = document.createElement('div');
+            content.style.cssText = `
+                flex: 1;
+                padding: 16px;
+                overflow-y: auto;
+                background: #0f172a;
+                color: #e2e8f0;
+                font-size: 12px;
+                line-height: 1.4;
+            `;
+            
+            const controls = document.createElement('div');
+            controls.style.cssText = `
+                padding: 12px 16px;
+                background: #1e293b;
+                border-top: 1px solid #334155;
+                display: flex;
+                gap: 8px;
+                border-radius: 0 0 10px 10px;
+            `;
+            controls.innerHTML = `
+                <button id="clear-debug" style="padding: 6px 12px; background: #ef4444; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 11px;">Clear</button>
+                <button id="export-debug" style="padding: 6px 12px; background: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 11px;">Export</button>
+                <button id="test-settings" style="padding: 6px 12px; background: #f59e0b; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 11px;">Test Settings</button>
+            `;
+            
+            consoleDiv.appendChild(header);
+            consoleDiv.appendChild(content);
+            consoleDiv.appendChild(controls);
+            document.body.appendChild(consoleDiv);
+            
+            // Add event listeners
+            document.getElementById('close-debug').addEventListener('click', () => {
+                consoleDiv.remove();
+                debugConsole = null;
+            });
+            
+            document.getElementById('clear-debug').addEventListener('click', () => {
+                debugLogs = [];
+                updateDebugDisplay();
+            });
+            
+            document.getElementById('export-debug').addEventListener('click', () => {
+                const data = JSON.stringify({
+                    timestamp: new Date().toISOString(),
+                    url: window.location.href,
+                    userAgent: navigator.userAgent,
+                    logs: debugLogs,
+                    settings: {
+                        autoRead, speechRate, sensitivity, imageThreshold, 
+                        processingInterval, showDebugCanvas, currentOCREngine
+                    }
+                }, null, 2);
+                
+                const blob = new Blob([data], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `captn-debug-${Date.now()}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+            });
+            
+            document.getElementById('test-settings').addEventListener('click', () => {
+                testSettingsButton();
+            });
+            
+            debugConsole = { closed: false };
+            
+            // Override console methods to capture logs
+            ['log', 'error', 'warn', 'info'].forEach(method => {
+                const original = console[method];
+                console[method] = function(...args) {
+                    original.apply(console, args);
+                    debugLogs.push({
+                        type: method,
+                        timestamp: new Date().toISOString(),
+                        message: args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ')
+                    });
+                    if (debugLogs.length > 200) debugLogs.shift(); // Keep last 200 logs
+                    updateDebugDisplay();
+                };
+            });
+            
+            updateDebugDisplay();
+            
+            function updateDebugDisplay() {
+                const content = document.querySelector('#debug-console > div:nth-child(2)');
+                if (content) {
+                    content.innerHTML = debugLogs.map(log => `
+                        <div style="margin-bottom: 4px; padding: 4px; background: ${
+                            log.type === 'error' ? 'rgba(239, 68, 68, 0.1)' :
+                            log.type === 'warn' ? 'rgba(245, 158, 11, 0.1)' :
+                            log.type === 'info' ? 'rgba(59, 130, 246, 0.1)' :
+                            'rgba(16, 185, 129, 0.1)'
+                        }; border-left: 3px solid ${
+                            log.type === 'error' ? '#ef4444' :
+                            log.type === 'warn' ? '#f59e0b' :
+                            log.type === 'info' ? '#3b82f6' :
+                            '#10b981'
+                        }; border-radius: 4px;">
+                            <span style="color: #64748b; font-size: 10px;">[${log.timestamp.split('T')[1].split('.')[0]}]</span>
+                            <span style="color: ${
+                                log.type === 'error' ? '#ef4444' :
+                                log.type === 'warn' ? '#f59e0b' :
+                                log.type === 'info' ? '#3b82f6' :
+                                '#10b981'
+                            }; font-weight: bold; margin: 0 8px;">${log.type.toUpperCase()}</span>
+                            <span style="color: #e2e8f0;">${log.message}</span>
+                        </div>
+                    `).join('');
+                    content.scrollTop = content.scrollHeight;
+                }
+            }
+        }
+        
+        function testSettingsButton() {
+            console.log('🧪 Testing settings button functionality...');
+            const settingsBtn = document.getElementById('settings-btn');
+            const settingsModal = document.getElementById('settings-modal');
+            
+            console.log('Settings button element:', settingsBtn);
+            console.log('Settings modal element:', settingsModal);
+            console.log('Button click listeners:', getEventListeners ? getEventListeners(settingsBtn) : 'getEventListeners not available');
+            
+            if (settingsBtn) {
+                console.log('✅ Settings button found');
+                console.log('Button styles:', getComputedStyle(settingsBtn).display);
+                console.log('Button visibility:', settingsBtn.offsetParent !== null);
+                
+                // Try triggering click programmatically
+                console.log('🖱️ Triggering click event...');
+                settingsBtn.click();
+                
+                setTimeout(() => {
+                    const isVisible = settingsModal && !settingsModal.classList.contains('hidden');
+                    console.log('Modal visible after click:', isVisible);
+                }, 100);
+            } else {
+                console.error('❌ Settings button not found');
+            }
+            
+            if (settingsModal) {
+                console.log('✅ Settings modal found');
+                console.log('Modal classes:', settingsModal.className);
+                console.log('Modal styles:', getComputedStyle(settingsModal).display);
+            } else {
+                console.error('❌ Settings modal not found');
+            }
+        }
 
         // Initialize when page loads
         document.addEventListener('DOMContentLoaded', init);
