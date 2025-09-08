@@ -1014,8 +1014,25 @@
             debugCanvas.style.position = 'fixed';
             debugCanvas.style.top = '80px';
             debugCanvas.style.right = '10px';
-            debugCanvas.style.maxWidth = '200px';
-            debugCanvas.style.maxHeight = '150px';
+            
+            // Fix aspect ratio: Calculate display size while maintaining canvas aspect ratio
+            const aspectRatio = canvas.width / canvas.height;
+            const maxWidth = 200;
+            const maxHeight = 150;
+            
+            let displayWidth, displayHeight;
+            if (aspectRatio > maxWidth / maxHeight) {
+                // Width-limited
+                displayWidth = maxWidth;
+                displayHeight = maxWidth / aspectRatio;
+            } else {
+                // Height-limited
+                displayHeight = maxHeight;
+                displayWidth = maxHeight * aspectRatio;
+            }
+            
+            debugCanvas.style.width = `${displayWidth}px`;
+            debugCanvas.style.height = `${displayHeight}px`;
             debugCanvas.style.border = '2px solid #0ea5e9';
             debugCanvas.style.borderRadius = '8px';
             debugCanvas.style.zIndex = '9999';
@@ -1083,9 +1100,13 @@
                     }
                 });
 
+                // Optimized OCR parameters based on comprehensive test suite results
                 await ocrWorker.setParameters({
-                    tessedit_pageseg_mode: '1', // OPTIMAL: Auto with OSD - 70% confidence on test image!
-                    preserve_interword_spaces: '1' // Better word spacing
+                    tessedit_pageseg_mode: '6', // OPTIMAL: Single uniform block - best for general text
+                    preserve_interword_spaces: '1', // Better word spacing
+                    tesseract_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 .,"\'', // Improve accuracy by restricting to common characters
+                    tessedit_do_invert: '0', // Disable auto-invert for better consistency
+                    classify_enable_adaptive_matcher: '1' // Enable adaptive matching for better accuracy
                 });
 
                 console.log('✅ OCR Worker ready');
@@ -1250,14 +1271,21 @@
             
             try {
                 const capabilities = mediaStreamTrack.getCapabilities();
+                console.log('📷 Camera capabilities:', capabilities);
+                
                 if (capabilities.zoom) {
                     await mediaStreamTrack.applyConstraints({
                         zoom: { ideal: cameraZoom }
                     });
                     console.log(`📷 Applied zoom: ${cameraZoom}x`);
+                    updateStatus(`Zoom: ${cameraZoom}x applied`, 'bg-blue-400');
+                } else {
+                    console.warn('⚠️ Camera does not support optical zoom');
+                    updateStatus('Zoom not supported by camera', 'bg-yellow-400');
                 }
             } catch (error) {
                 console.warn('⚠️ Camera zoom not supported:', error);
+                updateStatus('Zoom failed to apply', 'bg-red-400');
             }
         }
 
@@ -1423,6 +1451,48 @@
             await processFrame();
         }
 
+        // Helper function to detect blank, noise, or meaningless OCR results
+        function isBlankOrNoise(text) {
+            if (!text || typeof text !== 'string') return true;
+            
+            // Common OCR noise patterns
+            const noisePatterns = [
+                /^[\s\-_|\\\/\.\,\;\:\!\?\'\"\`\~\@\#\$\%\^\&\*\(\)\[\]\{\}\<\>\=\+]+$/, // Only symbols/punctuation
+                /^[lI1|]{1,3}$/, // Common OCR misreads (l, I, 1, |)
+                /^[oO0]{1,3}$/, // Circles mistaken for O's or 0's
+                /^[\.\s]+$/, // Only dots and spaces
+                /^[\-\s]+$/, // Only dashes and spaces
+                /^[_\s]+$/, // Only underscores and spaces
+                /^[,\s]+$/, // Only commas and spaces
+                /^\s*$/, // Only whitespace
+            ];
+            
+            // Check against noise patterns
+            for (const pattern of noisePatterns) {
+                if (pattern.test(text)) {
+                    return true;
+                }
+            }
+            
+            // Check for very repetitive patterns (like "|||" or "...")
+            if (text.length > 1) {
+                const firstChar = text.charAt(0);
+                if (text.split('').every(char => char === firstChar || char === ' ')) {
+                    return true; // All characters are the same (ignoring spaces)
+                }
+            }
+            
+            // Check for suspicious character ratios
+            const alphanumericCount = (text.match(/[a-zA-Z0-9]/g) || []).length;
+            const totalLength = text.length;
+            
+            if (totalLength > 0 && (alphanumericCount / totalLength) < 0.3) {
+                return true; // Less than 30% alphanumeric characters
+            }
+            
+            return false;
+        }
+
         async function processFrame() {
             try {
                 const video = document.getElementById('camera-feed');
@@ -1566,33 +1636,49 @@
                 // Update debug display with OCR result
                 updateDebugText(ocrText, ocrConfidence);
                 
-                if (ocrConfidence > sensitivity) {
-                    const text = result.data.text.trim();
-                    if (text && text.length > 2 && text !== lastText) {
-                        displayText(text, result.data.confidence, processingTime);
-                        lastText = text;
-                        
-                        console.log(`📝 New text detected: "${text}"`);
-                        
-                        if (autoRead) {
-                            console.log(`🔊 Auto-reading enabled, speaking text...`);
-                            speak(text);
-                        }
-                    } else if (text === lastText) {
-                        console.log(`🔄 Same text as before, skipping...`);
-                    } else {
-                        console.log(`📏 Text too short (${text.length} chars), skipping...`);
+                // Enhanced text validation to prevent false positives on blank/empty content
+                const text = result.data.text.trim();
+                const hasActualText = text && 
+                    text.length > 2 && 
+                    /[a-zA-Z0-9]/.test(text) && // Contains at least one alphanumeric character
+                    text !== lastText &&
+                    !isBlankOrNoise(text); // Additional noise filtering
+                
+                if (ocrConfidence > sensitivity && hasActualText) {
+                    displayText(text, result.data.confidence, processingTime);
+                    lastText = text;
+                    
+                    console.log(`📝 New text detected: "${text}"`);
+                    
+                    if (autoRead) {
+                        console.log(`🔊 Auto-reading enabled, speaking text...`);
+                        speak(text);
                     }
                 } else {
-                    console.log(`🎯 Confidence ${Math.round(result.data.confidence)}% below threshold ${sensitivity}%`);
+                    // Detailed logging for why text was rejected
+                    if (!hasActualText) {
+                        if (!text || text.length <= 2) {
+                            console.log(`📏 Text too short (${text.length} chars): "${text}"`);
+                        } else if (!/[a-zA-Z0-9]/.test(text)) {
+                            console.log(`🚫 No alphanumeric characters in: "${text}"`);
+                        } else if (text === lastText) {
+                            console.log(`🔄 Same text as before, skipping: "${text}"`);
+                        } else if (isBlankOrNoise(text)) {
+                            console.log(`🔇 Detected noise/blank pattern: "${text}"`);
+                        }
+                        updateStatus('No readable text found', 'bg-gray-400');
+                    } else if (ocrConfidence <= sensitivity) {
+                        console.log(`🎯 Confidence ${Math.round(ocrConfidence)}% below threshold ${sensitivity}%`);
+                        updateStatus(`Low confidence: ${Math.round(ocrConfidence)}%`, 'bg-yellow-400');
+                    }
                     
-                    // Enhanced user feedback for low confidence OCR results
+                    // Enhanced user feedback for rejected OCR results
                     if (ocrConfidence < 20) {
-                        updateStatus('No readable text found', 'bg-red-400');
                         updateDebugText('No clear text detected. Try adjusting lighting, focus, or crop area.', ocrConfidence);
                     } else if (ocrConfidence < sensitivity) {
-                        updateStatus('Text detected but low quality', 'bg-yellow-400');
                         updateDebugText(`Text detected but confidence (${Math.round(ocrConfidence)}%) below threshold (${sensitivity}%). Consider lowering sensitivity.`, ocrConfidence);
+                    } else if (!hasActualText) {
+                        updateDebugText(`High confidence (${Math.round(ocrConfidence)}%) but invalid text content: "${text}"`, ocrConfidence);
                     }
                 }
             } catch (error) {
