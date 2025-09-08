@@ -357,6 +357,15 @@
                             </button>
                         </div>
                         
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Debug View Size</label>
+                            <div class="flex items-center gap-2" id="debug-sizing-control">
+                                <button data-size="constrained" class="flex-1 py-2 px-3 rounded-lg text-xs font-medium bg-primary-600 text-white">Constrained</button>
+                                <button data-size="autoWidth" class="flex-1 py-2 px-3 rounded-lg text-xs font-medium bg-dark-600 hover:bg-dark-500 text-white">Auto Height</button>
+                            </div>
+                            <p class="text-xs text-dark-400 mt-1">Constrained fits within box, Auto Height preserves aspect ratio</p>
+                        </div>
+                        
                         <button id="test-ocr" class="w-full bg-purple-600 hover:bg-purple-700 text-white py-3 px-4 rounded-xl font-medium transition-colors">
                             🧪 Test OCR with Sample Text
                         </button>
@@ -406,7 +415,8 @@
                 sensitivity: 60, // Increased default for better quality filtering
                 imageThreshold: 150,
                 processingInterval: 2000,
-                showDebugCanvas: true
+                showDebugCanvas: true,
+                debugViewSizing: 'constrained' // 'constrained' or 'autoWidth'
             }
         };
 
@@ -542,6 +552,7 @@
                     processingInterval = settings.processingInterval ?? processingInterval;
                     showDebugCanvas = settings.showDebugCanvas ?? showDebugCanvas;
                     currentOCREngine = settings.currentOCREngine ?? currentOCREngine;
+                    AppState.settings.debugViewSizing = settings.debugViewSizing ?? AppState.settings.debugViewSizing;
                     console.log('💾 Loaded saved settings');
                 }
             } catch (error) {
@@ -559,7 +570,8 @@
                     imageThreshold,
                     processingInterval,
                     showDebugCanvas,
-                    currentOCREngine
+                    currentOCREngine,
+                    debugViewSizing: AppState.settings.debugViewSizing
                 };
                 localStorage.setItem('captn-reverse-settings', JSON.stringify(settings));
                 console.log('💾 Settings saved');
@@ -771,9 +783,7 @@
 
             // Auto focus button
             document.getElementById('focus-auto').addEventListener('click', () => {
-                document.getElementById('camera-focus').value = 500;
-                document.getElementById('focus-value').textContent = 'Auto';
-                applyCameraFocus(500);
+                setAutoFocus();
             });
 
             // Crop selector
@@ -810,9 +820,11 @@
 
             // OCR settings (modal)
             document.getElementById('sensitivity-modal').addEventListener('input', (e) => {
-                sensitivity = parseInt(e.target.value);
-                document.getElementById('sensitivity-value-modal').textContent = sensitivity;
+                AppState.settings.sensitivity = parseInt(e.target.value);
+                sensitivity = AppState.settings.sensitivity; // Keep legacy var in sync temporarily
+                document.getElementById('sensitivity-value-modal').textContent = AppState.settings.sensitivity;
                 saveSettings();
+                console.log(`🎯 Sensitivity updated to ${AppState.settings.sensitivity}%`);
             });
 
             document.getElementById('threshold-slider-modal').addEventListener('input', (e) => {
@@ -834,6 +846,7 @@
             // Debug toggle
             document.getElementById('debug-toggle').addEventListener('click', () => {
                 showDebugCanvas = !showDebugCanvas;
+                AppState.settings.showDebugCanvas = showDebugCanvas; // Keep AppState in sync
                 updateDebugToggle();
                 if (!showDebugCanvas) {
                     // Remove debug elements
@@ -844,6 +857,24 @@
                     });
                 }
                 saveSettings();
+            });
+
+            // Debug sizing control
+            document.getElementById('debug-sizing-control').addEventListener('click', (e) => {
+                if (e.target.tagName === 'BUTTON') {
+                    const newSize = e.target.dataset.size;
+                    AppState.settings.debugViewSizing = newSize;
+                    saveSettings();
+                    
+                    // Update button styles
+                    document.querySelectorAll('#debug-sizing-control button').forEach(btn => {
+                        btn.classList.toggle('bg-primary-600', btn.dataset.size === newSize);
+                        btn.classList.toggle('bg-dark-600', btn.dataset.size !== newSize);
+                        btn.classList.toggle('hover:bg-dark-500', btn.dataset.size !== newSize);
+                    });
+                    
+                    console.log(`🖼️ Debug view sizing changed to: ${newSize}`);
+                }
             });
 
             // Release camera button
@@ -1015,24 +1046,32 @@
             debugCanvas.style.top = '80px';
             debugCanvas.style.right = '10px';
             
-            // Fix aspect ratio: Calculate display size while maintaining canvas aspect ratio
-            const aspectRatio = canvas.width / canvas.height;
-            const maxWidth = 200;
-            const maxHeight = 150;
-            
-            let displayWidth, displayHeight;
-            if (aspectRatio > maxWidth / maxHeight) {
-                // Width-limited
-                displayWidth = maxWidth;
-                displayHeight = maxWidth / aspectRatio;
+            // Dynamic sizing based on user preference
+            if (AppState.settings.debugViewSizing === 'autoWidth') {
+                // Auto height mode: Fixed width, height adjusts to preserve aspect ratio
+                debugCanvas.style.width = '200px';
+                debugCanvas.style.height = 'auto';
+                debugCanvas.style.maxHeight = 'none';
             } else {
-                // Height-limited
-                displayHeight = maxHeight;
-                displayWidth = maxHeight * aspectRatio;
+                // Constrained mode: Fit within fixed box while maintaining aspect ratio
+                const aspectRatio = canvas.width / canvas.height;
+                const maxWidth = 200;
+                const maxHeight = 150;
+                
+                let displayWidth, displayHeight;
+                if (aspectRatio > maxWidth / maxHeight) {
+                    // Width-limited
+                    displayWidth = maxWidth;
+                    displayHeight = maxWidth / aspectRatio;
+                } else {
+                    // Height-limited
+                    displayHeight = maxHeight;
+                    displayWidth = maxHeight * aspectRatio;
+                }
+                
+                debugCanvas.style.width = `${displayWidth}px`;
+                debugCanvas.style.height = `${displayHeight}px`;
             }
-            
-            debugCanvas.style.width = `${displayWidth}px`;
-            debugCanvas.style.height = `${displayHeight}px`;
             debugCanvas.style.border = '2px solid #0ea5e9';
             debugCanvas.style.borderRadius = '8px';
             debugCanvas.style.zIndex = '9999';
@@ -1253,6 +1292,9 @@
             // Get camera track for zoom control
             mediaStreamTrack = stream.getVideoTracks()[0];
             
+            // Configure camera controls based on actual capabilities
+            configureCameraControls();
+            
             // Wait for video to start playing
             video.onloadedmetadata = () => {
                 console.log('📹 Video metadata loaded, starting overlay');
@@ -1264,6 +1306,66 @@
             document.getElementById('main-app').classList.remove('hidden');
             
             updateStatus('Camera active', 'bg-green-400');
+        }
+        
+        async function configureCameraControls() {
+            if (!mediaStreamTrack) return;
+            
+            try {
+                const capabilities = mediaStreamTrack.getCapabilities();
+                const settings = mediaStreamTrack.getSettings();
+                console.log('📷 Camera capabilities:', capabilities);
+                console.log('📷 Current settings:', settings);
+                
+                // Configure focus control based on actual capabilities
+                const focusSlider = document.getElementById('camera-focus');
+                const focusRow = focusSlider.closest('.flex');
+                
+                if (capabilities.focusDistance) {
+                    const { min, max, step } = capabilities.focusDistance;
+                    console.log(`🎯 Configuring focus slider: min=${min}, max=${max}, step=${step}`);
+                    
+                    focusSlider.min = min;
+                    focusSlider.max = max;
+                    focusSlider.step = step || 0.1;
+                    
+                    // Set current value from device settings
+                    if (settings.focusDistance !== undefined) {
+                        focusSlider.value = settings.focusDistance;
+                        document.getElementById('focus-value').textContent = settings.focusDistance.toFixed(2);
+                    }
+                    focusRow.style.display = 'flex'; // Ensure it's visible
+                } else {
+                    console.warn('⚠️ Focus distance control not supported');
+                    focusRow.style.display = 'none'; // Hide the control
+                }
+                
+                // Configure zoom control
+                const zoomSlider = document.getElementById('camera-zoom');
+                const zoomRow = zoomSlider.closest('.flex');
+                
+                if (capabilities.zoom) {
+                    const { min, max, step } = capabilities.zoom;
+                    console.log(`📷 Configuring zoom slider: min=${min}, max=${max}, step=${step}`);
+                    
+                    zoomSlider.min = min;
+                    zoomSlider.max = max;
+                    zoomSlider.step = step || 0.1;
+                    
+                    if (settings.zoom !== undefined) {
+                        zoomSlider.value = settings.zoom;
+                        cameraZoom = settings.zoom;
+                        document.getElementById('zoom-value').textContent = settings.zoom.toFixed(1) + 'x';
+                    }
+                    zoomRow.style.display = 'flex';
+                } else {
+                    console.warn('⚠️ Camera zoom not supported');
+                    zoomRow.style.display = 'none';
+                }
+                
+            } catch (error) {
+                console.error('❌ Failed to configure camera controls:', error);
+            }
         }
 
         async function applyCameraZoom() {
@@ -1294,23 +1396,40 @@
             
             try {
                 const capabilities = mediaStreamTrack.getCapabilities();
-                console.log('📷 Camera capabilities:', capabilities);
                 
                 if (capabilities.focusDistance) {
-                    const constraints = focusDistance === 500 ? 
-                        { focusMode: 'auto' } : 
-                        { 
-                            focusMode: 'manual',
-                            focusDistance: { ideal: focusDistance / 1000 } // Convert to 0-1 range
-                        };
+                    // Use the actual focus distance value from camera capabilities
+                    const constraints = {
+                        focusMode: 'manual',
+                        focusDistance: { ideal: parseFloat(focusDistance) }
+                    };
                     
                     await mediaStreamTrack.applyConstraints({ advanced: [constraints] });
-                    console.log(`🎯 Applied focus: ${focusDistance === 500 ? 'auto' : focusDistance}`);
+                    console.log(`🎯 Applied manual focus: ${focusDistance}`);
+                    updateStatus(`Focus: ${parseFloat(focusDistance).toFixed(2)}`, 'bg-blue-400');
                 } else {
                     console.warn('⚠️ Manual focus not supported on this camera');
+                    updateStatus('Focus control not supported', 'bg-yellow-400');
                 }
             } catch (error) {
                 console.warn('⚠️ Focus control error:', error);
+                updateStatus('Focus adjustment failed', 'bg-red-400');
+            }
+        }
+        
+        async function setAutoFocus() {
+            if (!mediaStreamTrack) return;
+            
+            try {
+                await mediaStreamTrack.applyConstraints({ 
+                    focusMode: 'continuous' // Better for live video than 'auto'
+                });
+                console.log('🎯 Set focus mode to continuous auto-focus');
+                updateStatus('Auto-focus enabled', 'bg-green-400');
+                document.getElementById('focus-value').textContent = 'Auto';
+            } catch (error) {
+                console.warn('⚠️ Could not set auto focus:', error);
+                updateStatus('Auto-focus failed', 'bg-red-400');
             }
         }
 
@@ -1622,7 +1741,31 @@
                 document.getElementById('processing-state').classList.remove('hidden');
 
                 const startTime = Date.now();
-                const result = await ocrWorker.recognize(cropCanvas);
+                let result;
+                
+                // Use the selected OCR engine
+                if (currentOCREngine === 'paddle' && paddleOCRLoaded && window.paddleocr) {
+                    console.log('🤖 Using PaddleOCR engine...');
+                    try {
+                        const paddleResult = await window.paddleocr.recognize(cropCanvas);
+                        // Normalize PaddleOCR result to match Tesseract format
+                        result = {
+                            data: {
+                                text: paddleResult.text || '',
+                                confidence: (paddleResult.confidence || 0) * 100 // Convert to percentage if needed
+                            }
+                        };
+                        console.log('✅ PaddleOCR recognition completed');
+                    } catch (paddleError) {
+                        console.error('❌ PaddleOCR recognition failed:', paddleError);
+                        updateStatus('PaddleOCR failed, using Tesseract', 'bg-yellow-400');
+                        result = await ocrWorker.recognize(cropCanvas);
+                    }
+                } else {
+                    console.log('🤖 Using Tesseract.js engine...');
+                    result = await ocrWorker.recognize(cropCanvas);
+                }
+                
                 const processingTime = Date.now() - startTime;
 
                 // Hide processing state
@@ -1644,7 +1787,7 @@
                     text !== lastText &&
                     !isBlankOrNoise(text); // Additional noise filtering
                 
-                if (ocrConfidence > sensitivity && hasActualText) {
+                if (ocrConfidence > AppState.settings.sensitivity && hasActualText) {
                     displayText(text, result.data.confidence, processingTime);
                     lastText = text;
                     
@@ -1667,16 +1810,16 @@
                             console.log(`🔇 Detected noise/blank pattern: "${text}"`);
                         }
                         updateStatus('No readable text found', 'bg-gray-400');
-                    } else if (ocrConfidence <= sensitivity) {
-                        console.log(`🎯 Confidence ${Math.round(ocrConfidence)}% below threshold ${sensitivity}%`);
+                    } else if (ocrConfidence <= AppState.settings.sensitivity) {
+                        console.log(`🎯 Confidence ${Math.round(ocrConfidence)}% below threshold ${AppState.settings.sensitivity}%`);
                         updateStatus(`Low confidence: ${Math.round(ocrConfidence)}%`, 'bg-yellow-400');
                     }
                     
                     // Enhanced user feedback for rejected OCR results
                     if (ocrConfidence < 20) {
                         updateDebugText('No clear text detected. Try adjusting lighting, focus, or crop area.', ocrConfidence);
-                    } else if (ocrConfidence < sensitivity) {
-                        updateDebugText(`Text detected but confidence (${Math.round(ocrConfidence)}%) below threshold (${sensitivity}%). Consider lowering sensitivity.`, ocrConfidence);
+                    } else if (ocrConfidence < AppState.settings.sensitivity) {
+                        updateDebugText(`Text detected but confidence (${Math.round(ocrConfidence)}%) below threshold (${AppState.settings.sensitivity}%). Consider lowering sensitivity.`, ocrConfidence);
                     } else if (!hasActualText) {
                         updateDebugText(`High confidence (${Math.round(ocrConfidence)}%) but invalid text content: "${text}"`, ocrConfidence);
                     }
@@ -1781,26 +1924,32 @@
             try {
                 updateStatus('Loading PaddleOCR...', 'bg-yellow-400 animate-pulse');
                 
-                // Dynamically load PaddleOCR.js with SRI for security
+                // Dynamically load PaddleOCR.js with correct package
                 const script = document.createElement('script');
-                script.src = 'https://unpkg.com/paddleocr@1.0.0/dist/paddleocr.min.js';
+                script.src = 'https://unpkg.com/@paddlejs-models/ocr@1.2.4/dist/index.min.js';
+                script.type = 'module'; // PaddleOCR requires ES module support
                 
-                // Security: Add Subresource Integrity to prevent code injection
-                script.integrity = 'sha384-N4YqHYzm6JtAL7yJBCZLl+CYUl8PXA5E1TqH8W+1iKGdH0YFgCnrJhZlc/3Pv2Sw';
-                script.crossOrigin = 'anonymous';
-                
-                script.onload = () => {
-                    console.log('✅ PaddleOCR loaded successfully');
-                    paddleOCRLoaded = true;
-                    updateStatus('PaddleOCR ready', 'bg-green-400');
+                script.onload = async () => {
+                    console.log('✅ PaddleOCR script loaded, initializing...');
+                    try {
+                        // Initialize PaddleOCR (it's available as window.paddleocr after loading)
+                        if (window.paddleocr) {
+                            await window.paddleocr.init();
+                            console.log('✅ PaddleOCR initialized successfully');
+                            paddleOCRLoaded = true;
+                            updateStatus('PaddleOCR ready', 'bg-green-400');
+                        } else {
+                            throw new Error('PaddleOCR not available on window object');
+                        }
+                    } catch (initError) {
+                        console.error('❌ PaddleOCR initialization failed:', initError);
+                        updateStatus('PaddleOCR init failed', 'bg-red-400');
+                        switchOCREngine('tesseract');
+                    }
                 };
                 script.onerror = (error) => {
                     console.error('❌ Failed to load PaddleOCR:', error);
                     updateStatus('PaddleOCR load failed', 'bg-red-400');
-                    // Security note: SRI failure could be due to tampered content
-                    if (error.target && error.target.integrity) {
-                        console.warn('⚠️ SRI check failed - script content may have been tampered with');
-                    }
                     // Fallback to Tesseract
                     switchOCREngine('tesseract');
                 };
@@ -1874,6 +2023,16 @@
                 thumb.classList.add('translate-x-1');
             }
         }
+        
+        function updateDebugSizingButtons() {
+            const buttons = document.querySelectorAll('#debug-sizing-control button');
+            buttons.forEach(btn => {
+                const isSelected = btn.dataset.size === AppState.settings.debugViewSizing;
+                btn.classList.toggle('bg-primary-600', isSelected);
+                btn.classList.toggle('bg-dark-600', !isSelected);
+                btn.classList.toggle('hover:bg-dark-500', !isSelected);
+            });
+        }
 
         function updateSettingsModalValues() {
             // Update all modal controls with current values
@@ -1892,6 +2051,7 @@
             // Update toggles
             updateModalAutoReadToggle();
             updateDebugToggle();
+            updateDebugSizingButtons();
             
             // Update OCR engine buttons
             const tesseractBtn = document.getElementById('ocr-tesseract');
