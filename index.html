@@ -360,6 +360,10 @@
                         <button id="test-ocr" class="w-full bg-purple-600 hover:bg-purple-700 text-white py-3 px-4 rounded-xl font-medium transition-colors">
                             🧪 Test OCR with Sample Text
                         </button>
+
+                        <button id="release-camera" class="w-full bg-red-600 hover:bg-red-700 text-white py-3 px-4 rounded-xl font-medium transition-colors">
+                            🛑 Release Camera Resources
+                        </button>
                     </div>
                 </section>
             </div>
@@ -385,6 +389,7 @@
         let paddleOCRLoaded = false;
         let showDebugCanvas = true;
         let processingInterval = 2000;
+        let cameraRequestInProgress = false;
 
         // Initialize app
         async function init() {
@@ -538,6 +543,16 @@
                         if (el) el.remove();
                     });
                 }
+            });
+
+            // Release camera button
+            document.getElementById('release-camera').addEventListener('click', () => {
+                cleanupCamera();
+                // Reset UI to setup screen
+                document.getElementById('main-app').classList.add('hidden');
+                document.getElementById('setup-screen').classList.remove('hidden');
+                document.getElementById('settings-modal').classList.add('hidden');
+                updateStatus('Camera released', 'bg-yellow-400');
             });
         }
 
@@ -761,13 +776,21 @@
 
         async function requestCamera() {
             try {
+                // Prevent duplicate camera requests
+                if (cameraRequestInProgress) {
+                    console.log('⏳ Camera request already in progress...');
+                    return;
+                }
+
+                cameraRequestInProgress = true;
                 console.log('📸 Requesting camera permission...');
                 
-                // First check if camera is already active and streaming
-                if (stream && stream.active && stream.getVideoTracks().length > 0) {
-                    console.log('📷 Camera already active, proceeding to main app');
-                    showMainApp();
-                    return;
+                // Cleanup any existing stream first
+                if (stream) {
+                    console.log('🧹 Cleaning up existing camera stream...');
+                    stream.getTracks().forEach(track => track.stop());
+                    stream = null;
+                    mediaStreamTrack = null;
                 }
                 
                 // Request camera permission with simplified constraints for better compatibility
@@ -780,9 +803,11 @@
                 });
 
                 console.log('✅ Camera permission granted!');
+                cameraRequestInProgress = false;
                 showMainApp();
 
             } catch (error) {
+                cameraRequestInProgress = false;
                 console.error('❌ Camera access denied:', error);
                 
                 let errorMessage = 'Camera access is required for CaptnReverse to function.';
@@ -1268,6 +1293,54 @@
                 thumb.classList.add('translate-x-1');
             }
         }
+
+        // Cleanup camera resources on page unload
+        function cleanupCamera() {
+            console.log('🧹 Cleaning up camera resources...');
+            
+            if (stream) {
+                // Stop all tracks to release camera
+                stream.getTracks().forEach(track => {
+                    console.log(`🛑 Stopping track: ${track.kind} (${track.label})`);
+                    track.stop();
+                });
+                stream = null;
+                mediaStreamTrack = null;
+            }
+
+            // Stop monitoring
+            if (window.monitoringInterval) {
+                clearInterval(window.monitoringInterval);
+                window.monitoringInterval = null;
+            }
+
+            // Cleanup OCR worker
+            if (ocrWorker) {
+                ocrWorker.terminate().catch(e => console.warn('OCR cleanup error:', e));
+                ocrWorker = null;
+            }
+
+            console.log('✅ Camera resources cleaned up');
+        }
+
+        // Critical: Add multiple cleanup event listeners
+        window.addEventListener('beforeunload', cleanupCamera);
+        window.addEventListener('unload', cleanupCamera);
+        window.addEventListener('pagehide', cleanupCamera);
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                console.log('📱 Page hidden, cleaning up camera...');
+                cleanupCamera();
+            }
+        });
+
+        // Cleanup on focus loss (important for mobile)
+        window.addEventListener('blur', () => {
+            console.log('👁️ Window lost focus, pausing camera...');
+            if (isMonitoring) {
+                toggleMonitoring(); // Stop monitoring to reduce resource usage
+            }
+        });
 
         // Initialize when page loads
         document.addEventListener('DOMContentLoaded', init);
