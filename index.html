@@ -184,13 +184,26 @@
                             </div>
                         </div>
 
-                        <!-- Zoom Controls (directly below camera) -->
-                        <div class="flex items-center justify-between mt-4">
+                        <!-- Camera Controls (directly below camera) -->
+                        <div class="space-y-3 mt-4">
+                            <!-- Zoom Control -->
                             <div class="flex items-center gap-4">
-                                <span class="text-sm font-medium text-dark-300">Zoom:</span>
-                                <input id="camera-zoom" type="range" min="1.0" max="5.0" step="0.1" value="1.0" class="w-24 h-2 bg-dark-600 rounded-lg">
-                                <span id="zoom-value" class="text-sm font-mono text-primary-400">1.0x</span>
+                                <span class="text-sm font-medium text-dark-300 w-12">Zoom:</span>
+                                <input id="camera-zoom" type="range" min="1.0" max="5.0" step="0.1" value="1.0" class="flex-1 h-2 bg-dark-600 rounded-lg">
+                                <span id="zoom-value" class="text-sm font-mono text-primary-400 w-12">1.0x</span>
                             </div>
+                            
+                            <!-- Focus Control -->
+                            <div class="flex items-center gap-4">
+                                <span class="text-sm font-medium text-dark-300 w-12">Focus:</span>
+                                <input id="camera-focus" type="range" min="0" max="1000" step="50" value="500" class="flex-1 h-2 bg-dark-600 rounded-lg">
+                                <span id="focus-value" class="text-sm font-mono text-primary-400 w-12">Auto</span>
+                                <button id="focus-auto" class="text-xs bg-dark-600 hover:bg-dark-500 px-2 py-1 rounded transition-colors">Auto</button>
+                            </div>
+                        </div>
+                        
+                        <!-- Crop Presets -->
+                        <div class="flex justify-end mt-4">
                             <div class="flex gap-2">
                                 <button onclick="setCrop(0.25, 0.25, 0.5, 0.5)" class="bg-dark-600 hover:bg-dark-500 px-3 py-1 rounded text-xs transition-colors">Center</button>
                                 <button onclick="setCrop(0, 0, 1, 0.5)" class="bg-dark-600 hover:bg-dark-500 px-3 py-1 rounded text-xs transition-colors">Top</button>
@@ -267,8 +280,8 @@
                             </div>
 
                             <div>
-                                <label class="block text-sm font-medium mb-2">OCR Sensitivity: <span id="sensitivity-value">30</span>%</label>
-                                <input id="sensitivity" type="range" min="10" max="100" step="5" value="30" class="w-full h-2 bg-dark-600 rounded-lg">
+                                <label class="block text-sm font-medium mb-2">OCR Sensitivity: <span id="sensitivity-value">60</span>%</label>
+                                <input id="sensitivity" type="range" min="10" max="100" step="5" value="60" class="w-full h-2 bg-dark-600 rounded-lg">
                             </div>
 
                             <div>
@@ -293,7 +306,7 @@
         let currentCrop = { x: 0.25, y: 0.25, width: 0.5, height: 0.5 };
         let autoRead = true;
         let speechRate = 1.0;
-        let sensitivity = 30; // Lowered for debugging - will catch more text
+        let sensitivity = 60; // Increased default for better quality filtering
         let lastText = '';
         let cameraZoom = 1.0;
         let mediaStreamTrack = null;
@@ -388,6 +401,20 @@
                 cameraZoom = parseFloat(e.target.value);
                 document.getElementById('zoom-value').textContent = cameraZoom.toFixed(1);
                 applyCameraZoom();
+            });
+
+            // Camera focus
+            document.getElementById('camera-focus').addEventListener('input', (e) => {
+                const focusDistance = parseInt(e.target.value);
+                document.getElementById('focus-value').textContent = focusDistance === 500 ? 'Auto' : focusDistance;
+                applyCameraFocus(focusDistance);
+            });
+
+            // Auto focus button
+            document.getElementById('focus-auto').addEventListener('click', () => {
+                document.getElementById('camera-focus').value = 500;
+                document.getElementById('focus-value').textContent = 'Auto';
+                applyCameraFocus(500);
             });
 
             // Crop selector
@@ -712,6 +739,31 @@
                 }
             } catch (error) {
                 console.warn('⚠️ Camera zoom not supported:', error);
+            }
+        }
+
+        async function applyCameraFocus(focusDistance) {
+            if (!mediaStreamTrack) return;
+            
+            try {
+                const capabilities = mediaStreamTrack.getCapabilities();
+                console.log('📷 Camera capabilities:', capabilities);
+                
+                if (capabilities.focusDistance) {
+                    const constraints = focusDistance === 500 ? 
+                        { focusMode: 'auto' } : 
+                        { 
+                            focusMode: 'manual',
+                            focusDistance: { ideal: focusDistance / 1000 } // Convert to 0-1 range
+                        };
+                    
+                    await mediaStreamTrack.applyConstraints({ advanced: [constraints] });
+                    console.log(`🎯 Applied focus: ${focusDistance === 500 ? 'auto' : focusDistance}`);
+                } else {
+                    console.warn('⚠️ Manual focus not supported on this camera');
+                }
+            } catch (error) {
+                console.warn('⚠️ Focus control error:', error);
             }
         }
 
