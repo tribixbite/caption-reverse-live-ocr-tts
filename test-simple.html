@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Settings Test</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            padding: 20px; 
+            background: #111; 
+            color: white; 
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #333;
+            padding: 20px;
+            border-radius: 8px;
+            border: 2px solid #0ea5e9;
+            z-index: 1000;
+        }
+        .modal.visible { display: block; }
+        .hidden { display: none !important; }
+        button { 
+            padding: 10px 15px; 
+            margin: 5px; 
+            background: #0ea5e9;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        #status { 
+            margin: 20px 0; 
+            padding: 10px; 
+            border-radius: 4px; 
+            background: #333; 
+        }
+    </style>
+</head>
+<body>
+    <h1>🔧 Simple Settings Button Test</h1>
+    <div id="status">Loading...</div>
+    
+    <!-- Settings Button -->
+    <button id="settings-btn">⚙️ Settings</button>
+    
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal hidden">
+        <h3>Settings Modal</h3>
+        <p>This is the settings modal!</p>
+        <button id="close-settings">Close Settings</button>
+    </div>
+
+    <script>
+        console.log('🚀 Simple test initializing...');
+        
+        // Test basic functionality
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('📋 DOM loaded');
+            
+            const statusDiv = document.getElementById('status');
+            const settingsBtn = document.getElementById('settings-btn');
+            const settingsModal = document.getElementById('settings-modal');
+            const closeBtn = document.getElementById('close-settings');
+            
+            // Update status
+            statusDiv.innerHTML = '✅ JavaScript is working!';
+            statusDiv.style.background = 'rgba(0, 255, 0, 0.2)';
+            
+            console.log('Elements found:', {
+                settingsBtn: !!settingsBtn,
+                settingsModal: !!settingsModal,
+                closeBtn: !!closeBtn
+            });
+            
+            // Event delegation (like in main app)
+            document.body.addEventListener('click', (e) => {
+                console.log('🖱️ Click detected on:', e.target.id, e.target.tagName);
+                
+                // Settings Button
+                if (e.target.closest('#settings-btn')) {
+                    e.preventDefault();
+                    console.log('⚙️ Settings button clicked!');
+                    if (settingsModal) {
+                        settingsModal.classList.remove('hidden');
+                        settingsModal.classList.add('visible');
+                        statusDiv.innerHTML = '⚙️ Settings modal opened!';
+                        statusDiv.style.background = 'rgba(0, 0, 255, 0.2)';
+                    }
+                    return;
+                }
+                
+                // Close Settings
+                if (e.target.closest('#close-settings')) {
+                    e.preventDefault();
+                    console.log('✖️ Close settings clicked!');
+                    if (settingsModal) {
+                        settingsModal.classList.add('hidden');
+                        settingsModal.classList.remove('visible');
+                        statusDiv.innerHTML = '✖️ Settings modal closed!';
+                        statusDiv.style.background = 'rgba(255, 255, 0, 0.2)';
+                    }
+                    return;
+                }
+            });
+            
+            console.log('✅ Event listeners attached');
+        });
+        
+        // Test API availability
+        console.log('🔍 API Check:', {
+            mediaDevices: !!navigator.mediaDevices,
+            speechSynthesis: !!speechSynthesis,
+            permissions: !!navigator.permissions,
+            isSecureContext: window.isSecureContext,
+            protocol: window.location.protocol
+        });
+    </script>
+</body>
+</html>

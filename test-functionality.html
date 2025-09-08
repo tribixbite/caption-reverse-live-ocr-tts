@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CaptnReverse Functionality Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #111;
+            color: white;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #333;
+            border-radius: 8px;
+        }
+        .success { border-color: green; background: rgba(0, 255, 0, 0.1); }
+        .error { border-color: red; background: rgba(255, 0, 0, 0.1); }
+        button { 
+            padding: 10px 15px; 
+            margin: 5px; 
+            background: #0ea5e9;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        #test-modal {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #222;
+            padding: 20px;
+            border-radius: 8px;
+            border: 2px solid #0ea5e9;
+            z-index: 1000;
+        }
+        #test-modal.visible { display: block; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <h1>🔍 CaptnReverse Functionality Test</h1>
+    
+    <div class="test-section">
+        <h2>Settings Button Test</h2>
+        <button id="settings-btn">⚙️ Settings</button>
+        <button id="test-settings">🧪 Test Settings Button</button>
+        <div id="settings-result"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>Event Delegation Test</h2>
+        <button id="test-delegation">Test Event Delegation</button>
+        <div id="delegation-result"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>Permission API Test</h2>
+        <button id="test-permissions">Test Navigator Permissions</button>
+        <div id="permissions-result"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>Camera API Test</h2>
+        <button id="test-camera">Test Camera Access</button>
+        <div id="camera-result"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>Voice API Test</h2>
+        <button id="test-voices">Test Speech Synthesis</button>
+        <div id="voices-result"></div>
+    </div>
+
+    <!-- Test Modal -->
+    <div id="test-modal" class="hidden">
+        <h3>Test Modal</h3>
+        <p>This is a test modal to verify modal functionality.</p>
+        <button id="close-modal">Close Modal</button>
+    </div>
+
+    <script>
+        console.log('🔧 Setting up functionality tests...');
+        
+        // Test Results Helper
+        function showResult(elementId, message, isSuccess = true) {
+            const element = document.getElementById(elementId);
+            element.innerHTML = `<p style="color: ${isSuccess ? 'green' : 'red'}">${message}</p>`;
+            element.parentElement.className = `test-section ${isSuccess ? 'success' : 'error'}`;
+        }
+
+        // 1. Settings Button Test
+        document.getElementById('settings-btn').addEventListener('click', (e) => {
+            e.preventDefault();
+            console.log('⚙️ Settings button clicked!');
+            const modal = document.getElementById('test-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('visible');
+            showResult('settings-result', '✅ Settings button click handler working!');
+        });
+
+        document.getElementById('close-modal').addEventListener('click', () => {
+            const modal = document.getElementById('test-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('visible');
+        });
+
+        document.getElementById('test-settings').addEventListener('click', () => {
+            const settingsBtn = document.getElementById('settings-btn');
+            if (settingsBtn) {
+                console.log('🧪 Testing settings button programmatically...');
+                settingsBtn.click();
+            } else {
+                showResult('settings-result', '❌ Settings button not found!', false);
+            }
+        });
+
+        // 2. Event Delegation Test
+        document.body.addEventListener('click', (e) => {
+            if (e.target.id === 'test-delegation') {
+                e.preventDefault();
+                showResult('delegation-result', '✅ Event delegation working!');
+            }
+        });
+
+        // 3. Permission API Test
+        document.getElementById('test-permissions').addEventListener('click', async () => {
+            try {
+                console.log('🔒 Testing permissions API...');
+                if (!navigator.permissions) {
+                    showResult('permissions-result', '⚠️ Navigator.permissions not supported', false);
+                    return;
+                }
+                
+                const cameraPermission = await navigator.permissions.query({name: 'camera'});
+                showResult('permissions-result', `✅ Camera permission: ${cameraPermission.state}`);
+            } catch (error) {
+                showResult('permissions-result', `❌ Permission API error: ${error.message}`, false);
+            }
+        });
+
+        // 4. Camera API Test
+        document.getElementById('test-camera').addEventListener('click', async () => {
+            try {
+                console.log('📸 Testing camera access...');
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    showResult('camera-result', '❌ getUserMedia not supported', false);
+                    return;
+                }
+
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { width: 640, height: 480 } 
+                });
+                
+                // Immediately stop the stream since this is just a test
+                stream.getTracks().forEach(track => track.stop());
+                showResult('camera-result', '✅ Camera access granted!');
+                
+            } catch (error) {
+                showResult('camera-result', `❌ Camera error: ${error.name} - ${error.message}`, false);
+            }
+        });
+
+        // 5. Voice API Test
+        document.getElementById('test-voices').addEventListener('click', () => {
+            try {
+                console.log('🗣️ Testing speech synthesis...');
+                if (!speechSynthesis) {
+                    showResult('voices-result', '❌ Speech synthesis not supported', false);
+                    return;
+                }
+
+                const voices = speechSynthesis.getVoices();
+                const utterance = new SpeechSynthesisUtterance('Testing speech synthesis');
+                utterance.rate = 1.0;
+                utterance.onend = () => {
+                    showResult('voices-result', `✅ Speech synthesis working! Found ${voices.length} voices`);
+                };
+                utterance.onerror = (error) => {
+                    showResult('voices-result', `❌ Speech error: ${error.error}`, false);
+                };
+                
+                speechSynthesis.speak(utterance);
+                
+            } catch (error) {
+                showResult('voices-result', `❌ Voice API error: ${error.message}`, false);
+            }
+        });
+
+        // Check secure context
+        console.log('🔒 Secure context:', window.isSecureContext);
+        console.log('🌐 Protocol:', window.location.protocol);
+        console.log('🏠 Host:', window.location.host);
+
+        // Check for critical APIs
+        console.log('📋 API Availability:', {
+            mediaDevices: !!navigator.mediaDevices,
+            getUserMedia: !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia),
+            permissions: !!navigator.permissions,
+            speechSynthesis: !!speechSynthesis,
+            isSecureContext: window.isSecureContext
+        });
+    </script>
+</body>
+</html>
