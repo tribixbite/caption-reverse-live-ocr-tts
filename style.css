@@ -1,0 +1,120 @@
+/* CaptnReverse - Advanced OCR & TTS Stylesheet */
+
+/* Glass morphism effect for modern UI */
+.glass {
+    background: rgba(30, 41, 59, 0.7);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(51, 65, 85, 0.5);
+}
+
+/* Primary button styling with gradient and hover effects */
+.btn-primary {
+    background: linear-gradient(135deg, #0284c7 0%, #0ea5e9 100%);
+    transition: all 0.2s ease;
+}
+
+.btn-primary:hover {
+    background: linear-gradient(135deg, #0369a1 0%, #0284c7 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 10px 20px rgba(14, 165, 233, 0.25);
+}
+
+/* Debug canvas positioning and styling */
+.debug-canvas {
+    position: fixed;
+    top: 80px;
+    right: 10px;
+    border: 2px solid #0ea5e9;
+    border-radius: 8px;
+    z-index: 9999;
+    background: white;
+    image-rendering: pixelated;
+}
+
+/* Status indicator animations */
+.status-pulse {
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: .5;
+    }
+}
+
+/* Custom scrollbar for debug console */
+.debug-console-content::-webkit-scrollbar {
+    width: 8px;
+}
+
+.debug-console-content::-webkit-scrollbar-track {
+    background: #1e293b;
+}
+
+.debug-console-content::-webkit-scrollbar-thumb {
+    background: #475569;
+    border-radius: 4px;
+}
+
+.debug-console-content::-webkit-scrollbar-thumb:hover {
+    background: #64748b;
+}
+
+/* Camera control styling */
+.camera-controls {
+    background: rgba(30, 41, 59, 0.8);
+    backdrop-filter: blur(8px);
+    border-radius: 12px;
+    padding: 16px;
+}
+
+/* OCR processing overlay */
+.processing-overlay {
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(4px);
+}
+
+/* Settings modal styling */
+.settings-modal {
+    backdrop-filter: blur(16px);
+    background: rgba(30, 41, 59, 0.95);
+}
+
+/* Responsive design for mobile */
+@media (max-width: 768px) {
+    .debug-canvas {
+        width: 150px !important;
+        height: auto !important;
+        top: 60px;
+        right: 5px;
+    }
+    
+    .glass {
+        backdrop-filter: blur(8px); /* Reduced for mobile performance */
+    }
+}
+
+/* Accessibility improvements */
+.btn-primary:focus,
+button:focus {
+    outline: 2px solid #0ea5e9;
+    outline-offset: 2px;
+}
+
+/* Loading spinner animation */
+.loading-spinner {
+    border: 4px solid #1e293b;
+    border-top: 4px solid #0ea5e9;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}

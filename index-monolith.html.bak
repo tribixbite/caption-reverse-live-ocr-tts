@@ -1,0 +1,2493 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CaptnReverse - Advanced OCR & TTS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+    <!-- ES Module Import Map for PaddleOCR -->
+    <script type="importmap">
+    {
+        "imports": {
+            "@paddlejs/paddlejs-core": "https://cdn.jsdelivr.net/npm/@paddlejs/paddlejs-core@2.2.0/dist/index.es.js",
+            "@paddlejs-models/ocr": "https://cdn.jsdelivr.net/npm/@paddlejs-models/ocr@2.2.0/dist/index.es.js"
+        }
+    }
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- External Stylesheet -->
+    <link rel="stylesheet" href="style.css">
+    <!-- Tailwind Configuration -->
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            400: '#38bdf8', 500: '#0ea5e9', 600: '#0284c7', 700: '#0369a1'
+                        },
+                        dark: {
+                            300: '#cbd5e1', 400: '#94a3b8', 500: '#64748b', 600: '#475569',
+                            700: '#334155', 800: '#1e293b', 900: '#0f172a', 950: '#020617'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-dark-900 text-white min-h-screen">
+    <!-- Status Bar -->
+    <header class="glass fixed top-0 left-0 right-0 z-50 border-b border-dark-700/50">
+        <div class="container mx-auto px-4 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-4">
+                <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center">
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                    </div>
+                    <span class="font-semibold text-lg">CaptnReverse</span>
+                </div>
+                <div class="hidden md:flex items-center gap-2">
+                    <div id="status-dot" class="w-2 h-2 rounded-full bg-dark-500"></div>
+                    <span id="status-text" class="text-sm text-dark-300">Ready</span>
+                </div>
+            </div>
+            <button id="settings-btn" class="p-2 hover:bg-dark-700 rounded-lg transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                </svg>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="pt-20 min-h-screen max-h-screen overflow-y-auto bg-gradient-to-br from-dark-900 via-dark-800 to-dark-900">
+        <!-- Setup Screen -->
+        <div id="setup-screen" class="container mx-auto px-4 py-8 max-w-4xl">
+            <!-- Header -->
+            <header class="text-center mb-12">
+                <div class="inline-flex items-center gap-3 mb-6">
+                    <div class="w-16 h-16 bg-primary-600 rounded-2xl flex items-center justify-center">
+                        <svg class="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                    </div>
+                    <h1 class="text-5xl font-bold bg-gradient-to-r from-primary-400 to-primary-600 bg-clip-text text-transparent">
+                        CaptnReverse
+                    </h1>
+                </div>
+                <p class="text-dark-300 text-xl max-w-2xl mx-auto">
+                    Advanced OCR and Text-to-Speech powered by cutting-edge browser APIs
+                </p>
+            </header>
+
+            <!-- Setup Card -->
+            <div class="glass rounded-2xl p-8 max-w-2xl mx-auto text-center">
+                <div class="w-20 h-20 bg-primary-600/20 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <svg class="w-10 h-10 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                    </svg>
+                </div>
+                
+                <h2 class="text-2xl font-semibold mb-4">Welcome to CaptnReverse</h2>
+                <p class="text-dark-300 mb-6">
+                    This app uses your camera to read text aloud using advanced OCR technology.
+                    We'll need camera permission to get started.
+                </p>
+
+                <button id="request-camera" class="btn-primary w-full text-lg py-4 mb-4 rounded-xl font-medium">
+                    🚀 Enable Camera Access
+                </button>
+                
+                <button onclick="location.reload()" class="w-full bg-dark-600 hover:bg-dark-500 text-white py-3 px-6 rounded-xl transition-colors text-sm mb-4">
+                    🔄 Reset Permissions
+                </button>
+
+                <div class="text-sm text-dark-400 space-y-1">
+                    <p>✅ No downloads required - runs entirely in your browser</p>
+                    <p>🔒 Your data never leaves your device</p>  
+                    <p>🚀 Uses cutting-edge Web APIs for optimal performance</p>
+                </div>
+            </div>
+
+            <!-- Features Grid -->
+            <div class="grid md:grid-cols-3 gap-6 mt-12">
+                <div class="glass rounded-2xl p-6 text-center">
+                    <div class="w-12 h-12 bg-primary-600/20 rounded-xl flex items-center justify-center mx-auto mb-4">
+                        <svg class="w-6 h-6 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                        </svg>
+                    </div>
+                    <h3 class="font-semibold mb-2 text-white">Advanced OCR</h3>
+                    <p class="text-dark-300 text-sm">Tesseract.js with WebAssembly acceleration</p>
+                </div>
+
+                <div class="glass rounded-2xl p-6 text-center">
+                    <div class="w-12 h-12 bg-primary-600/20 rounded-xl flex items-center justify-center mx-auto mb-4">
+                        <svg class="w-6 h-6 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                        </svg>
+                    </div>
+                    <h3 class="font-semibold mb-2 text-white">Natural TTS</h3>
+                    <p class="text-dark-300 text-sm">Web Speech API with voice selection</p>
+                </div>
+
+                <div class="glass rounded-2xl p-6 text-center">
+                    <div class="w-12 h-12 bg-primary-600/20 rounded-xl flex items-center justify-center mx-auto mb-4">
+                        <svg class="w-6 h-6 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                    </div>
+                    <h3 class="font-semibold mb-2 text-white">Real-time</h3>
+                    <p class="text-dark-300 text-sm">Live processing with intelligent cropping</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main App (hidden initially) -->
+        <div id="main-app" class="container mx-auto px-4 py-4 max-w-6xl h-[calc(100vh-5rem)] hidden">
+            <div class="grid lg:grid-cols-3 gap-4 h-full">
+                <!-- Camera View -->
+                <div class="lg:col-span-2 space-y-6">
+                    <!-- Camera Feed -->
+                    <div class="glass rounded-2xl p-6">
+                        <div id="camera-container" class="aspect-video bg-dark-800 rounded-xl overflow-hidden relative cursor-crosshair">
+                            <video id="camera-feed" autoplay muted playsinline class="w-full h-full object-cover"></video>
+                            <canvas id="crop-overlay" class="absolute inset-0 w-full h-full"></canvas>
+                            
+                            <!-- Crop Instructions Overlay -->
+                            <div id="crop-instructions" class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                <div class="glass rounded-xl p-4 text-center">
+                                    <p class="text-sm text-dark-300 mb-1">Click and drag to select text area</p>
+                                    <p class="text-xs text-dark-400">Crop area will be highlighted in blue</p>
+                                </div>
+                            </div>
+                            
+                            <!-- Processing State -->
+                            <div id="processing-state" class="absolute inset-0 bg-black/50 flex items-center justify-center hidden">
+                                <div class="glass rounded-xl p-6 text-center">
+                                    <div class="w-12 h-12 border-4 border-primary-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                                    <p class="text-lg font-medium">Processing Text...</p>
+                                    <p id="ocr-progress" class="text-sm text-dark-300 mt-2">0%</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Camera Controls (directly below camera) -->
+                        <div class="space-y-3 mt-4">
+                            <!-- Zoom Control -->
+                            <div class="flex items-center gap-4">
+                                <span class="text-sm font-medium text-dark-300 w-12">Zoom:</span>
+                                <input id="camera-zoom" type="range" min="1.0" max="5.0" step="0.1" value="1.0" class="flex-1 h-2 bg-dark-600 rounded-lg">
+                                <span id="zoom-value" class="text-sm font-mono text-primary-400 w-12">1.0x</span>
+                            </div>
+                            
+                            <!-- Focus Control -->
+                            <div class="flex items-center gap-4">
+                                <span class="text-sm font-medium text-dark-300 w-12">Focus:</span>
+                                <input id="camera-focus" type="range" min="0" max="1000" step="50" value="500" class="flex-1 h-2 bg-dark-600 rounded-lg">
+                                <span id="focus-value" class="text-sm font-mono text-primary-400 w-12">Auto</span>
+                                <button id="focus-auto" class="text-xs bg-dark-600 hover:bg-dark-500 px-2 py-1 rounded transition-colors">Auto</button>
+                            </div>
+                        </div>
+                        
+                        <!-- Crop Presets -->
+                        <div class="flex justify-end mt-4">
+                            <div class="flex gap-2">
+                                <button onclick="setCrop(0.25, 0.25, 0.5, 0.5)" class="bg-dark-600 hover:bg-dark-500 px-3 py-1 rounded text-xs transition-colors">Center</button>
+                                <button onclick="setCrop(0, 0, 1, 0.5)" class="bg-dark-600 hover:bg-dark-500 px-3 py-1 rounded text-xs transition-colors">Top</button>
+                                <button onclick="setCrop(0, 0.5, 1, 0.5)" class="bg-dark-600 hover:bg-dark-500 px-3 py-1 rounded text-xs transition-colors">Bottom</button>
+                                <button onclick="setCrop(0, 0, 1, 1)" class="bg-dark-600 hover:bg-dark-500 px-3 py-1 rounded text-xs transition-colors">Full</button>
+                            </div>
+                        </div>
+
+                        <!-- Camera Controls -->
+                        <div class="flex items-center justify-between mt-6">
+                            <div class="flex items-center gap-2">
+                                <div id="camera-status-dot" class="w-2 h-2 rounded-full bg-green-400"></div>
+                                <span id="camera-status-text" class="text-sm text-dark-300">Camera active</span>
+                            </div>
+                            
+                            <div class="flex gap-3">
+                                <button id="read-now-btn" class="btn-primary px-4 py-2 rounded-lg text-sm font-medium">
+                                    📖 Read Now
+                                </button>
+                                <button id="test-tts-btn" class="bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                                    🔊 Test TTS
+                                </button>
+                                <button id="stop-speech-btn" class="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors hidden">
+                                    🔇 Stop Speech
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Detected Text Display -->
+                    <div id="text-display" class="glass rounded-2xl p-6 hidden">
+                        <div class="flex items-start justify-between mb-4">
+                            <h3 class="text-lg font-semibold text-primary-300">Detected Text</h3>
+                            <button id="speak-text-btn" class="p-2 hover:bg-dark-700 rounded-lg transition-colors">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072M18.364 5.636a9 9 0 010 12.728" />
+                                </svg>
+                            </button>
+                        </div>
+                        <p id="detected-text" class="text-dark-100 leading-relaxed text-lg"></p>
+                        <div class="mt-4 text-sm text-dark-400">
+                            <span>Confidence: <span id="confidence-score">0</span>%</span>
+                            <span class="ml-4">Processing time: <span id="processing-time">0</span>ms</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Controls Panel -->
+                <div class="space-y-4 overflow-y-auto">
+                    <!-- Monitoring Control -->
+                    <div class="glass rounded-2xl p-6">
+                        <h3 class="text-lg font-semibold mb-4 text-primary-300">Control Center</h3>
+                        <button id="monitor-toggle" class="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-4 px-6 rounded-xl transition-all duration-200 transform hover:scale-105">
+                            ▶️ Start Monitoring
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-dark-800 rounded-2xl shadow-2xl border border-dark-700 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <!-- Header -->
+            <div class="flex items-center justify-between p-6 border-b border-dark-700">
+                <h2 class="text-2xl font-semibold">Settings</h2>
+                <button id="close-settings" class="p-2 hover:bg-dark-700 rounded-lg transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+
+            <div class="p-6 space-y-8">
+                <!-- OCR Engine Selection -->
+                <section>
+                    <h3 class="text-lg font-medium mb-4 text-primary-300">OCR Engine</h3>
+                    <div class="flex items-center gap-4 mb-4">
+                        <button id="ocr-tesseract" class="flex-1 py-3 px-4 rounded-xl font-medium transition-all bg-primary-600 text-white">
+                            Tesseract.js
+                        </button>
+                        <button id="ocr-paddle" class="flex-1 py-3 px-4 rounded-xl font-medium transition-all bg-dark-600 hover:bg-dark-500 text-white">
+                            PaddleOCR
+                        </button>
+                    </div>
+                    <div id="ocr-engine-info" class="text-sm text-dark-400">
+                        <p>Tesseract.js - Fast, lightweight, good for general text</p>
+                    </div>
+                </section>
+
+                <!-- Speech Settings -->
+                <section>
+                    <h3 class="text-lg font-medium mb-4 text-primary-300">Text-to-Speech</h3>
+                    <div class="space-y-4">
+                        <div class="flex items-center justify-between">
+                            <label class="text-sm font-medium">Auto Read</label>
+                            <button id="auto-read-toggle-modal" class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors bg-primary-600">
+                                <span class="inline-block h-4 w-4 transform rounded-full bg-white transition translate-x-6"></span>
+                            </button>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Speech Rate: <span id="rate-value-modal">1.0</span>x</label>
+                            <input id="speech-rate-modal" type="range" min="0.5" max="2.0" step="0.1" value="1.0" class="w-full h-2 bg-dark-600 rounded-lg">
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Speech Volume: <span id="volume-value">100</span>%</label>
+                            <input id="speech-volume" type="range" min="0" max="100" step="5" value="100" class="w-full h-2 bg-dark-600 rounded-lg">
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Voice Selection</label>
+                            <select id="voice-select" class="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-white">
+                                <option value="">Default Voice</option>
+                            </select>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- OCR Settings -->
+                <section>
+                    <h3 class="text-lg font-medium mb-4 text-primary-300">OCR Settings</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium mb-2">OCR Sensitivity: <span id="sensitivity-value-modal">60</span>%</label>
+                            <input id="sensitivity-modal" type="range" min="10" max="100" step="5" value="60" class="w-full h-2 bg-dark-600 rounded-lg">
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Image Threshold: <span id="threshold-value-modal">150</span></label>
+                            <input id="threshold-slider-modal" type="range" min="50" max="250" step="10" value="150" class="w-full h-2 bg-dark-600 rounded-lg">
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Processing Interval: <span id="interval-value">2000</span>ms</label>
+                            <input id="processing-interval" type="range" min="500" max="5000" step="250" value="2000" class="w-full h-2 bg-dark-600 rounded-lg">
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Debug Options -->
+                <section>
+                    <h3 class="text-lg font-medium mb-4 text-primary-300">Debug Options</h3>
+                    <div class="space-y-4">
+                        <div class="flex items-center justify-between">
+                            <label class="text-sm font-medium">Show Debug Canvas</label>
+                            <button id="debug-toggle" class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors bg-primary-600">
+                                <span class="inline-block h-4 w-4 transform rounded-full bg-white transition translate-x-6"></span>
+                            </button>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Debug View Size</label>
+                            <div class="flex items-center gap-2" id="debug-sizing-control">
+                                <button data-size="constrained" class="flex-1 py-2 px-3 rounded-lg text-xs font-medium bg-primary-600 text-white">Constrained</button>
+                                <button data-size="autoWidth" class="flex-1 py-2 px-3 rounded-lg text-xs font-medium bg-dark-600 hover:bg-dark-500 text-white">Auto Height</button>
+                            </div>
+                            <p class="text-xs text-dark-400 mt-1">Constrained fits within box, Auto Height preserves aspect ratio</p>
+                        </div>
+                        
+                        <button id="test-ocr" class="w-full bg-purple-600 hover:bg-purple-700 text-white py-3 px-4 rounded-xl font-medium transition-colors">
+                            🧪 Test OCR with Sample Text
+                        </button>
+
+                        <button id="release-camera" class="w-full bg-red-600 hover:bg-red-700 text-white py-3 px-4 rounded-xl font-medium transition-colors">
+                            🛑 Release Camera Resources
+                        </button>
+                        
+                        <button id="show-console" class="w-full bg-gray-600 hover:bg-gray-700 text-white py-3 px-4 rounded-xl font-medium transition-colors">
+                            🔍 Show Debug Console
+                        </button>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Application Module -->
+    <script type="module" src="js/app.js"></script>
+    <!-- Legacy compatibility for inline crop preset handlers -->
+    <script>
+        // Simple global functions for inline onclick handlers
+        function setCrop(x, y, width, height) {
+            if (window.setCrop) {
+                window.setCrop(x, y, width, height);
+            }
+        }
+    </script>
+</body>
+</html>
+            // Core functionality state
+            isMonitoring: false,
+            stream: null,
+            ocrWorker: null,
+            lastText: '',
+            cameraRequestInProgress: false,
+            
+            // Camera and media state
+            mediaStreamTrack: null,
+            cameraZoom: 1.0,
+            currentCrop: { x: 0.25, y: 0.25, width: 0.5, height: 0.5 },
+            
+            // OCR engine state
+            currentOCREngine: 'tesseract', // 'tesseract' or 'paddle'
+            paddleOCRLoaded: false,
+            paddleOCRInstance: null,
+            
+            // Voice/TTS state
+            voices: [],
+            voicesLoaded: false,
+            
+            // User settings
+            settings: {
+                autoRead: true,
+                speechRate: 1.0,
+                sensitivity: 60, // Increased default for better quality filtering
+                imageThreshold: 150,
+                processingInterval: 2000,
+                showDebugCanvas: true,
+                debugViewSizing: 'constrained' // 'constrained' or 'autoWidth'
+            }
+        };
+
+        // Legacy global variables for compatibility (gradually remove these)
+        let isMonitoring = AppState.isMonitoring;
+        let stream = AppState.stream;
+        let ocrWorker = AppState.ocrWorker;
+        let currentCrop = AppState.currentCrop;
+        let autoRead = AppState.settings.autoRead;
+        let speechRate = AppState.settings.speechRate;
+        let sensitivity = AppState.settings.sensitivity;
+        let lastText = AppState.lastText;
+        let cameraZoom = AppState.cameraZoom;
+        let mediaStreamTrack = AppState.mediaStreamTrack;
+        let imageThreshold = AppState.settings.imageThreshold;
+        let currentOCREngine = AppState.currentOCREngine;
+        let paddleOCRLoaded = AppState.paddleOCRLoaded;
+        let showDebugCanvas = AppState.settings.showDebugCanvas;
+        let processingInterval = AppState.settings.processingInterval;
+        let cameraRequestInProgress = AppState.cameraRequestInProgress;
+        let voices = AppState.voices;
+        let voicesLoaded = AppState.voicesLoaded;
+
+        // Performance optimization: Reusable canvas objects to prevent memory leaks
+        const reusableCanvases = {
+            processing: document.createElement('canvas'),
+            crop: document.createElement('canvas'),
+            temp: document.createElement('canvas')
+        };
+        
+        // Get contexts once to avoid repeated getContext() calls
+        const canvasContexts = {
+            processing: reusableCanvases.processing.getContext('2d'),
+            crop: reusableCanvases.crop.getContext('2d'),
+            temp: reusableCanvases.temp.getContext('2d')
+        };
+
+        // Enhanced logger service for debug console with immediate console override
+        let debugLogs = [];
+        let originalConsole = {};
+        
+        // Capture console methods immediately for debug logging
+        function initializeDebugLogging() {
+            // Store original console methods
+            originalConsole = {
+                log: console.log,
+                warn: console.warn,
+                error: console.error,
+                info: console.info
+            };
+            
+            // Override console methods to capture logs
+            ['log', 'warn', 'error', 'info'].forEach(method => {
+                console[method] = function(...args) {
+                    // Call original method first
+                    originalConsole[method].apply(console, args);
+                    
+                    // Capture for debug console
+                    debugLogs.push({
+                        type: method,
+                        timestamp: new Date().toISOString(),
+                        message: args.map(arg => 
+                            typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
+                        ).join(' ')
+                    });
+                    
+                    if (debugLogs.length > 200) debugLogs.shift(); // Keep last 200 logs
+                    updateDebugDisplay(); // Update if debug console is open
+                };
+            });
+            
+            console.log('🔍 Debug logging initialized - all console output will be captured');
+        }
+        
+        function logMessage(type, ...args) {
+            // This is now handled by the console override above
+            console[type](...args);
+        }
+
+        function updateDebugDisplay() {
+            const content = document.querySelector('#debug-console > div:nth-child(2)');
+            if (!content) return; // Debug console not open
+            
+            // Security: Use createElement instead of innerHTML to prevent XSS
+            content.innerHTML = ''; // Clear existing content
+            
+            debugLogs.forEach(log => {
+                const logEntry = document.createElement('div');
+                logEntry.style.cssText = `
+                    margin-bottom: 4px; 
+                    padding: 4px; 
+                    background: ${
+                        log.type === 'error' ? 'rgba(239, 68, 68, 0.1)' :
+                        log.type === 'warn' ? 'rgba(245, 158, 11, 0.1)' :
+                        log.type === 'info' ? 'rgba(59, 130, 246, 0.1)' :
+                        'rgba(16, 185, 129, 0.1)'
+                    }; 
+                    border-left: 3px solid ${
+                        log.type === 'error' ? '#ef4444' :
+                        log.type === 'warn' ? '#f59e0b' :
+                        log.type === 'info' ? '#3b82f6' :
+                        '#10b981'
+                    }; 
+                    border-radius: 4px;
+                `;
+                
+                // Create timestamp span
+                const timestampSpan = document.createElement('span');
+                timestampSpan.style.cssText = 'color: #64748b; font-size: 10px;';
+                timestampSpan.textContent = `[${log.timestamp.split('T')[1].split('.')[0]}]`;
+                
+                // Create type span  
+                const typeSpan = document.createElement('span');
+                typeSpan.style.cssText = `
+                    color: ${
+                        log.type === 'error' ? '#ef4444' :
+                        log.type === 'warn' ? '#f59e0b' :
+                        log.type === 'info' ? '#3b82f6' :
+                        '#10b981'
+                    }; 
+                    font-weight: bold; 
+                    margin: 0 8px;
+                `;
+                typeSpan.textContent = log.type.toUpperCase();
+                
+                // Create message span
+                const messageSpan = document.createElement('span');
+                messageSpan.style.cssText = 'color: #e2e8f0;';
+                messageSpan.textContent = log.message; // Safe: textContent auto-escapes
+                
+                // Assemble log entry
+                logEntry.appendChild(timestampSpan);
+                logEntry.appendChild(typeSpan);
+                logEntry.appendChild(messageSpan);
+                content.appendChild(logEntry);
+            });
+            
+            content.scrollTop = content.scrollHeight;
+        }
+
+        // Load persistent settings
+        function loadSettings() {
+            try {
+                const savedSettings = localStorage.getItem('captn-reverse-settings');
+                if (savedSettings) {
+                    const settings = JSON.parse(savedSettings);
+                    autoRead = settings.autoRead ?? autoRead;
+                    speechRate = settings.speechRate ?? speechRate;
+                    sensitivity = settings.sensitivity ?? sensitivity;
+                    imageThreshold = settings.imageThreshold ?? imageThreshold;
+                    processingInterval = settings.processingInterval ?? processingInterval;
+                    showDebugCanvas = settings.showDebugCanvas ?? showDebugCanvas;
+                    currentOCREngine = settings.currentOCREngine ?? currentOCREngine;
+                    AppState.settings.debugViewSizing = settings.debugViewSizing ?? AppState.settings.debugViewSizing;
+                    console.log('💾 Loaded saved settings');
+                }
+            } catch (error) {
+                console.warn('⚠️ Failed to load settings:', error);
+            }
+        }
+
+        // Save persistent settings
+        function saveSettings() {
+            try {
+                const settings = {
+                    autoRead,
+                    speechRate,
+                    sensitivity,
+                    imageThreshold,
+                    processingInterval,
+                    showDebugCanvas,
+                    currentOCREngine,
+                    debugViewSizing: AppState.settings.debugViewSizing
+                };
+                localStorage.setItem('captn-reverse-settings', JSON.stringify(settings));
+                console.log('💾 Settings saved');
+            } catch (error) {
+                console.warn('⚠️ Failed to save settings:', error);
+            }
+        }
+
+        // Debug console functionality (define early to avoid hoisting issues)
+        let debugConsole = null;
+        
+        function toggleDebugConsole() {
+            if (debugConsole && !debugConsole.closed) {
+                const existingConsole = document.getElementById('debug-console');
+                if (existingConsole) {
+                    existingConsole.remove();
+                }
+                debugConsole = null;
+                return;
+            }
+            
+            createDebugConsole();
+        }
+        
+        function createDebugConsole() {
+            // Remove any existing debug console
+            const existing = document.getElementById('debug-console');
+            if (existing) existing.remove();
+            
+            // Create floating debug console
+            const consoleDiv = document.createElement('div');
+            consoleDiv.id = 'debug-console';
+            consoleDiv.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                width: 80vw;
+                max-width: 600px;
+                height: 70vh;
+                background: rgba(15, 23, 42, 0.95);
+                border: 2px solid #0ea5e9;
+                border-radius: 12px;
+                z-index: 10000;
+                display: flex;
+                flex-direction: column;
+                font-family: 'JetBrains Mono', monospace;
+                backdrop-filter: blur(12px);
+            `;
+            
+            const header = document.createElement('div');
+            header.style.cssText = `
+                padding: 12px 16px;
+                background: #0ea5e9;
+                color: white;
+                font-weight: bold;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                border-radius: 10px 10px 0 0;
+            `;
+            header.innerHTML = `
+                <span>🔍 CaptnReverse Debug Console (${debugLogs.length} logs)</span>
+                <button id="close-debug" style="background: none; border: none; color: white; font-size: 18px; cursor: pointer;">✖️</button>
+            `;
+            
+            const content = document.createElement('div');
+            content.style.cssText = `
+                flex: 1;
+                padding: 16px;
+                overflow-y: auto;
+                background: #0f172a;
+                color: #e2e8f0;
+                font-size: 12px;
+                line-height: 1.4;
+            `;
+            
+            const controls = document.createElement('div');
+            controls.style.cssText = `
+                padding: 12px 16px;
+                background: #1e293b;
+                border-top: 1px solid #334155;
+                display: flex;
+                gap: 8px;
+                border-radius: 0 0 10px 10px;
+            `;
+            controls.innerHTML = `
+                <button id="clear-debug" style="padding: 6px 12px; background: #ef4444; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 11px;">Clear</button>
+                <button id="export-debug" style="padding: 6px 12px; background: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 11px;">Export</button>
+                <button id="test-settings" style="padding: 6px 12px; background: #f59e0b; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 11px;">Test Settings</button>
+            `;
+            
+            consoleDiv.appendChild(header);
+            consoleDiv.appendChild(content);
+            consoleDiv.appendChild(controls);
+            document.body.appendChild(consoleDiv);
+            
+            // Add event listeners
+            document.getElementById('close-debug').addEventListener('click', () => {
+                consoleDiv.remove();
+                debugConsole = null;
+            });
+            
+            document.getElementById('clear-debug').addEventListener('click', () => {
+                debugLogs = [];
+                updateDebugDisplay();
+            });
+            
+            document.getElementById('export-debug').addEventListener('click', () => {
+                const data = JSON.stringify({
+                    timestamp: new Date().toISOString(),
+                    url: window.location.href,
+                    userAgent: navigator.userAgent,
+                    logs: debugLogs,
+                    settings: AppState.settings
+                }, null, 2);
+                
+                const blob = new Blob([data], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `captn-debug-${Date.now()}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+            });
+            
+            document.getElementById('test-settings').addEventListener('click', () => {
+                testSettingsButton();
+            });
+            
+            debugConsole = { closed: false };
+            
+            // Initial display of existing logs
+            updateDebugDisplay();
+        }
+
+        // Initialize app
+        async function init() {
+            initializeDebugLogging(); // Initialize debug logging first
+            console.log('🔧 Initializing CaptnReverse...');
+            loadSettings(); // Load saved settings first
+            setupEventListeners();
+            initVoices(); // Initialize voice loading
+            await initOCR();
+            checkSecureContext();
+            console.log('✅ CaptnReverse ready!');
+        }
+
+        // Initialize voice loading with proper async handling
+        function initVoices() {
+            // Load voices immediately if available
+            voices = speechSynthesis.getVoices();
+            if (voices.length > 0) {
+                voicesLoaded = true;
+                console.log('🗣️ Voices loaded immediately:', voices.length);
+            }
+
+            // Set up listener for when voices become available
+            speechSynthesis.addEventListener('voiceschanged', () => {
+                voices = speechSynthesis.getVoices();
+                voicesLoaded = true;
+                console.log('🗣️ Voices loaded via voiceschanged:', voices.length);
+                
+                // Update voice select if settings modal is open
+                const settingsModal = document.getElementById('settings-modal');
+                if (settingsModal && !settingsModal.classList.contains('hidden')) {
+                    populateVoiceSelect();
+                }
+            });
+        }
+
+        function checkSecureContext() {
+            console.log('🔒 Checking secure context...', {
+                isSecureContext: window.isSecureContext,
+                protocol: window.location.protocol,
+                hostname: window.location.hostname,
+                userAgent: navigator.userAgent.substring(0, 100)
+            });
+            
+            if (!window.isSecureContext) {
+                console.warn('⚠️ Not in secure context - camera may not work');
+                const setupCard = document.querySelector('#setup-screen .glass');
+                if (setupCard) {
+                    setupCard.innerHTML = `
+                        <div class="w-20 h-20 bg-yellow-600/20 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <svg class="w-10 h-10 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                            </svg>
+                        </div>
+                        <h2 class="text-2xl font-semibold mb-4 text-yellow-300">HTTPS Required</h2>
+                        <p class="text-dark-300 mb-6">Camera access requires a secure connection (HTTPS) or localhost. Please access the app via HTTPS or localhost for full functionality.</p>
+                        <button onclick="location.reload()" class="btn-primary w-full text-lg py-4 mb-4">
+                            🔄 Reload Page
+                        </button>
+                        <div class="text-sm text-dark-400 space-y-1">
+                            <p>💡 Current: ${window.location.protocol}//${window.location.host}</p>
+                            <p>🔧 Required: HTTPS or localhost</p>
+                            <p>🌐 GitHub Pages automatically uses HTTPS</p>
+                        </div>
+                    `;
+                }
+            } else {
+                console.log('✅ Secure context confirmed - camera should work');
+                
+                // Additional permission checks
+                if (!navigator.mediaDevices) {
+                    console.error('❌ navigator.mediaDevices not available');
+                } else if (!navigator.mediaDevices.getUserMedia) {
+                    console.error('❌ getUserMedia not available');
+                } else {
+                    console.log('✅ getUserMedia API available');
+                }
+            }
+        }
+
+        function setupEventListeners() {
+            console.log('🔧 Setting up event listeners with event delegation...');
+            
+            // Single event delegation handler for all click events
+            document.body.addEventListener('click', (e) => {
+                // Settings Button
+                if (e.target.closest('#settings-btn')) {
+                    e.preventDefault();
+                    console.log('⚙️ Opening settings modal...');
+                    const settingsModal = document.getElementById('settings-modal');
+                    if (settingsModal) {
+                        try {
+                            settingsModal.classList.remove('hidden');
+                            populateVoiceSelect();
+                            updateSettingsModalValues();
+                            updateStatus('Settings opened', 'bg-blue-400');
+                        } catch (error) {
+                            console.error('❌ Settings modal error:', error);
+                            updateStatus('Settings error', 'bg-red-400');
+                        }
+                    }
+                    return;
+                }
+
+                // Close Settings Button
+                if (e.target.closest('#close-settings')) {
+                    e.preventDefault();
+                    console.log('✖️ Closing settings modal...');
+                    const settingsModal = document.getElementById('settings-modal');
+                    if (settingsModal) {
+                        settingsModal.classList.add('hidden');
+                        updateStatus('Settings closed', 'bg-green-400');
+                    }
+                    return;
+                }
+
+                // Camera Permission Request
+                if (e.target.closest('#request-camera') || e.target.closest('#retry-camera')) {
+                    e.preventDefault();
+                    requestCamera();
+                    return;
+                }
+
+                // Basic Camera Retry
+                if (e.target.closest('#retry-basic')) {
+                    e.preventDefault();
+                    requestBasicCamera();
+                    return;
+                }
+
+                // Monitoring Toggle
+                if (e.target.closest('#monitor-toggle')) {
+                    e.preventDefault();
+                    toggleMonitoring();
+                    return;
+                }
+
+                // Read Now Button
+                if (e.target.closest('#read-now-btn')) {
+                    e.preventDefault();
+                    readNow();
+                    return;
+                }
+
+                // Test TTS Button
+                if (e.target.closest('#test-tts-btn')) {
+                    e.preventDefault();
+                    speak("CaptnReverse text-to-speech is working perfectly! This is a test of the speech synthesis system.");
+                    return;
+                }
+
+                // Stop Speech Button
+                if (e.target.closest('#stop-speech-btn')) {
+                    e.preventDefault();
+                    speechSynthesis.cancel();
+                    document.getElementById('stop-speech-btn').classList.add('hidden');
+                    updateStatus(isMonitoring ? 'Monitoring active' : 'Ready', 'bg-green-400');
+                    return;
+                }
+
+                // Speak Text Button (dynamically created)
+                if (e.target.closest('#speak-text-btn')) {
+                    e.preventDefault();
+                    const text = document.getElementById('detected-text').textContent;
+                    if (text) speak(text);
+                    return;
+                }
+
+                // Debug Console Button
+                if (e.target.closest('#show-console')) {
+                    e.preventDefault();
+                    toggleDebugConsole();
+                    return;
+                }
+
+                // Release Camera Button
+                if (e.target.closest('#release-camera')) {
+                    e.preventDefault();
+                    cleanupCamera();
+                    document.getElementById('main-app').classList.add('hidden');
+                    document.getElementById('setup-screen').classList.remove('hidden');
+                    document.getElementById('settings-modal').classList.add('hidden');
+                    updateStatus('Camera released', 'bg-yellow-400');
+                    return;
+                }
+            });
+
+            console.log('✅ Event delegation listener added');
+
+            // Camera zoom
+            document.getElementById('camera-zoom').addEventListener('input', (e) => {
+                cameraZoom = parseFloat(e.target.value);
+                document.getElementById('zoom-value').textContent = cameraZoom.toFixed(1);
+                applyCameraZoom();
+            });
+
+            // Camera focus
+            document.getElementById('camera-focus').addEventListener('input', (e) => {
+                const focusDistance = parseInt(e.target.value);
+                document.getElementById('focus-value').textContent = focusDistance === 500 ? 'Auto' : focusDistance;
+                applyCameraFocus(focusDistance);
+            });
+
+            // Auto focus button
+            document.getElementById('focus-auto').addEventListener('click', () => {
+                setAutoFocus();
+            });
+
+            // Crop selector
+            setupCropSelector();
+            setupSettingsEventListeners();
+        }
+
+        function setupSettingsEventListeners() {
+            // OCR Engine toggle
+            document.getElementById('ocr-tesseract').addEventListener('click', () => switchOCREngine('tesseract'));
+            document.getElementById('ocr-paddle').addEventListener('click', () => switchOCREngine('paddle'));
+
+            // Auto-read toggle (modal)
+            document.getElementById('auto-read-toggle-modal').addEventListener('click', () => {
+                autoRead = !autoRead;
+                updateAutoReadToggle();
+                updateModalAutoReadToggle();
+                saveSettings();
+            });
+
+            // Speech settings (modal)
+            document.getElementById('speech-rate-modal').addEventListener('input', (e) => {
+                speechRate = parseFloat(e.target.value);
+                document.getElementById('rate-value-modal').textContent = speechRate;
+                saveSettings();
+            });
+
+            document.getElementById('speech-volume').addEventListener('input', (e) => {
+                const volume = parseInt(e.target.value);
+                document.getElementById('volume-value').textContent = volume;
+                // Volume will be applied in speak function
+                saveSettings();
+            });
+
+            // OCR settings (modal)
+            document.getElementById('sensitivity-modal').addEventListener('input', (e) => {
+                AppState.settings.sensitivity = parseInt(e.target.value);
+                sensitivity = AppState.settings.sensitivity; // Keep legacy var in sync temporarily
+                document.getElementById('sensitivity-value-modal').textContent = AppState.settings.sensitivity;
+                saveSettings();
+                console.log(`🎯 Sensitivity updated to ${AppState.settings.sensitivity}%`);
+            });
+
+            document.getElementById('threshold-slider-modal').addEventListener('input', (e) => {
+                imageThreshold = parseInt(e.target.value);
+                document.getElementById('threshold-value-modal').textContent = imageThreshold;
+                saveSettings();
+            });
+
+            document.getElementById('processing-interval').addEventListener('input', (e) => {
+                processingInterval = parseInt(e.target.value);
+                document.getElementById('interval-value').textContent = processingInterval;
+                if (isMonitoring) {
+                    stopMonitoring();
+                    startMonitoring(); // Restart with new interval
+                }
+                saveSettings();
+            });
+
+            // Debug toggle
+            document.getElementById('debug-toggle').addEventListener('click', () => {
+                showDebugCanvas = !showDebugCanvas;
+                AppState.settings.showDebugCanvas = showDebugCanvas; // Keep AppState in sync
+                updateDebugToggle();
+                if (!showDebugCanvas) {
+                    // Remove debug elements
+                    const elements = ['debug-canvas', 'debug-label', 'debug-text'];
+                    elements.forEach(id => {
+                        const el = document.getElementById(id);
+                        if (el) el.remove();
+                    });
+                }
+                saveSettings();
+            });
+
+            // Debug sizing control
+            document.getElementById('debug-sizing-control').addEventListener('click', (e) => {
+                if (e.target.tagName === 'BUTTON') {
+                    const newSize = e.target.dataset.size;
+                    AppState.settings.debugViewSizing = newSize;
+                    saveSettings();
+                    
+                    // Update button styles
+                    document.querySelectorAll('#debug-sizing-control button').forEach(btn => {
+                        btn.classList.toggle('bg-primary-600', btn.dataset.size === newSize);
+                        btn.classList.toggle('bg-dark-600', btn.dataset.size !== newSize);
+                        btn.classList.toggle('hover:bg-dark-500', btn.dataset.size !== newSize);
+                    });
+                    
+                    console.log(`🖼️ Debug view sizing changed to: ${newSize}`);
+                }
+            });
+
+            // Release camera button
+            document.getElementById('release-camera').addEventListener('click', () => {
+                cleanupCamera();
+                // Reset UI to setup screen
+                document.getElementById('main-app').classList.add('hidden');
+                document.getElementById('setup-screen').classList.remove('hidden');
+                document.getElementById('settings-modal').classList.add('hidden');
+                updateStatus('Camera released', 'bg-yellow-400');
+            });
+
+            // Show debug console button
+            document.getElementById('show-console').addEventListener('click', () => {
+                toggleDebugConsole();
+            });
+        }
+
+        function updateAutoReadToggle() {
+            const toggle = document.getElementById('auto-read-toggle');
+            const thumb = toggle.querySelector('span');
+            
+            if (autoRead) {
+                toggle.classList.add('bg-primary-600');
+                toggle.classList.remove('bg-dark-600');
+                thumb.classList.add('translate-x-6');
+                thumb.classList.remove('translate-x-1');
+            } else {
+                toggle.classList.remove('bg-primary-600');
+                toggle.classList.add('bg-dark-600');
+                thumb.classList.remove('translate-x-6');
+                thumb.classList.add('translate-x-1');
+            }
+        }
+
+        function setupCropSelector() {
+            const container = document.getElementById('camera-container');
+            let startX = 0, startY = 0;
+
+            container.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                const rect = container.getBoundingClientRect();
+                startX = (e.clientX - rect.left) / rect.width;
+                startY = (e.clientY - rect.top) / rect.height;
+                isDraggingCrop = true; // Use global dragging state
+                
+                // Start animation loop during dragging
+                if (!cropOverlayAnimationId) {
+                    startCropOverlay();
+                }
+                
+                // Hide instructions when user starts interacting
+                document.getElementById('crop-instructions').style.opacity = '0';
+            });
+
+            container.addEventListener('mousemove', (e) => {
+                if (!isDraggingCrop) return;
+                e.preventDefault();
+                
+                const rect = container.getBoundingClientRect();
+                const endX = (e.clientX - rect.left) / rect.width;
+                const endY = (e.clientY - rect.top) / rect.height;
+
+                currentCrop = {
+                    x: Math.min(startX, endX),
+                    y: Math.min(startY, endY),
+                    width: Math.abs(endX - startX),
+                    height: Math.abs(endY - startY)
+                };
+
+                // Animation loop will automatically redraw while isDraggingCrop is true
+            });
+
+            container.addEventListener('mouseup', () => {
+                isDraggingCrop = false; // Stop animation loop
+                // Final redraw and save crop to localStorage
+                redrawCropOverlay();
+                localStorage.setItem('captn-reverse-crop', JSON.stringify(currentCrop));
+            });
+
+            container.addEventListener('mouseleave', () => {
+                isDraggingCrop = false; // Stop animation loop
+                redrawCropOverlay(); // Final redraw
+            });
+
+            // Touch support for mobile
+            container.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                const touch = e.touches[0];
+                const rect = container.getBoundingClientRect();
+                startX = (touch.clientX - rect.left) / rect.width;
+                startY = (touch.clientY - rect.top) / rect.height;
+                isDraggingCrop = true; // Use global dragging state
+                
+                // Start animation loop during dragging
+                if (!cropOverlayAnimationId) {
+                    startCropOverlay();
+                }
+                document.getElementById('crop-instructions').style.opacity = '0';
+            });
+
+            container.addEventListener('touchmove', (e) => {
+                if (!isDraggingCrop) return;
+                e.preventDefault();
+                
+                const touch = e.touches[0];
+                const rect = container.getBoundingClientRect();
+                const endX = (touch.clientX - rect.left) / rect.width;
+                const endY = (touch.clientY - rect.top) / rect.height;
+
+                currentCrop = {
+                    x: Math.min(startX, endX),
+                    y: Math.min(startY, endY),
+                    width: Math.abs(endX - startX),
+                    height: Math.abs(endY - startY)
+                };
+
+                // Animation loop will automatically redraw while isDraggingCrop is true
+            });
+
+            container.addEventListener('touchend', () => {
+                isDraggingCrop = false; // Stop animation loop
+                redrawCropOverlay(); // Final redraw
+                localStorage.setItem('captn-reverse-crop', JSON.stringify(currentCrop));
+            });
+
+            // Load saved crop or show default
+            const savedCrop = localStorage.getItem('captn-reverse-crop');
+            if (savedCrop) {
+                try {
+                    currentCrop = JSON.parse(savedCrop);
+                } catch (e) {
+                    setCrop(0.25, 0.25, 0.5, 0.5);
+                }
+            } else {
+                setCrop(0.25, 0.25, 0.5, 0.5);
+            }
+        }
+
+        function setCrop(x, y, width, height) {
+            currentCrop = { x, y, width, height };
+            // Hide instructions once user selects a crop area
+            document.getElementById('crop-instructions').style.opacity = '0';
+            localStorage.setItem('captn-reverse-crop', JSON.stringify(currentCrop));
+            // Trigger redraw with new crop area
+            redrawCropOverlay();
+        }
+
+        function renderDebugCanvas(canvas) {
+            // Remove any existing debug elements
+            const existingCanvas = document.getElementById('debug-canvas');
+            const existingLabel = document.getElementById('debug-label');
+            const existingText = document.getElementById('debug-text');
+            if (existingCanvas) existingCanvas.remove();
+            if (existingLabel) existingLabel.remove();
+            if (existingText) existingText.remove();
+            
+            // Create debug display - this should show ONLY the cropped area
+            const debugCanvas = document.createElement('canvas');
+            const debugCtx = debugCanvas.getContext('2d');
+            
+            // Copy the processed canvas exactly as it will be sent to OCR
+            debugCanvas.width = canvas.width;
+            debugCanvas.height = canvas.height;
+            debugCtx.drawImage(canvas, 0, 0);
+            
+            debugCanvas.id = 'debug-canvas';
+            debugCanvas.style.position = 'fixed';
+            debugCanvas.style.top = '80px';
+            debugCanvas.style.right = '10px';
+            
+            // Dynamic sizing based on user preference
+            if (AppState.settings.debugViewSizing === 'autoWidth') {
+                // Auto height mode: Fixed width, height adjusts to preserve aspect ratio
+                debugCanvas.style.width = '200px';
+                debugCanvas.style.height = 'auto';
+                debugCanvas.style.maxHeight = 'none';
+            } else {
+                // Constrained mode: Fit within fixed box while maintaining aspect ratio
+                const aspectRatio = canvas.width / canvas.height;
+                const maxWidth = 200;
+                const maxHeight = 150;
+                
+                let displayWidth, displayHeight;
+                if (aspectRatio > maxWidth / maxHeight) {
+                    // Width-limited
+                    displayWidth = maxWidth;
+                    displayHeight = maxWidth / aspectRatio;
+                } else {
+                    // Height-limited
+                    displayHeight = maxHeight;
+                    displayWidth = maxHeight * aspectRatio;
+                }
+                
+                debugCanvas.style.width = `${displayWidth}px`;
+                debugCanvas.style.height = `${displayHeight}px`;
+            }
+            debugCanvas.style.border = '2px solid #0ea5e9';
+            debugCanvas.style.borderRadius = '8px';
+            debugCanvas.style.zIndex = '9999';
+            debugCanvas.style.background = 'white';
+            debugCanvas.style.imageRendering = 'pixelated'; // Show crisp pixels
+            
+            document.body.appendChild(debugCanvas);
+            
+            // Add label
+            const label = document.createElement('div');
+            label.id = 'debug-label';
+            label.textContent = `Debug: OCR Input (${canvas.width}×${canvas.height}px)`;
+            label.style.position = 'fixed';
+            label.style.top = '60px';
+            label.style.right = '10px';
+            label.style.color = '#0ea5e9';
+            label.style.fontSize = '12px';
+            label.style.fontWeight = 'bold';
+            label.style.zIndex = '9999';
+            label.style.textShadow = '0 0 4px black';
+            document.body.appendChild(label);
+            
+            // Add text display area for debug
+            const textDisplay = document.createElement('div');
+            textDisplay.id = 'debug-text';
+            textDisplay.style.position = 'fixed';
+            textDisplay.style.top = '250px';
+            textDisplay.style.right = '10px';
+            textDisplay.style.maxWidth = '200px';
+            textDisplay.style.background = 'rgba(15, 23, 42, 0.9)';
+            textDisplay.style.color = '#0ea5e9';
+            textDisplay.style.padding = '8px';
+            textDisplay.style.borderRadius = '8px';
+            textDisplay.style.fontSize = '11px';
+            textDisplay.style.border = '1px solid #0ea5e9';
+            textDisplay.style.zIndex = '9999';
+            textDisplay.textContent = 'Waiting for OCR result...';
+            document.body.appendChild(textDisplay);
+            
+            console.log(`🔍 Debug canvas: ${canvas.width}×${canvas.height}px - this exact image goes to OCR`);
+        }
+
+        function updateDebugText(text, confidence) {
+            const debugText = document.getElementById('debug-text');
+            if (debugText) {
+                debugText.innerHTML = `
+                    <strong>OCR Result:</strong><br>
+                    "${text}"<br>
+                    <small>Confidence: ${Math.round(confidence)}%</small>
+                `;
+            }
+        }
+
+        async function initOCR() {
+            try {
+                console.log('🤖 Initializing OCR worker...');
+                ocrWorker = await Tesseract.createWorker('eng', 1, {
+                    logger: ({ status, progress }) => {
+                        if (status === 'recognizing text') {
+                            const progressEl = document.getElementById('ocr-progress');
+                            if (progressEl) {
+                                progressEl.textContent = `${Math.round(progress * 100)}%`;
+                            }
+                        }
+                    }
+                });
+
+                // Optimized OCR parameters based on comprehensive test suite results
+                await ocrWorker.setParameters({
+                    tessedit_pageseg_mode: '6', // OPTIMAL: Single uniform block - best for general text
+                    preserve_interword_spaces: '1', // Better word spacing
+                    tesseract_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 .,"\'', // Improve accuracy by restricting to common characters
+                    tessedit_do_invert: '0', // Disable auto-invert for better consistency
+                    classify_enable_adaptive_matcher: '1' // Enable adaptive matching for better accuracy
+                });
+
+                console.log('✅ OCR Worker ready');
+            } catch (error) {
+                console.error('❌ OCR initialization failed:', error);
+            }
+        }
+
+        async function requestCamera() {
+            try {
+                // Prevent duplicate camera requests
+                if (cameraRequestInProgress) {
+                    console.log('⏳ Camera request already in progress...');
+                    return;
+                }
+
+                cameraRequestInProgress = true;
+                console.log('📸 Requesting camera permission...');
+                updateStatus('Requesting camera...', 'bg-yellow-400 animate-pulse');
+                
+                // Check if getUserMedia is available
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    throw new Error('getUserMedia not supported in this browser');
+                }
+                
+                // Cleanup any existing stream first
+                if (stream) {
+                    console.log('🧹 Cleaning up existing camera stream...');
+                    stream.getTracks().forEach(track => track.stop());
+                    stream = null;
+                    mediaStreamTrack = null;
+                }
+                
+                // Check permission first (if supported)
+                if (navigator.permissions) {
+                    try {
+                        const permission = await navigator.permissions.query({name: 'camera'});
+                        console.log('📋 Camera permission status:', permission.state);
+                    } catch (permError) {
+                        console.log('⚠️ Could not query camera permission:', permError.message);
+                    }
+                }
+                
+                // Request camera permission with simplified constraints for better compatibility
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: 'environment',
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 }
+                    }
+                });
+
+                console.log('✅ Camera permission granted!');
+                cameraRequestInProgress = false;
+                showMainApp();
+
+            } catch (error) {
+                cameraRequestInProgress = false;
+                console.error('❌ Camera access denied:', error);
+                
+                let errorMessage = 'Camera access is required for CaptnReverse to function.';
+                let debugInfo = `Error: ${error.name} - ${error.message}`;
+                
+                if (error.name === 'NotAllowedError') {
+                    errorMessage = 'Camera permission was denied. Please refresh and allow camera access, or check your browser settings.';
+                } else if (error.name === 'NotFoundError') {
+                    errorMessage = 'No camera found. Please connect a camera and try again.';
+                } else if (error.name === 'NotSupportedError') {
+                    errorMessage = 'Camera is not supported in this browser. Try Chrome, Edge, or Firefox.';
+                } else if (error.name === 'OverconstrainedError') {
+                    errorMessage = 'Camera constraints not supported. Trying with basic settings...';
+                } else {
+                    errorMessage = `Camera error: ${error.message}`;
+                }
+                
+                updateStatus('Camera error', 'bg-red-400');
+                
+                // Update UI to show error
+                const setupCard = document.querySelector('#setup-screen .glass');
+                if (setupCard) {
+                    setupCard.innerHTML = `
+                        <div class="w-20 h-20 bg-red-600/20 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <svg class="w-10 h-10 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                            </svg>
+                        </div>
+                        <h2 class="text-2xl font-semibold mb-4 text-red-300">Camera Access Required</h2>
+                        <p class="text-dark-300 mb-6">${errorMessage}</p>
+                        <button id="retry-camera" class="btn-primary w-full text-lg py-4 mb-4">
+                            🔄 Try Again
+                        </button>
+                        <button id="retry-basic" class="w-full bg-purple-600 hover:bg-purple-700 text-white py-3 px-6 rounded-xl transition-colors text-sm mb-4">
+                            📱 Try Basic Camera
+                        </button>
+                        <details class="text-xs text-dark-400 mt-4">
+                            <summary class="cursor-pointer hover:text-dark-300">Debug Info</summary>
+                            <div class="mt-2 p-2 bg-dark-800 rounded font-mono">
+                                <p>URL: ${window.location.href}</p>
+                                <p>Secure: ${window.isSecureContext}</p>
+                                <p>${debugInfo}</p>
+                            </div>
+                        </details>
+                        <div class="text-sm text-dark-400 space-y-1 mt-4">
+                            <p>💡 Make sure you're using HTTPS or localhost</p>
+                            <p>🔒 Your privacy is protected - all processing is local</p>
+                            <p>🌐 Works best in Chrome, Edge, or Firefox</p>
+                        </div>
+                    `;
+                    
+                    // Note: retry handlers now managed by event delegation
+                }
+            }
+        }
+
+        async function requestBasicCamera() {
+            try {
+                console.log('📱 Trying basic camera constraints...');
+                updateStatus('Trying basic camera...', 'bg-yellow-400 animate-pulse');
+                
+                // Cleanup any existing stream first
+                if (stream) {
+                    stream.getTracks().forEach(track => track.stop());
+                    stream = null;
+                    mediaStreamTrack = null;
+                }
+                
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: true // Minimal constraints
+                });
+                
+                console.log('✅ Basic camera access granted!');
+                showMainApp();
+                
+            } catch (basicError) {
+                console.error('❌ Basic camera also failed:', basicError);
+                updateStatus('Basic camera failed', 'bg-red-400');
+            }
+        }
+
+        function showMainApp() {
+            const video = document.getElementById('camera-feed');
+            video.srcObject = stream;
+            
+            // Get camera track for zoom control
+            mediaStreamTrack = stream.getVideoTracks()[0];
+            
+            // Configure camera controls based on actual capabilities
+            configureCameraControls();
+            
+            // Wait for video to start playing
+            video.onloadedmetadata = () => {
+                console.log('📹 Video metadata loaded, starting overlay');
+                startCropOverlay();
+            };
+            
+            // Hide setup, show main app
+            document.getElementById('setup-screen').classList.add('hidden');
+            document.getElementById('main-app').classList.remove('hidden');
+            
+            updateStatus('Camera active', 'bg-green-400');
+        }
+        
+        async function configureCameraControls() {
+            if (!mediaStreamTrack) return;
+            
+            try {
+                const capabilities = mediaStreamTrack.getCapabilities();
+                const settings = mediaStreamTrack.getSettings();
+                console.log('📷 Camera capabilities:', capabilities);
+                console.log('📷 Current settings:', settings);
+                
+                // Configure focus control based on actual capabilities
+                const focusSlider = document.getElementById('camera-focus');
+                const focusRow = focusSlider.closest('.flex');
+                
+                if (capabilities.focusDistance) {
+                    const { min, max, step } = capabilities.focusDistance;
+                    console.log(`🎯 Configuring focus slider: min=${min}, max=${max}, step=${step}`);
+                    
+                    focusSlider.min = min;
+                    focusSlider.max = max;
+                    focusSlider.step = step || 0.1;
+                    
+                    // Set current value from device settings
+                    if (settings.focusDistance !== undefined) {
+                        focusSlider.value = settings.focusDistance;
+                        document.getElementById('focus-value').textContent = settings.focusDistance.toFixed(2);
+                    }
+                    focusRow.style.display = 'flex'; // Ensure it's visible
+                } else {
+                    console.warn('⚠️ Focus distance control not supported');
+                    focusRow.style.display = 'none'; // Hide the control
+                }
+                
+                // Configure zoom control
+                const zoomSlider = document.getElementById('camera-zoom');
+                const zoomRow = zoomSlider.closest('.flex');
+                
+                if (capabilities.zoom) {
+                    const { min, max, step } = capabilities.zoom;
+                    console.log(`📷 Configuring zoom slider: min=${min}, max=${max}, step=${step}`);
+                    
+                    zoomSlider.min = min;
+                    zoomSlider.max = max;
+                    zoomSlider.step = step || 0.1;
+                    
+                    if (settings.zoom !== undefined) {
+                        zoomSlider.value = settings.zoom;
+                        cameraZoom = settings.zoom;
+                        document.getElementById('zoom-value').textContent = settings.zoom.toFixed(1) + 'x';
+                    }
+                    zoomRow.style.display = 'flex';
+                } else {
+                    console.warn('⚠️ Camera zoom not supported');
+                    zoomRow.style.display = 'none';
+                }
+                
+            } catch (error) {
+                console.error('❌ Failed to configure camera controls:', error);
+            }
+        }
+
+        async function applyCameraZoom() {
+            if (!mediaStreamTrack) return;
+            
+            try {
+                const capabilities = mediaStreamTrack.getCapabilities();
+                console.log('📷 Camera capabilities:', capabilities);
+                
+                if (capabilities.zoom) {
+                    await mediaStreamTrack.applyConstraints({
+                        zoom: { ideal: cameraZoom }
+                    });
+                    console.log(`📷 Applied zoom: ${cameraZoom}x`);
+                    updateStatus(`Zoom: ${cameraZoom}x applied`, 'bg-blue-400');
+                } else {
+                    console.warn('⚠️ Camera does not support optical zoom');
+                    updateStatus('Zoom not supported by camera', 'bg-yellow-400');
+                }
+            } catch (error) {
+                console.warn('⚠️ Camera zoom not supported:', error);
+                updateStatus('Zoom failed to apply', 'bg-red-400');
+            }
+        }
+
+        async function applyCameraFocus(focusDistance) {
+            if (!mediaStreamTrack) return;
+            
+            try {
+                const capabilities = mediaStreamTrack.getCapabilities();
+                
+                if (capabilities.focusDistance) {
+                    // Use the actual focus distance value from camera capabilities
+                    const constraints = {
+                        focusMode: 'manual',
+                        focusDistance: { ideal: parseFloat(focusDistance) }
+                    };
+                    
+                    await mediaStreamTrack.applyConstraints({ advanced: [constraints] });
+                    console.log(`🎯 Applied manual focus: ${focusDistance}`);
+                    updateStatus(`Focus: ${parseFloat(focusDistance).toFixed(2)}`, 'bg-blue-400');
+                } else {
+                    console.warn('⚠️ Manual focus not supported on this camera');
+                    updateStatus('Focus control not supported', 'bg-yellow-400');
+                }
+            } catch (error) {
+                console.warn('⚠️ Focus control error:', error);
+                updateStatus('Focus adjustment failed', 'bg-red-400');
+            }
+        }
+        
+        async function setAutoFocus() {
+            if (!mediaStreamTrack) return;
+            
+            try {
+                await mediaStreamTrack.applyConstraints({ 
+                    focusMode: 'continuous' // Better for live video than 'auto'
+                });
+                console.log('🎯 Set focus mode to continuous auto-focus');
+                updateStatus('Auto-focus enabled', 'bg-green-400');
+                document.getElementById('focus-value').textContent = 'Auto';
+            } catch (error) {
+                console.warn('⚠️ Could not set auto focus:', error);
+                updateStatus('Auto-focus failed', 'bg-red-400');
+            }
+        }
+
+        // Crop overlay animation management
+        let cropOverlayAnimationId = null;
+        let isDraggingCrop = false;
+        
+        function startCropOverlay() {
+            const video = document.getElementById('camera-feed');
+            const canvas = document.getElementById('crop-overlay');
+            const ctx = canvas.getContext('2d');
+            
+            function drawOverlay() {
+                if (video.videoWidth === 0 || video.videoHeight === 0) {
+                    // Only continue animation if we're waiting for video to load
+                    cropOverlayAnimationId = requestAnimationFrame(drawOverlay);
+                    return;
+                }
+                
+                // Set canvas size to match video
+                const rect = video.getBoundingClientRect();
+                canvas.width = rect.width;
+                canvas.height = rect.height;
+                
+                // Clear canvas
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                // Draw semi-transparent overlay
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                // Clear crop area
+                const x = currentCrop.x * canvas.width;
+                const y = currentCrop.y * canvas.height;
+                const width = currentCrop.width * canvas.width;
+                const height = currentCrop.height * canvas.height;
+                
+                ctx.clearRect(x, y, width, height);
+                
+                // Draw crop border
+                ctx.strokeStyle = '#0ea5e9';
+                ctx.lineWidth = 3;
+                ctx.strokeRect(x, y, width, height);
+                
+                // Draw corner handles
+                const handleSize = 8;
+                ctx.fillStyle = '#0ea5e9';
+                ctx.fillRect(x - handleSize/2, y - handleSize/2, handleSize, handleSize);
+                ctx.fillRect(x + width - handleSize/2, y - handleSize/2, handleSize, handleSize);
+                ctx.fillRect(x - handleSize/2, y + height - handleSize/2, handleSize, handleSize);
+                ctx.fillRect(x + width - handleSize/2, y + height - handleSize/2, handleSize, handleSize);
+                
+                // Only continue animation loop while dragging or video not ready
+                if (isDraggingCrop || video.videoWidth === 0 || video.videoHeight === 0) {
+                    cropOverlayAnimationId = requestAnimationFrame(drawOverlay);
+                } else {
+                    cropOverlayAnimationId = null; // Stop the loop when not needed
+                }
+            }
+            
+            // Start initial draw
+            drawOverlay();
+        }
+        
+        function redrawCropOverlay() {
+            // Force a single redraw without starting continuous loop
+            if (!cropOverlayAnimationId && !isDraggingCrop) {
+                const video = document.getElementById('camera-feed');
+                const canvas = document.getElementById('crop-overlay');
+                const ctx = canvas.getContext('2d');
+                
+                if (video.videoWidth > 0 && video.videoHeight > 0) {
+                    // Directly redraw without animation loop
+                    const rect = video.getBoundingClientRect();
+                    canvas.width = rect.width;
+                    canvas.height = rect.height;
+                    
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    
+                    const x = currentCrop.x * canvas.width;
+                    const y = currentCrop.y * canvas.height;
+                    const width = currentCrop.width * canvas.width;
+                    const height = currentCrop.height * canvas.height;
+                    
+                    ctx.clearRect(x, y, width, height);
+                    ctx.strokeStyle = '#0ea5e9';
+                    ctx.lineWidth = 3;
+                    ctx.strokeRect(x, y, width, height);
+                    
+                    const handleSize = 8;
+                    ctx.fillStyle = '#0ea5e9';
+                    ctx.fillRect(x - handleSize/2, y - handleSize/2, handleSize, handleSize);
+                    ctx.fillRect(x + width - handleSize/2, y - handleSize/2, handleSize, handleSize);
+                    ctx.fillRect(x - handleSize/2, y + height - handleSize/2, handleSize, handleSize);
+                    ctx.fillRect(x + width - handleSize/2, y + height - handleSize/2, handleSize, handleSize);
+                }
+            }
+        }
+
+        function toggleMonitoring() {
+            isMonitoring = !isMonitoring;
+            const btn = document.getElementById('monitor-toggle');
+            
+            if (isMonitoring) {
+                btn.textContent = '⏸️ Pause Monitoring';
+                btn.classList.remove('bg-green-600', 'hover:bg-green-700');
+                btn.classList.add('bg-red-600', 'hover:bg-red-700');
+                updateStatus('Monitoring active', 'bg-green-400 animate-pulse');
+                startMonitoring();
+            } else {
+                btn.textContent = '▶️ Start Monitoring';
+                btn.classList.remove('bg-red-600', 'hover:bg-red-700');
+                btn.classList.add('bg-green-600', 'hover:bg-green-700');
+                updateStatus('Monitoring paused', 'bg-yellow-400');
+                stopMonitoring();
+            }
+        }
+
+        function startMonitoring() {
+            if (!stream || !ocrWorker) return;
+            
+            window.monitoringInterval = setInterval(async () => {
+                await processFrame();
+            }, processingInterval); // Use configurable interval
+        }
+
+        function stopMonitoring() {
+            if (window.monitoringInterval) {
+                clearInterval(window.monitoringInterval);
+                window.monitoringInterval = null;
+            }
+        }
+
+        async function readNow() {
+            if (!stream || !ocrWorker) return;
+            await processFrame();
+        }
+
+        // Helper function to detect blank, noise, or meaningless OCR results
+        function isBlankOrNoise(text) {
+            if (!text || typeof text !== 'string') return true;
+            
+            // Common OCR noise patterns
+            const noisePatterns = [
+                /^[\s\-_|\\\/\.\,\;\:\!\?\'\"\`\~\@\#\$\%\^\&\*\(\)\[\]\{\}\<\>\=\+]+$/, // Only symbols/punctuation
+                /^[lI1|]{1,3}$/, // Common OCR misreads (l, I, 1, |)
+                /^[oO0]{1,3}$/, // Circles mistaken for O's or 0's
+                /^[\.\s]+$/, // Only dots and spaces
+                /^[\-\s]+$/, // Only dashes and spaces
+                /^[_\s]+$/, // Only underscores and spaces
+                /^[,\s]+$/, // Only commas and spaces
+                /^\s*$/, // Only whitespace
+            ];
+            
+            // Check against noise patterns
+            for (const pattern of noisePatterns) {
+                if (pattern.test(text)) {
+                    return true;
+                }
+            }
+            
+            // Check for very repetitive patterns (like "|||" or "...")
+            if (text.length > 1) {
+                const firstChar = text.charAt(0);
+                if (text.split('').every(char => char === firstChar || char === ' ')) {
+                    return true; // All characters are the same (ignoring spaces)
+                }
+            }
+            
+            // Check for suspicious character ratios
+            const alphanumericCount = (text.match(/[a-zA-Z0-9]/g) || []).length;
+            const totalLength = text.length;
+            
+            if (totalLength > 0 && (alphanumericCount / totalLength) < 0.3) {
+                return true; // Less than 30% alphanumeric characters
+            }
+            
+            return false;
+        }
+
+        async function processFrame() {
+            try {
+                const video = document.getElementById('camera-feed');
+                
+                // Use reusable canvas objects to prevent memory leaks
+                const canvas = reusableCanvases.processing;
+                const ctx = canvasContexts.processing;
+
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                
+                if (canvas.width === 0 || canvas.height === 0) return;
+
+                // Clear previous frame data
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(video, 0, 0);
+
+                // Apply crop based on video dimensions and crop area  
+                const cropCanvas = reusableCanvases.crop;
+                const cropCtx = canvasContexts.crop;
+                
+                // Get actual video element dimensions for proper crop calculation
+                const videoEl = document.getElementById('camera-feed');
+                const videoRect = videoEl.getBoundingClientRect();
+                
+                // Calculate crop coordinates based on video's actual dimensions
+                const scaleX = canvas.width / videoRect.width;
+                const scaleY = canvas.height / videoRect.height;
+                
+                const cropX = currentCrop.x * canvas.width;
+                const cropY = currentCrop.y * canvas.height;  
+                const cropWidth = currentCrop.width * canvas.width;
+                const cropHeight = currentCrop.height * canvas.height;
+
+                console.log(`🔲 Crop area: x=${Math.round(cropX)}, y=${Math.round(cropY)}, w=${Math.round(cropWidth)}, h=${Math.round(cropHeight)}`);
+                console.log(`📐 Video: ${canvas.width}x${canvas.height}, Display: ${Math.round(videoRect.width)}x${Math.round(videoRect.height)}`);
+
+                // Set crop canvas to exact crop size
+                cropCanvas.width = Math.max(cropWidth, 50); // Minimum 50px width
+                cropCanvas.height = Math.max(cropHeight, 50); // Minimum 50px height
+                
+                // Clear previous crop data and draw only the cropped portion
+                cropCtx.clearRect(0, 0, cropCanvas.width, cropCanvas.height);
+                cropCtx.drawImage(canvas, cropX, cropY, cropWidth, cropHeight, 0, 0, cropCanvas.width, cropCanvas.height);
+
+                // OPTIMIZATION: Rescale cropCanvas for optimal OCR resolution (20-40px character height)
+                const OCR_TARGET_HEIGHT = 800; // Optimal height for Tesseract.js accuracy
+                if (cropCanvas.height > 0 && cropCanvas.height !== OCR_TARGET_HEIGHT) {
+                    const aspectRatio = cropCanvas.width / cropCanvas.height;
+                    const scaledWidth = OCR_TARGET_HEIGHT * aspectRatio;
+                    
+                    // Use reusable temp canvas instead of creating new one
+                    const tempCanvas = reusableCanvases.temp;
+                    const tempCtx = canvasContexts.temp;
+                    tempCanvas.width = scaledWidth;
+                    tempCanvas.height = OCR_TARGET_HEIGHT;
+                    
+                    // Clear and scale the cropped image to optimal resolution
+                    tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
+                    tempCtx.drawImage(cropCanvas, 0, 0, tempCanvas.width, tempCanvas.height);
+                    
+                    // Copy scaled image back to cropCanvas
+                    cropCanvas.width = tempCanvas.width;
+                    cropCanvas.height = tempCanvas.height;
+                    cropCtx.clearRect(0, 0, cropCanvas.width, cropCanvas.height);
+                    cropCtx.drawImage(tempCanvas, 0, 0);
+                    
+                    console.log(`📏 Scaled crop to optimal OCR size: ${Math.round(scaledWidth)}×${OCR_TARGET_HEIGHT}px`);
+                }
+
+                // *** CRITICAL: Image preprocessing for OCR ***
+                const imageData = cropCtx.getImageData(0, 0, cropCanvas.width, cropCanvas.height);
+                const data = imageData.data;
+
+                // Advanced adaptive thresholding for better OCR accuracy
+                const blockSize = 32; // Size of neighborhood to consider
+                const C = 5; // Constant subtracted from mean
+                
+                // First pass: convert to grayscale
+                for (let i = 0; i < data.length; i += 4) {
+                    const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+                    data[i] = avg;
+                    data[i + 1] = avg;
+                    data[i + 2] = avg;
+                }
+                
+                // Second pass: adaptive thresholding
+                for (let y = 0; y < cropCanvas.height; y++) {
+                    for (let x = 0; x < cropCanvas.width; x++) {
+                        let sum = 0;
+                        let count = 0;
+                        
+                        // Calculate local mean for block around (x,y)
+                        const startY = Math.max(0, y - Math.floor(blockSize / 2));
+                        const endY = Math.min(cropCanvas.height, y + Math.floor(blockSize / 2));
+                        const startX = Math.max(0, x - Math.floor(blockSize / 2));
+                        const endX = Math.min(cropCanvas.width, x + Math.floor(blockSize / 2));
+                        
+                        for (let by = startY; by < endY; by++) {
+                            for (let bx = startX; bx < endX; bx++) {
+                                const pixelIndex = (by * cropCanvas.width + bx) * 4;
+                                sum += data[pixelIndex]; // Already grayscale
+                                count++;
+                            }
+                        }
+                        
+                        const localThreshold = (sum / count) - C;
+                        const pixelIndex = (y * cropCanvas.width + x) * 4;
+                        const pixelValue = data[pixelIndex];
+                        const value = pixelValue > localThreshold ? 255 : 0;
+                        
+                        data[pixelIndex] = value;
+                        data[pixelIndex + 1] = value;
+                        data[pixelIndex + 2] = value;
+                    }
+                }
+                
+                // Apply the processed image data back to canvas
+                cropCtx.putImageData(imageData, 0, 0);
+
+                // DEBUG: Show processed crop image (if enabled)
+                if (showDebugCanvas) {
+                    renderDebugCanvas(cropCanvas);
+                }
+
+                // Show processing state
+                document.getElementById('processing-state').classList.remove('hidden');
+
+                const startTime = Date.now();
+                let result;
+                
+                // Use the selected OCR engine
+                if (currentOCREngine === 'paddle' && AppState.paddleOCRLoaded) {
+                    console.log('🤖 Using PaddleOCR engine...');
+                    try {
+                        const paddleResult = await AppState.paddleOCRInstance.recognize(cropCanvas, {
+                            det: true, // Enable text detection
+                            rec: true  // Enable text recognition
+                        });
+
+                        // Adapt PaddleOCR's result format to match Tesseract's structure for compatibility
+                        const ocrText = paddleResult.text ? paddleResult.text.join('\n') : '';
+                        const avgConfidence = paddleResult.confidence ? 
+                            (paddleResult.confidence.reduce((a, b) => a + b, 0) / paddleResult.confidence.length) * 100 : 
+                            0;
+                        
+                        result = {
+                            data: {
+                                text: ocrText,
+                                confidence: avgConfidence
+                            }
+                        };
+                        
+                        console.log('✅ PaddleOCR recognition completed');
+                    } catch (paddleError) {
+                        console.error('❌ PaddleOCR recognition failed:', paddleError);
+                        updateStatus('PaddleOCR failed, using Tesseract', 'bg-yellow-400');
+                        result = await ocrWorker.recognize(cropCanvas);
+                    }
+
+                } else {
+                    if (currentOCREngine === 'paddle' && !AppState.paddleOCRLoaded) {
+                        console.warn('⚠️ PaddleOCR selected but not loaded. Using Tesseract instead.');
+                        updateStatus('Using Tesseract (Paddle not ready)', 'bg-blue-400');
+                    }
+                    console.log('🤖 Using Tesseract.js engine...');
+                    result = await ocrWorker.recognize(cropCanvas);
+                }
+                
+                const processingTime = Date.now() - startTime;
+
+                // Hide processing state
+                document.getElementById('processing-state').classList.add('hidden');
+
+                const ocrText = result.data.text.trim();
+                const ocrConfidence = result.data.confidence;
+                
+                console.log(`🔍 OCR Result: "${ocrText}" (confidence: ${Math.round(ocrConfidence)}%)`);
+                
+                // Update debug display with OCR result
+                updateDebugText(ocrText, ocrConfidence);
+                
+                // Enhanced text validation to prevent false positives on blank/empty content
+                const text = result.data.text.trim();
+                const hasActualText = text && 
+                    text.length > 2 && 
+                    /[a-zA-Z0-9]/.test(text) && // Contains at least one alphanumeric character
+                    text !== lastText &&
+                    !isBlankOrNoise(text); // Additional noise filtering
+                
+                if (ocrConfidence > AppState.settings.sensitivity && hasActualText) {
+                    displayText(text, result.data.confidence, processingTime);
+                    lastText = text;
+                    
+                    console.log(`📝 New text detected: "${text}"`);
+                    
+                    if (autoRead) {
+                        console.log(`🔊 Auto-reading enabled, speaking text...`);
+                        speak(text);
+                    }
+                } else {
+                    // Detailed logging for why text was rejected
+                    if (!hasActualText) {
+                        if (!text || text.length <= 2) {
+                            console.log(`📏 Text too short (${text.length} chars): "${text}"`);
+                        } else if (!/[a-zA-Z0-9]/.test(text)) {
+                            console.log(`🚫 No alphanumeric characters in: "${text}"`);
+                        } else if (text === lastText) {
+                            console.log(`🔄 Same text as before, skipping: "${text}"`);
+                        } else if (isBlankOrNoise(text)) {
+                            console.log(`🔇 Detected noise/blank pattern: "${text}"`);
+                        }
+                        updateStatus('No readable text found', 'bg-gray-400');
+                    } else if (ocrConfidence <= AppState.settings.sensitivity) {
+                        console.log(`🎯 Confidence ${Math.round(ocrConfidence)}% below threshold ${AppState.settings.sensitivity}%`);
+                        updateStatus(`Low confidence: ${Math.round(ocrConfidence)}%`, 'bg-yellow-400');
+                    }
+                    
+                    // Enhanced user feedback for rejected OCR results
+                    if (ocrConfidence < 20) {
+                        updateDebugText('No clear text detected. Try adjusting lighting, focus, or crop area.', ocrConfidence);
+                    } else if (ocrConfidence < AppState.settings.sensitivity) {
+                        updateDebugText(`Text detected but confidence (${Math.round(ocrConfidence)}%) below threshold (${AppState.settings.sensitivity}%). Consider lowering sensitivity.`, ocrConfidence);
+                    } else if (!hasActualText) {
+                        updateDebugText(`High confidence (${Math.round(ocrConfidence)}%) but invalid text content: "${text}"`, ocrConfidence);
+                    }
+                }
+            } catch (error) {
+                document.getElementById('processing-state').classList.add('hidden');
+                console.error('❌ OCR processing error:', error);
+            }
+        }
+
+        function displayText(text, confidence, processingTime) {
+            document.getElementById('detected-text').textContent = text;
+            document.getElementById('confidence-score').textContent = Math.round(confidence);
+            document.getElementById('processing-time').textContent = processingTime;
+            document.getElementById('text-display').classList.remove('hidden');
+        }
+
+        function speak(text) {
+            if (!text || !text.trim()) return;
+            
+            // Cancel any current speech
+            speechSynthesis.cancel();
+            
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.rate = speechRate;
+            utterance.pitch = 1.0;
+            utterance.volume = 1.0;
+            
+            // Try to get a voice
+            const voices = speechSynthesis.getVoices();
+            if (voices.length > 0) {
+                // Prefer English voices
+                const englishVoice = voices.find(voice => voice.lang.startsWith('en')) || voices[0];
+                utterance.voice = englishVoice;
+            }
+
+            utterance.onstart = () => {
+                console.log('🔊 Speaking:', text.substring(0, 50) + '...');
+                document.getElementById('stop-speech-btn').classList.remove('hidden');
+                updateStatus('Speaking...', 'bg-blue-400 animate-pulse');
+            };
+            
+            utterance.onend = () => {
+                console.log('🔇 Speech completed');
+                document.getElementById('stop-speech-btn').classList.add('hidden');
+                updateStatus(isMonitoring ? 'Monitoring active' : 'Ready', 'bg-green-400');
+            };
+            
+            utterance.onerror = (event) => {
+                console.error('🔇 Speech error:', event.error);
+                document.getElementById('stop-speech-btn').classList.add('hidden');
+                updateStatus('Speech error', 'bg-red-400');
+            };
+
+            // Ensure voices are loaded before speaking
+            if (voices.length === 0) {
+                speechSynthesis.addEventListener('voiceschanged', () => {
+                    speechSynthesis.speak(utterance);
+                }, { once: true });
+            } else {
+                speechSynthesis.speak(utterance);
+            }
+        }
+
+        function updateStatus(text, dotClass) {
+            document.getElementById('status-text').textContent = text;
+            const dot = document.getElementById('status-dot');
+            dot.className = `w-2 h-2 rounded-full ${dotClass}`;
+        }
+
+        async function switchOCREngine(engine) {
+            console.log(`🔄 Switching to ${engine} OCR engine...`);
+            currentOCREngine = engine;
+            
+            // Update UI
+            const tesseractBtn = document.getElementById('ocr-tesseract');
+            const paddleBtn = document.getElementById('ocr-paddle');
+            const infoDiv = document.getElementById('ocr-engine-info');
+            
+            if (engine === 'tesseract') {
+                tesseractBtn.className = 'flex-1 py-3 px-4 rounded-xl font-medium transition-all bg-primary-600 text-white';
+                paddleBtn.className = 'flex-1 py-3 px-4 rounded-xl font-medium transition-all bg-dark-600 hover:bg-dark-500 text-white';
+                infoDiv.innerHTML = '<p>Tesseract.js - Fast, lightweight, good for general text</p>';
+                
+                // Initialize Tesseract if needed
+                if (!ocrWorker) {
+                    await initOCR();
+                }
+            } else {
+                tesseractBtn.className = 'flex-1 py-3 px-4 rounded-xl font-medium transition-all bg-dark-600 hover:bg-dark-500 text-white';
+                paddleBtn.className = 'flex-1 py-3 px-4 rounded-xl font-medium transition-all bg-primary-600 text-white';
+                infoDiv.innerHTML = '<p>PaddleOCR - Higher accuracy, larger download, slower processing</p>';
+                
+                // Load PaddleOCR dynamically
+                await loadPaddleOCR();
+            }
+        }
+
+        async function loadPaddleOCR() {
+            if (AppState.paddleOCRLoaded) {
+                console.log('✅ PaddleOCR already loaded.');
+                return;
+            }
+            
+            try {
+                updateStatus('Loading PaddleOCR...', 'bg-yellow-400 animate-pulse');
+                console.log('⏳ Loading PaddleOCR engine via dynamic import...');
+
+                // Dynamically import the ocr module using the name from our import map
+                const ocr = await import('@paddlejs-models/ocr');
+                
+                console.log('🤖 Initializing PaddleOCR model... (this may take a moment)');
+                // Initialize the model. This will download the necessary model files.
+                await ocr.init(); 
+                
+                AppState.paddleOCRInstance = ocr;
+                AppState.paddleOCRLoaded = true;
+                paddleOCRLoaded = true; // Keep legacy var in sync
+                
+                console.log('✅ PaddleOCR loaded and initialized successfully!');
+                updateStatus('PaddleOCR ready', 'bg-green-400');
+
+            } catch (error) {
+                console.error('❌ PaddleOCR loading failed:', error);
+                updateStatus('PaddleOCR failed to load', 'bg-red-400');
+                
+                // Fallback to Tesseract if loading fails
+                setTimeout(() => {
+                    console.log('🔄 Falling back to Tesseract.js');
+                    switchOCREngine('tesseract');
+                }, 2000);
+            }
+        }
+
+        function populateVoiceSelect() {
+            const select = document.getElementById('voice-select');
+            if (!select) {
+                console.warn('⚠️ Voice select element not found');
+                return;
+            }
+            
+            // Use cached voices or get fresh ones
+            const currentVoices = voicesLoaded ? voices : speechSynthesis.getVoices();
+            
+            if (currentVoices.length === 0) {
+                console.warn('⚠️ No voices available yet');
+                select.innerHTML = '<option value="">Loading voices...</option>';
+                return;
+            }
+            
+            select.innerHTML = '<option value="">Default Voice</option>';
+            
+            currentVoices.forEach((voice, index) => {
+                const option = document.createElement('option');
+                option.value = index;
+                option.textContent = `${voice.name} (${voice.lang})`;
+                select.appendChild(option);
+            });
+            
+            console.log(`🗣️ Populated voice select with ${currentVoices.length} voices`);
+        }
+
+        function updateModalAutoReadToggle() {
+            const toggle = document.getElementById('auto-read-toggle-modal');
+            const thumb = toggle.querySelector('span');
+            
+            if (autoRead) {
+                toggle.classList.add('bg-primary-600');
+                toggle.classList.remove('bg-dark-600');
+                thumb.classList.add('translate-x-6');
+                thumb.classList.remove('translate-x-1');
+            } else {
+                toggle.classList.remove('bg-primary-600');
+                toggle.classList.add('bg-dark-600');
+                thumb.classList.remove('translate-x-6');
+                thumb.classList.add('translate-x-1');
+            }
+        }
+
+        function updateDebugToggle() {
+            const toggle = document.getElementById('debug-toggle');
+            const thumb = toggle.querySelector('span');
+            
+            if (showDebugCanvas) {
+                toggle.classList.add('bg-primary-600');
+                toggle.classList.remove('bg-dark-600');
+                thumb.classList.add('translate-x-6');
+                thumb.classList.remove('translate-x-1');
+            } else {
+                toggle.classList.remove('bg-primary-600');
+                toggle.classList.add('bg-dark-600');
+                thumb.classList.remove('translate-x-6');
+                thumb.classList.add('translate-x-1');
+            }
+        }
+        
+        function updateDebugSizingButtons() {
+            const buttons = document.querySelectorAll('#debug-sizing-control button');
+            buttons.forEach(btn => {
+                const isSelected = btn.dataset.size === AppState.settings.debugViewSizing;
+                btn.classList.toggle('bg-primary-600', isSelected);
+                btn.classList.toggle('bg-dark-600', !isSelected);
+                btn.classList.toggle('hover:bg-dark-500', !isSelected);
+            });
+        }
+
+        function updateSettingsModalValues() {
+            // Update all modal controls with current values
+            document.getElementById('speech-rate-modal').value = speechRate;
+            document.getElementById('rate-value-modal').textContent = speechRate;
+            
+            document.getElementById('sensitivity-modal').value = sensitivity;
+            document.getElementById('sensitivity-value-modal').textContent = sensitivity;
+            
+            document.getElementById('threshold-slider-modal').value = imageThreshold;
+            document.getElementById('threshold-value-modal').textContent = imageThreshold;
+            
+            document.getElementById('processing-interval').value = processingInterval;
+            document.getElementById('interval-value').textContent = processingInterval;
+            
+            // Update toggles
+            updateModalAutoReadToggle();
+            updateDebugToggle();
+            updateDebugSizingButtons();
+            
+            // Update OCR engine buttons
+            const tesseractBtn = document.getElementById('ocr-tesseract');
+            const paddleBtn = document.getElementById('ocr-paddle');
+            if (currentOCREngine === 'tesseract') {
+                tesseractBtn.className = 'flex-1 py-3 px-4 rounded-xl font-medium transition-all bg-primary-600 text-white';
+                paddleBtn.className = 'flex-1 py-3 px-4 rounded-xl font-medium transition-all bg-dark-600 hover:bg-dark-500 text-white';
+            } else {
+                tesseractBtn.className = 'flex-1 py-3 px-4 rounded-xl font-medium transition-all bg-dark-600 hover:bg-dark-500 text-white';
+                paddleBtn.className = 'flex-1 py-3 px-4 rounded-xl font-medium transition-all bg-primary-600 text-white';
+            }
+        }
+
+        // Cleanup camera resources on page unload
+        function cleanupCamera() {
+            console.log('🧹 Cleaning up camera resources...');
+            
+            if (stream) {
+                // Stop all tracks to release camera
+                stream.getTracks().forEach(track => {
+                    console.log(`🛑 Stopping track: ${track.kind} (${track.label})`);
+                    track.stop();
+                });
+                stream = null;
+                mediaStreamTrack = null;
+            }
+
+            // Stop monitoring
+            if (window.monitoringInterval) {
+                clearInterval(window.monitoringInterval);
+                window.monitoringInterval = null;
+            }
+
+            // Cleanup OCR worker
+            if (ocrWorker) {
+                ocrWorker.terminate().catch(e => console.warn('OCR cleanup error:', e));
+                ocrWorker = null;
+            }
+
+            console.log('✅ Camera resources cleaned up');
+        }
+
+        // Critical: Add multiple cleanup event listeners
+        window.addEventListener('beforeunload', cleanupCamera);
+        window.addEventListener('unload', cleanupCamera);
+        window.addEventListener('pagehide', cleanupCamera);
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                console.log('📱 Page hidden, cleaning up camera...');
+                cleanupCamera();
+            }
+        });
+
+        // Cleanup on focus loss (important for mobile)
+        window.addEventListener('blur', () => {
+            console.log('👁️ Window lost focus, pausing camera...');
+            if (isMonitoring) {
+                toggleMonitoring(); // Stop monitoring to reduce resource usage
+            }
+        });
+
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', init);
+
+        // Live reload for development
+        if (location.hostname === 'localhost') {
+            let lastModified = null;
+            setInterval(async () => {
+                try {
+                    const response = await fetch(location.href, { method: 'HEAD' });
+                    const modified = response.headers.get('Last-Modified');
+                    if (lastModified && modified !== lastModified) {
+                        location.reload();
+                    }
+                    lastModified = modified;
+                } catch (error) {
+                    // Ignore
+                }
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                width: 80vw;
+                max-width: 600px;
+                height: 70vh;
+                background: rgba(15, 23, 42, 0.95);
+                border: 2px solid #0ea5e9;
+                border-radius: 12px;
+                z-index: 10000;
+                display: flex;
+                flex-direction: column;
+                font-family: 'JetBrains Mono', monospace;
+                backdrop-filter: blur(12px);
+            `;
+            
+            const header = document.createElement('div');
+            header.style.cssText = `
+                padding: 12px 16px;
+                background: #0ea5e9;
+                color: white;
+                font-weight: bold;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                border-radius: 10px 10px 0 0;
+            `;
+            header.innerHTML = `
+                <span>🔍 CaptnReverse Debug Console</span>
+                <button id="close-debug" style="background: none; border: none; color: white; font-size: 18px; cursor: pointer;">✖️</button>
+            `;
+            
+            const content = document.createElement('div');
+            content.style.cssText = `
+                flex: 1;
+                padding: 16px;
+                overflow-y: auto;
+                background: #0f172a;
+                color: #e2e8f0;
+                font-size: 12px;
+                line-height: 1.4;
+            `;
+            
+            const controls = document.createElement('div');
+            controls.style.cssText = `
+                padding: 12px 16px;
+                background: #1e293b;
+                border-top: 1px solid #334155;
+                display: flex;
+                gap: 8px;
+                border-radius: 0 0 10px 10px;
+            `;
+            controls.innerHTML = `
+                <button id="clear-debug" style="padding: 6px 12px; background: #ef4444; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 11px;">Clear</button>
+                <button id="export-debug" style="padding: 6px 12px; background: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 11px;">Export</button>
+                <button id="test-settings" style="padding: 6px 12px; background: #f59e0b; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 11px;">Test Settings</button>
+            `;
+            
+            consoleDiv.appendChild(header);
+            consoleDiv.appendChild(content);
+            consoleDiv.appendChild(controls);
+            document.body.appendChild(consoleDiv);
+            
+            // Add event listeners
+            document.getElementById('close-debug').addEventListener('click', () => {
+                consoleDiv.remove();
+                debugConsole = null;
+            });
+            
+            document.getElementById('clear-debug').addEventListener('click', () => {
+                debugLogs = [];
+                updateDebugDisplay();
+            });
+            
+            document.getElementById('export-debug').addEventListener('click', () => {
+                const data = JSON.stringify({
+                    timestamp: new Date().toISOString(),
+                    url: window.location.href,
+                    userAgent: navigator.userAgent,
+                    logs: debugLogs,
+                    settings: {
+                        autoRead, speechRate, sensitivity, imageThreshold, 
+                        processingInterval, showDebugCanvas, currentOCREngine
+                    }
+                }, null, 2);
+                
+                const blob = new Blob([data], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `captn-debug-${Date.now()}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+            });
+            
+            document.getElementById('test-settings').addEventListener('click', () => {
+                testSettingsButton();
+            });
+            
+            debugConsole = { closed: false };
+            
+            // Initial display update
+            updateDebugDisplay();
+        }
+        
+        function testSettingsButton() {
+            console.log('🧪 Testing settings button functionality...');
+            const settingsBtn = document.getElementById('settings-btn');
+            const settingsModal = document.getElementById('settings-modal');
+            
+            console.log('Settings button element:', settingsBtn);
+            console.log('Settings modal element:', settingsModal);
+            console.log('Button click listeners:', getEventListeners ? getEventListeners(settingsBtn) : 'getEventListeners not available');
+            
+            if (settingsBtn) {
+                console.log('✅ Settings button found');
+                console.log('Button styles:', getComputedStyle(settingsBtn).display);
+                console.log('Button visibility:', settingsBtn.offsetParent !== null);
+                
+                // Try triggering click programmatically
+                console.log('🖱️ Triggering click event...');
+                settingsBtn.click();
+                
+                setTimeout(() => {
+                    const isVisible = settingsModal && !settingsModal.classList.contains('hidden');
+                    console.log('Modal visible after click:', isVisible);
+                }, 100);
+            } else {
+                console.error('❌ Settings button not found');
+            }
+            
+            if (settingsModal) {
+                console.log('✅ Settings modal found');
+                console.log('Modal classes:', settingsModal.className);
+                console.log('Modal styles:', getComputedStyle(settingsModal).display);
+            } else {
+                console.error('❌ Settings modal not found');
+            }
+        }
+
+        function testSettingsButton() {
+            console.log('🧪 Testing settings button functionality...');
+            const settingsBtn = document.getElementById('settings-btn');
+            const settingsModal = document.getElementById('settings-modal');
+            
+            console.log('Settings button element:', settingsBtn);
+            console.log('Settings modal element:', settingsModal);
+            
+            if (settingsBtn) {
+                console.log('✅ Settings button found');
+                console.log('Button styles:', getComputedStyle(settingsBtn).display);
+                console.log('Button visibility:', settingsBtn.offsetParent !== null);
+                
+                // Try triggering click programmatically
+                console.log('🖱️ Triggering click event...');
+                settingsBtn.click();
+                
+                setTimeout(() => {
+                    const isVisible = settingsModal && !settingsModal.classList.contains('hidden');
+                    console.log('Modal visible after click:', isVisible);
+                }, 100);
+            } else {
+                console.error('❌ Settings button not found');
+            }
+            
+            if (settingsModal) {
+                console.log('✅ Settings modal found');
+                console.log('Modal classes:', settingsModal.className);
+                console.log('Modal styles:', getComputedStyle(settingsModal).display);
+            } else {
+                console.error('❌ Settings modal not found');
+            }
+        }
+
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', init);
+
+        // Live reload for development
+        if (location.hostname === 'localhost') {
+            let lastModified = null;
+            setInterval(async () => {
+                try {
+                    const response = await fetch(location.href, { method: 'HEAD' });
+                    const modified = response.headers.get('Last-Modified');
+                    if (lastModified && modified !== lastModified) {
+                        location.reload();
+                    }
+                    lastModified = modified;
+                } catch (error) {
+                    // Ignore
+                }
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
