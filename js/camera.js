@@ -203,9 +203,9 @@ export function showMainApp() {
     configureCameraControls();
     
     // Wait for video to start playing
-    video.onloadedmetadata = () => {
+    video.onloadedmetadata = async () => {
         console.log('📹 Video metadata loaded, starting overlay');
-        const { startCropOverlay } = require('./ui.js');
+        const { startCropOverlay } = await import('./ui.js');
         startCropOverlay();
     };
     
