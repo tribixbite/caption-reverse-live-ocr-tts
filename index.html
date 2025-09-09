@@ -6,6 +6,15 @@
     <title>CaptnReverse - Advanced OCR & TTS</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+    <!-- ES Module Import Map for PaddleOCR -->
+    <script type="importmap">
+    {
+        "imports": {
+            "@paddlejs/paddlejs-core": "https://cdn.jsdelivr.net/npm/@paddlejs/paddlejs-core@2.2.0/dist/index.es.js",
+            "@paddlejs-models/ocr": "https://cdn.jsdelivr.net/npm/@paddlejs-models/ocr@2.2.0/dist/index.es.js"
+        }
+    }
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -383,7 +392,7 @@
         </div>
     </div>
 
-    <script>
+    <script type="module">
         console.log('🚀 CaptnReverse initializing...');
         
         // Application State Management
@@ -403,6 +412,7 @@
             // OCR engine state
             currentOCREngine: 'tesseract', // 'tesseract' or 'paddle'
             paddleOCRLoaded: false,
+            paddleOCRInstance: null,
             
             // Voice/TTS state
             voices: [],
@@ -1890,15 +1900,43 @@
                 const startTime = Date.now();
                 let result;
                 
-                // Use the selected OCR engine (PaddleOCR disabled for single-file app compatibility)
-                if (currentOCREngine === 'paddle') {
-                    console.log('⚠️ PaddleOCR selected but not available in single-file mode');
-                    console.log('🔄 Using Tesseract.js instead (optimal for web apps)');
-                    updateStatus('Using Tesseract.js engine', 'bg-blue-400');
+                // Use the selected OCR engine
+                if (currentOCREngine === 'paddle' && AppState.paddleOCRLoaded) {
+                    console.log('🤖 Using PaddleOCR engine...');
+                    try {
+                        const paddleResult = await AppState.paddleOCRInstance.recognize(cropCanvas, {
+                            det: true, // Enable text detection
+                            rec: true  // Enable text recognition
+                        });
+
+                        // Adapt PaddleOCR's result format to match Tesseract's structure for compatibility
+                        const ocrText = paddleResult.text ? paddleResult.text.join('\n') : '';
+                        const avgConfidence = paddleResult.confidence ? 
+                            (paddleResult.confidence.reduce((a, b) => a + b, 0) / paddleResult.confidence.length) * 100 : 
+                            0;
+                        
+                        result = {
+                            data: {
+                                text: ocrText,
+                                confidence: avgConfidence
+                            }
+                        };
+                        
+                        console.log('✅ PaddleOCR recognition completed');
+                    } catch (paddleError) {
+                        console.error('❌ PaddleOCR recognition failed:', paddleError);
+                        updateStatus('PaddleOCR failed, using Tesseract', 'bg-yellow-400');
+                        result = await ocrWorker.recognize(cropCanvas);
+                    }
+
+                } else {
+                    if (currentOCREngine === 'paddle' && !AppState.paddleOCRLoaded) {
+                        console.warn('⚠️ PaddleOCR selected but not loaded. Using Tesseract instead.');
+                        updateStatus('Using Tesseract (Paddle not ready)', 'bg-blue-400');
+                    }
+                    console.log('🤖 Using Tesseract.js engine...');
+                    result = await ocrWorker.recognize(cropCanvas);
                 }
-                
-                console.log('🤖 Using Tesseract.js engine...');
-                result = await ocrWorker.recognize(cropCanvas);
                 
                 const processingTime = Date.now() - startTime;
 
@@ -2053,30 +2091,38 @@
         }
 
         async function loadPaddleOCR() {
-            if (paddleOCRLoaded) return;
+            if (AppState.paddleOCRLoaded) {
+                console.log('✅ PaddleOCR already loaded.');
+                return;
+            }
             
             try {
                 updateStatus('Loading PaddleOCR...', 'bg-yellow-400 animate-pulse');
-                console.log('⚠️ PaddleOCR integration temporarily disabled - ES module compatibility issues');
-                console.log('💡 PaddleOCR requires complex build setup not suitable for single-file app');
+                console.log('⏳ Loading PaddleOCR engine via dynamic import...');
+
+                // Dynamically import the ocr module using the name from our import map
+                const ocr = await import('@paddlejs-models/ocr');
                 
-                // For now, show user that PaddleOCR is not available
+                console.log('🤖 Initializing PaddleOCR model... (this may take a moment)');
+                // Initialize the model. This will download the necessary model files.
+                await ocr.init(); 
+                
+                AppState.paddleOCRInstance = ocr;
+                AppState.paddleOCRLoaded = true;
+                paddleOCRLoaded = true; // Keep legacy var in sync
+                
+                console.log('✅ PaddleOCR loaded and initialized successfully!');
+                updateStatus('PaddleOCR ready', 'bg-green-400');
+
+            } catch (error) {
+                console.error('❌ PaddleOCR loading failed:', error);
+                updateStatus('PaddleOCR failed to load', 'bg-red-400');
+                
+                // Fallback to Tesseract if loading fails
                 setTimeout(() => {
-                    updateStatus('PaddleOCR not available', 'bg-orange-400');
-                    console.log('🔄 Falling back to Tesseract.js (recommended for web apps)');
+                    console.log('🔄 Falling back to Tesseract.js');
                     switchOCREngine('tesseract');
                 }, 2000);
-                
-                // TODO: Future implementation would require:
-                // 1. Build system to handle ES modules
-                // 2. WebAssembly loading for PaddleOCR models  
-                // 3. Larger memory requirements (>100MB)
-                // For single-file web app, Tesseract.js is the optimal choice
-                
-            } catch (error) {
-                console.error('❌ PaddleOCR loading error:', error);
-                updateStatus('OCR error', 'bg-red-400');
-                switchOCREngine('tesseract');
             }
         }
 
