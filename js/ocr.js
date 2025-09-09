@@ -118,8 +118,9 @@ export async function loadPaddleOCR() {
         updateStatus('Loading PaddleOCR...', 'bg-yellow-400 animate-pulse');
         console.log('⏳ Loading PaddleOCR engine via dynamic import...');
 
-        // Dynamically import the ocr module using the name from our import map
-        const ocr = await import('@paddlejs-models/ocr');
+        // Dynamically import the ocr module using the corrected import name
+        const ocr = await import('@paddle-js-models/ocr');
+        console.log('📦 PaddleOCR module loaded:', ocr);
         
         console.log('🤖 Initializing PaddleOCR model... (this may take a moment)');
         // Initialize the model. This will download the necessary model files.
@@ -133,13 +134,37 @@ export async function loadPaddleOCR() {
 
     } catch (error) {
         console.error('❌ PaddleOCR loading failed:', error);
-        updateStatus('PaddleOCR failed to load', 'bg-red-400');
+        console.error('Error details:', error.message);
         
-        // Fallback to Tesseract if loading fails
+        // Provide more specific error messages
+        if (error.message.includes('NetworkError') || error.message.includes('fetch')) {
+            console.error('Network error: Check internet connection or CDN availability');
+            updateStatus('PaddleOCR load failed: Network error', 'bg-red-400');
+        } else if (error.message.includes('import')) {
+            console.error('Import error: Module structure may have changed');
+            updateStatus('PaddleOCR load failed: Import error', 'bg-red-400');
+        } else {
+            console.error('Unknown error loading PaddleOCR');
+            updateStatus('PaddleOCR load failed: Unknown error', 'bg-red-400');
+        }
+        
+        // Automatically fallback to Tesseract if loading fails
+        console.log('🔄 Automatically falling back to Tesseract.js');
+        AppState.currentOCREngine = 'tesseract';
+        
+        // Update UI to reflect fallback
         setTimeout(() => {
-            console.log('🔄 Falling back to Tesseract.js');
-            switchOCREngine('tesseract');
-        }, 2000);
+            const tesseractBtn = document.getElementById('ocr-tesseract');
+            const paddleBtn = document.getElementById('ocr-paddle');
+            const infoDiv = document.getElementById('ocr-engine-info');
+            
+            if (tesseractBtn && paddleBtn && infoDiv) {
+                tesseractBtn.className = 'flex-1 py-3 px-4 rounded-xl font-medium transition-all bg-primary-600 text-white';
+                paddleBtn.className = 'flex-1 py-3 px-4 rounded-xl font-medium transition-all bg-dark-600 hover:bg-dark-500 text-white';
+                infoDiv.innerHTML = '<p>Tesseract.js - PaddleOCR failed to load, using fallback</p>';
+            }
+            updateStatus('Using Tesseract.js (PaddleOCR unavailable)', 'bg-blue-400');
+        }, 1000);
     }
 }
 
@@ -279,16 +304,28 @@ export async function processFrame() {
         if (AppState.currentOCREngine === 'paddle' && AppState.paddleOCRLoaded) {
             console.log('🤖 Using PaddleOCR engine...');
             try {
-                const paddleResult = await AppState.paddleOCRInstance.recognize(cropCanvas, {
-                    det: true, // Enable text detection
-                    rec: true  // Enable text recognition
-                });
+                // Use correct PaddleOCR API - pass canvas/image directly
+                const paddleResult = await AppState.paddleOCRInstance.recognize(cropCanvas);
+                console.log('📊 PaddleOCR raw result:', paddleResult);
 
                 // Adapt PaddleOCR's result format to match Tesseract's structure for compatibility
-                const ocrText = paddleResult.text ? paddleResult.text.join('\n') : '';
-                const avgConfidence = paddleResult.confidence ? 
-                    (paddleResult.confidence.reduce((a, b) => a + b, 0) / paddleResult.confidence.length) * 100 : 
-                    0;
+                let ocrText = '';
+                let avgConfidence = 0;
+                
+                if (paddleResult && paddleResult.text) {
+                    if (Array.isArray(paddleResult.text)) {
+                        ocrText = paddleResult.text.join('\n');
+                    } else {
+                        ocrText = paddleResult.text;
+                    }
+                }
+                
+                if (paddleResult && paddleResult.points && paddleResult.points.length > 0) {
+                    // Estimate confidence based on successful detection
+                    avgConfidence = 85; // Default high confidence for successful detection
+                } else if (ocrText.length > 0) {
+                    avgConfidence = 75; // Lower confidence if no points but text found
+                }
                 
                 result = {
                     data: {
@@ -297,7 +334,7 @@ export async function processFrame() {
                     }
                 };
                 
-                console.log('✅ PaddleOCR recognition completed');
+                console.log('✅ PaddleOCR recognition completed:', { text: ocrText, confidence: avgConfidence });
             } catch (paddleError) {
                 console.error('❌ PaddleOCR recognition failed:', paddleError);
                 updateStatus('PaddleOCR failed, using Tesseract', 'bg-yellow-400');
