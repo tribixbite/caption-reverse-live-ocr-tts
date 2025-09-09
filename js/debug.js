@@ -334,15 +334,31 @@ export function renderDebugCanvas(canvas) {
     console.log(`🔍 Debug canvas: ${canvas.width}×${canvas.height}px - this exact image goes to OCR`);
 }
 
-// Update debug text display
+// Update debug text display (XSS-safe)
 export function updateDebugText(text, confidence) {
     const debugText = document.getElementById('debug-text');
     if (debugText) {
-        debugText.innerHTML = `
-            <strong>OCR Result:</strong><br>
-            "${text}"<br>
-            <small>Confidence: ${Math.round(confidence)}%</small>
-        `;
+        // Security: Use safe DOM manipulation instead of innerHTML
+        debugText.innerHTML = ''; // Clear existing content
+        
+        const titleStrong = document.createElement('strong');
+        titleStrong.textContent = 'OCR Result:';
+        
+        const lineBreak1 = document.createElement('br');
+        
+        const textSpan = document.createElement('span');
+        textSpan.textContent = `"${text}"`; // Safe: textContent auto-escapes
+        
+        const lineBreak2 = document.createElement('br');
+        
+        const confidenceSmall = document.createElement('small');
+        confidenceSmall.textContent = `Confidence: ${Math.round(confidence)}%`;
+        
+        debugText.appendChild(titleStrong);
+        debugText.appendChild(lineBreak1);
+        debugText.appendChild(textSpan);
+        debugText.appendChild(lineBreak2);
+        debugText.appendChild(confidenceSmall);
     }
 }
 
