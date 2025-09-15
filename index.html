@@ -27,11 +27,36 @@
                 extend: {
                     colors: {
                         primary: {
-                            400: '#38bdf8', 500: '#0ea5e9', 600: '#0284c7', 700: '#0369a1'
+                            300: '#60a5fa', 400: '#3b82f6', 500: '#2563eb', 600: '#1d4ed8', 700: '#1e40af'
+                        },
+                        secondary: {
+                            400: '#a78bfa', 500: '#8b5cf6', 600: '#7c3aed'
+                        },
+                        accent: {
+                            400: '#34d399', 500: '#10b981', 600: '#059669'
+                        },
+                        gaming: {
+                            cyan: '#22d3ee', blue: '#3b82f6', purple: '#8b5cf6',
+                            green: '#10b981', yellow: '#f59e0b', red: '#ef4444'
                         },
                         dark: {
                             300: '#cbd5e1', 400: '#94a3b8', 500: '#64748b', 600: '#475569',
                             700: '#334155', 800: '#1e293b', 900: '#0f172a', 950: '#020617'
+                        }
+                    },
+                    animation: {
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'glow': 'glow 2s ease-in-out infinite alternate',
+                        'float': 'float 6s ease-in-out infinite'
+                    },
+                    keyframes: {
+                        glow: {
+                            '0%': { 'box-shadow': '0 0 5px theme(colors.primary.500), 0 0 10px theme(colors.primary.500), 0 0 15px theme(colors.primary.500)' },
+                            '100%': { 'box-shadow': '0 0 10px theme(colors.primary.400), 0 0 20px theme(colors.primary.400), 0 0 30px theme(colors.primary.400)' }
+                        },
+                        float: {
+                            '0%, 100%': { transform: 'translateY(0px)' },
+                            '50%': { transform: 'translateY(-10px)' }
                         }
                     }
                 }
@@ -72,13 +97,13 @@
             <!-- Header -->
             <header class="text-center mb-12">
                 <div class="inline-flex items-center gap-3 mb-6">
-                    <div class="w-16 h-16 bg-primary-600 rounded-2xl flex items-center justify-center">
+                    <div class="w-16 h-16 bg-gradient-to-br from-primary-500 to-secondary-600 rounded-2xl flex items-center justify-center gaming-glow animate-float">
                         <svg class="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                         </svg>
                     </div>
-                    <h1 class="text-5xl font-bold bg-gradient-to-r from-primary-400 to-primary-600 bg-clip-text text-transparent">
+                    <h1 class="text-5xl font-bold bg-gradient-to-r from-gaming-cyan via-primary-400 to-secondary-500 bg-clip-text text-transparent text-gaming-glow">
                         CaptnReverse
                     </h1>
                 </div>
@@ -373,6 +398,10 @@
                             🛑 Release Camera Resources
                         </button>
                         
+                        <button id="performance-report" class="w-full bg-green-600 hover:bg-green-700 text-white py-3 px-4 rounded-xl font-medium transition-colors">
+                            📊 Performance Report
+                        </button>
+
                         <button id="show-console" class="w-full bg-gray-600 hover:bg-gray-700 text-white py-3 px-4 rounded-xl font-medium transition-colors">
                             🔍 Show Debug Console
                         </button>

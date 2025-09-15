@@ -10,6 +10,7 @@ import { speak, initVoices, stopSpeech, testTTS } from './speech.js';
 import { loadSettings, saveSettings, openSettings, closeSettings, updateSettingsModalValues, updateModalAutoReadToggle, updateDebugToggle, updateDebugSizingButtons } from './settings.js';
 import { updateStatus, setupCropSelector, setCrop, toggleMonitoring } from './ui.js';
 import { initializeDebugLogging, toggleDebugConsole } from './debug.js';
+import { initPerformanceMonitoring, generatePerformanceReport, stopPerformanceMonitoring } from './performance.js';
 
 // Initialize application
 async function init() {
@@ -18,6 +19,7 @@ async function init() {
     loadSettings(); // Load saved settings first
     setupEventListeners();
     initVoices(); // Initialize voice loading
+    initPerformanceMonitoring(); // Initialize performance monitoring
     await initOCR();
     checkSecureContext();
     console.log('✅ CaptnReverse ready!');
@@ -238,6 +240,22 @@ function setupSettingsEventListeners() {
             console.error('❌ Auto-calibration failed:', error);
             updateStatus('Auto-calibration failed', 'bg-red-400');
         }
+    });
+
+    // Performance report button
+    document.getElementById('performance-report').addEventListener('click', () => {
+        const report = generatePerformanceReport();
+        console.log('📊 Performance Report Generated:', report);
+
+        // Show performance report in UI
+        alert(`Performance Report:\n\n` +
+            `Uptime: ${report.uptime}\n` +
+            `Processed Frames: ${report.processedFrames}\n` +
+            `Success Rate: ${report.successRate}\n` +
+            `Average OCR Time: ${report.averageOCRTime}\n` +
+            `Average Confidence: ${report.averageConfidence}\n` +
+            `Memory Usage: ${report.currentMemoryUsage}\n` +
+            `Performance Level: ${report.performance}`);
     });
 
     // Show debug console button
