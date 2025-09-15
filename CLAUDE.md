@@ -2,6 +2,12 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Memory & Task Coordination
+- **Primary Reference**: `todo.md` - Central coordination point for all development tasks and improvements
+- Always check and update `todo.md` before starting work
+- Reference `todo.md` for current priorities and comprehensive improvement roadmap
+- Update progress in `todo.md` and commit after each round of work
+
 ## Commands
 
 ### Development Server

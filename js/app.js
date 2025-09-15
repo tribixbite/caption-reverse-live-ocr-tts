@@ -4,7 +4,7 @@
  */
 
 import { AppState } from './config.js';
-import { initOCR, switchOCREngine, readNow } from './ocr.js';
+import { initOCR, switchOCREngine, readNow, runAutoCalibration } from './ocr.js';
 import { requestCamera, checkSecureContext, cleanupCamera, applyCameraZoom, applyCameraFocus, setAutoFocus } from './camera.js';
 import { speak, initVoices, stopSpeech, testTTS } from './speech.js';
 import { loadSettings, saveSettings, openSettings, closeSettings, updateSettingsModalValues, updateModalAutoReadToggle, updateDebugToggle, updateDebugSizingButtons } from './settings.js';
@@ -226,6 +226,18 @@ function setupSettingsEventListeners() {
         document.getElementById('setup-screen').classList.remove('hidden');
         document.getElementById('settings-modal').classList.add('hidden');
         updateStatus('Camera released', 'bg-yellow-400');
+    });
+
+    // Auto-calibration button
+    document.getElementById('auto-calibrate').addEventListener('click', async () => {
+        try {
+            updateStatus('Running auto-calibration...', 'bg-purple-400 animate-pulse');
+            const bestConfig = await runAutoCalibration();
+            console.log('✅ Auto-calibration completed successfully:', bestConfig);
+        } catch (error) {
+            console.error('❌ Auto-calibration failed:', error);
+            updateStatus('Auto-calibration failed', 'bg-red-400');
+        }
     });
 
     // Show debug console button

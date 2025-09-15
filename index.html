@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CaptnReverse - Advanced OCR & TTS</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+    <script src="https://unpkg.com/tesseract.js@6.0.0/dist/tesseract.min.js"></script>
     <!-- ES Module Import Map for PaddleOCR -->
     <script type="importmap">
     {
@@ -361,6 +361,10 @@
                             <p class="text-xs text-dark-400 mt-1">Constrained fits within box, Auto Height preserves aspect ratio</p>
                         </div>
                         
+                        <button id="auto-calibrate" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 px-4 rounded-xl font-medium transition-colors">
+                            🎯 Auto-Calibrate OCR Settings
+                        </button>
+
                         <button id="test-ocr" class="w-full bg-purple-600 hover:bg-purple-700 text-white py-3 px-4 rounded-xl font-medium transition-colors">
                             🧪 Test OCR with Sample Text
                         </button>

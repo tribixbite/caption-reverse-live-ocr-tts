@@ -294,8 +294,12 @@ export async function processFrame() {
             renderDebugCanvas(cropCanvas);
         }
 
-        // Show processing state
+        // Show processing state and play processing sound
         document.getElementById('processing-state').classList.remove('hidden');
+
+        // Play processing start sound
+        const { playProcessingSound } = await import('./speech.js');
+        playProcessingSound();
 
         const startTime = Date.now();
         let result;
@@ -376,12 +380,15 @@ export async function processFrame() {
             const { displayText } = await import('./ui.js');
             displayText(text, result.data.confidence, processingTime);
             AppState.lastText = text;
-            
+
             console.log(`📝 New text detected: "${text}"`);
-            
+
+            // Play recognition success sound
+            const { playRecognitionSound, speak } = await import('./speech.js');
+            playRecognitionSound();
+
             if (AppState.settings.autoRead) {
                 console.log(`🔊 Auto-reading enabled, speaking text...`);
-                const { speak } = await import('./speech.js');
                 speak(text);
             }
         } else {
@@ -415,6 +422,214 @@ export async function processFrame() {
         document.getElementById('processing-state').classList.add('hidden');
         console.error('❌ OCR processing error:', error);
     }
+}
+
+// Auto-calibration system - finds optimal OCR settings
+export async function runAutoCalibration() {
+    console.log('🎯 Starting OCR auto-calibration...');
+    updateStatus('Running auto-calibration...', 'bg-purple-400 animate-pulse');
+
+    const calibrationResults = [];
+    const testConfigurations = [
+        // PSM (Page Segmentation Mode) configurations
+        { name: 'Single uniform block', psm: '6', threshold: 150 },
+        { name: 'Single text line', psm: '7', threshold: 150 },
+        { name: 'Single word', psm: '8', threshold: 150 },
+        { name: 'Single character', psm: '10', threshold: 150 },
+
+        // Different threshold values
+        { name: 'High contrast', psm: '6', threshold: 200 },
+        { name: 'Low contrast', psm: '6', threshold: 100 },
+        { name: 'Adaptive threshold', psm: '6', threshold: 'adaptive' }
+    ];
+
+    try {
+        console.log(`📊 Testing ${testConfigurations.length} different configurations...`);
+
+        for (let i = 0; i < testConfigurations.length; i++) {
+            const config = testConfigurations[i];
+            console.log(`🔧 Testing configuration ${i + 1}/${testConfigurations.length}: ${config.name}`);
+
+            const startTime = Date.now();
+
+            // Temporarily update OCR parameters
+            await AppState.ocrWorker.setParameters({
+                tessedit_pageseg_mode: config.psm,
+                preserve_interword_spaces: '1',
+                tesseract_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 .,"\'',
+                tessedit_do_invert: '0',
+                classify_enable_adaptive_matcher: '1'
+            });
+
+            // Process current frame with this configuration
+            const result = await testConfiguration(config);
+            const processingTime = Date.now() - startTime;
+
+            calibrationResults.push({
+                ...config,
+                result: result.text,
+                confidence: result.confidence,
+                processingTime,
+                score: calculateCalibrationScore(result.text, result.confidence, processingTime)
+            });
+
+            console.log(`   📝 Result: "${result.text.substring(0, 50)}..." (${Math.round(result.confidence)}%, ${processingTime}ms)`);
+
+            // Small delay to prevent overwhelming the system
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
+
+        // Find best configuration
+        const bestConfig = calibrationResults.reduce((best, current) =>
+            current.score > best.score ? current : best
+        );
+
+        console.log('🏆 Auto-calibration complete! Best configuration:');
+        console.log(`   Name: ${bestConfig.name}`);
+        console.log(`   PSM: ${bestConfig.psm}`);
+        console.log(`   Threshold: ${bestConfig.threshold}`);
+        console.log(`   Score: ${bestConfig.score.toFixed(2)}`);
+        console.log(`   Confidence: ${Math.round(bestConfig.confidence)}%`);
+        console.log(`   Processing time: ${bestConfig.processingTime}ms`);
+
+        // Apply best configuration
+        await AppState.ocrWorker.setParameters({
+            tessedit_pageseg_mode: bestConfig.psm,
+            preserve_interword_spaces: '1',
+            tesseract_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 .,"\'',
+            tessedit_do_invert: '0',
+            classify_enable_adaptive_matcher: '1'
+        });
+
+        // Update UI settings to reflect optimal values
+        if (bestConfig.threshold !== 'adaptive') {
+            const thresholdSlider = document.getElementById('threshold-slider-modal');
+            if (thresholdSlider) {
+                thresholdSlider.value = bestConfig.threshold;
+                document.getElementById('threshold-value-modal').textContent = bestConfig.threshold;
+            }
+        }
+
+        updateStatus(`Auto-calibrated: ${bestConfig.name}`, 'bg-green-400');
+
+        // Store calibration results for future use
+        localStorage.setItem('ocrCalibrationResults', JSON.stringify({
+            timestamp: Date.now(),
+            bestConfig: bestConfig,
+            allResults: calibrationResults
+        }));
+
+        // Show success message with audio feedback
+        const { playRecognitionSound } = await import('./speech.js');
+        playRecognitionSound();
+
+        return bestConfig;
+
+    } catch (error) {
+        console.error('❌ Auto-calibration failed:', error);
+        updateStatus('Auto-calibration failed', 'bg-red-400');
+
+        // Restore default settings
+        await AppState.ocrWorker.setParameters({
+            tessedit_pageseg_mode: '6',
+            preserve_interword_spaces: '1',
+            tesseract_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 .,"\'',
+            tessedit_do_invert: '0',
+            classify_enable_adaptive_matcher: '1'
+        });
+
+        throw error;
+    }
+}
+
+// Test a specific OCR configuration
+async function testConfiguration(config) {
+    const video = document.getElementById('camera-feed');
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    if (canvas.width === 0 || canvas.height === 0) {
+        throw new Error('Video not ready for calibration');
+    }
+
+    ctx.drawImage(video, 0, 0);
+
+    // Apply current crop area
+    const cropX = AppState.currentCrop.x * canvas.width;
+    const cropY = AppState.currentCrop.y * canvas.height;
+    const cropWidth = AppState.currentCrop.width * canvas.width;
+    const cropHeight = AppState.currentCrop.height * canvas.height;
+
+    const cropCanvas = document.createElement('canvas');
+    const cropCtx = cropCanvas.getContext('2d');
+    cropCanvas.width = Math.max(cropWidth, 50);
+    cropCanvas.height = Math.max(cropHeight, 50);
+
+    cropCtx.drawImage(canvas, cropX, cropY, cropWidth, cropHeight, 0, 0, cropCanvas.width, cropCanvas.height);
+
+    // Apply threshold based on configuration
+    if (config.threshold !== 'adaptive') {
+        const imageData = cropCtx.getImageData(0, 0, cropCanvas.width, cropCanvas.height);
+        const data = imageData.data;
+
+        // Simple threshold
+        for (let i = 0; i < data.length; i += 4) {
+            const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+            const value = avg > config.threshold ? 255 : 0;
+            data[i] = value;
+            data[i + 1] = value;
+            data[i + 2] = value;
+        }
+
+        cropCtx.putImageData(imageData, 0, 0);
+    }
+
+    // Run OCR with current configuration
+    const result = await AppState.ocrWorker.recognize(cropCanvas);
+
+    return {
+        text: result.data.text.trim(),
+        confidence: result.data.confidence
+    };
+}
+
+// Calculate calibration score based on multiple factors
+function calculateCalibrationScore(text, confidence, processingTime) {
+    let score = 0;
+
+    // Confidence score (0-100 points)
+    score += confidence;
+
+    // Text quality score (bonus points for meaningful text)
+    if (text && text.length > 0) {
+        // Bonus for alphanumeric characters
+        const alphanumericRatio = (text.match(/[a-zA-Z0-9]/g) || []).length / text.length;
+        score += alphanumericRatio * 20;
+
+        // Bonus for reasonable length (not too short, not too long)
+        if (text.length >= 3 && text.length <= 100) {
+            score += 10;
+        }
+
+        // Bonus for common English patterns
+        if (/\b(the|and|that|this|with|for|are|was)\b/i.test(text)) {
+            score += 5;
+        }
+    }
+
+    // Speed bonus (faster processing gets bonus points)
+    const speedBonus = Math.max(0, 10 - (processingTime / 200));
+    score += speedBonus;
+
+    // Penalty for very slow processing (over 3 seconds)
+    if (processingTime > 3000) {
+        score -= 20;
+    }
+
+    return Math.max(0, score); // Ensure non-negative score
 }
 
 // Read text from current frame immediately

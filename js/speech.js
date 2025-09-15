@@ -119,6 +119,67 @@ export function stopSpeech() {
     updateStatus(AppState.isMonitoring ? 'Monitoring active' : 'Ready', 'bg-green-400');
 }
 
+// Audio feedback for OCR recognition events
+export function playRecognitionSound() {
+    // Create audio context for sound effects
+    try {
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+        // Create a pleasant recognition chime (C major chord)
+        const frequencies = [261.63, 329.63, 392.00]; // C4, E4, G4
+        const duration = 0.2; // 200ms
+
+        frequencies.forEach((freq, index) => {
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+
+            oscillator.frequency.setValueAtTime(freq, audioContext.currentTime);
+            oscillator.type = 'sine';
+
+            // Fade in/out envelope
+            gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+            gainNode.gain.linearRampToValueAtTime(0.1, audioContext.currentTime + 0.05);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
+
+            oscillator.start(audioContext.currentTime + index * 0.05);
+            oscillator.stop(audioContext.currentTime + duration);
+        });
+
+        console.log('🔊 Recognition sound played');
+    } catch (error) {
+        console.warn('⚠️ Could not play recognition sound:', error);
+    }
+}
+
+// Audio feedback for processing start
+export function playProcessingSound() {
+    try {
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+
+        oscillator.frequency.setValueAtTime(440, audioContext.currentTime); // A4
+        oscillator.type = 'sine';
+
+        gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+        gainNode.gain.linearRampToValueAtTime(0.05, audioContext.currentTime + 0.02);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+
+        oscillator.start(audioContext.currentTime);
+        oscillator.stop(audioContext.currentTime + 0.1);
+
+        console.log('🎵 Processing sound played');
+    } catch (error) {
+        console.warn('⚠️ Could not play processing sound:', error);
+    }
+}
+
 // Test TTS with sample text
 export function testTTS() {
     speak("CaptnReverse text-to-speech is working perfectly! This is a test of the speech synthesis system.");
