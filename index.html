@@ -3,7 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CaptnReverse - Advanced OCR & TTS</title>
+    <title>CaptnReverse - Advanced OCR & TTS Gaming Companion</title>
+
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#3b82f6">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="CaptnReverse">
+
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/tesseract.js@6.0.0/dist/tesseract.min.js"></script>
     <!-- ES Module Import Map for PaddleOCR -->
@@ -414,6 +422,82 @@
             </div>
         </div>
     </div>
+
+    <!-- PWA Service Worker Registration -->
+    <script>
+        // Register service worker for PWA functionality
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(registration => {
+                        console.log('🎮 Service Worker registered:', registration.scope);
+
+                        // Check for updates
+                        registration.addEventListener('updatefound', () => {
+                            const newWorker = registration.installing;
+                            if (newWorker) {
+                                newWorker.addEventListener('statechange', () => {
+                                    if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                        console.log('🔄 New version available! Reload to update.');
+                                    }
+                                });
+                            }
+                        });
+                    })
+                    .catch(error => {
+                        console.warn('Service Worker registration failed:', error);
+                    });
+            });
+        }
+
+        // Handle PWA install prompt
+        let deferredPrompt;
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+
+            // Show install button after camera setup
+            setTimeout(() => {
+                if (deferredPrompt) {
+                    const installNotification = document.createElement('div');
+                    installNotification.className = 'fixed bottom-4 right-4 gaming-panel p-4 rounded-xl z-40';
+                    installNotification.innerHTML = `
+                        <div class="flex items-center gap-3">
+                            <span class="text-gaming-cyan">📱 Install Gaming Companion?</span>
+                            <button onclick="installPWA()" class="btn-primary px-4 py-2 rounded-lg text-sm">
+                                Install
+                            </button>
+                            <button onclick="this.closest('.fixed').remove()" class="text-dark-400 hover:text-white">
+                                ✕
+                            </button>
+                        </div>
+                    `;
+                    document.body.appendChild(installNotification);
+
+                    // Auto-remove after 15 seconds
+                    setTimeout(() => {
+                        installNotification.remove();
+                    }, 15000);
+                }
+            }, 5000);
+        });
+
+        // PWA install function
+        async function installPWA() {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                const { outcome } = await deferredPrompt.userChoice;
+                console.log(`🎮 PWA install outcome: ${outcome}`);
+                deferredPrompt = null;
+
+                // Remove notification
+                document.querySelector('.fixed.bottom-4')?.remove();
+            }
+        }
+
+        // Make install function globally accessible
+        window.installPWA = installPWA;
+    </script>
 
     <!-- Main Application Module -->
     <script type="module" src="js/app.js"></script>

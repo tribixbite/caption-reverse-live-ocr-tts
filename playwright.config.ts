@@ -6,48 +6,96 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
-  reporter: 'html',
+  reporter: [
+    ['html'],
+    ['json', { outputFile: 'test-results.json' }],
+    ['junit', { outputFile: 'test-results.xml' }]
+  ],
+
   use: {
     baseURL: 'http://localhost:3000',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
-    video: 'retain-on-failure'
+    video: 'retain-on-failure',
+
+    // Gaming-specific permissions
+    permissions: ['camera', 'microphone'],
+
+    // Fake media for consistent testing
+    launchOptions: {
+      args: [
+        '--use-fake-ui-for-media-stream',
+        '--use-fake-device-for-media-stream',
+        '--enable-gpu',
+        '--enable-hardware-acceleration'
+      ]
+    }
   },
 
   projects: [
     {
-      name: 'chromium',
-      use: { 
+      name: 'gaming-chrome',
+      use: {
         ...devices['Desktop Chrome'],
+        viewport: { width: 1920, height: 1080 },
         permissions: ['camera', 'microphone'],
         launchOptions: {
           args: [
             '--use-fake-ui-for-media-stream',
             '--use-fake-device-for-media-stream',
-            '--use-file-for-fake-video-capture=/dev/null'
+            '--enable-gpu',
+            '--enable-hardware-acceleration',
+            '--enable-features=VaapiVideoDecoder'
           ]
         }
       },
     },
+
     {
-      name: 'firefox',
-      use: { ...devices['Desktop Firefox'] },
-    },
-    {
-      name: 'webkit',
-      use: { ...devices['Desktop Safari'] },
-    },
-    {
-      name: 'Mobile Chrome',
-      use: { 
-        ...devices['Pixel 5'],
+      name: 'gaming-firefox',
+      use: {
+        ...devices['Desktop Firefox'],
+        viewport: { width: 1920, height: 1080 },
         permissions: ['camera', 'microphone']
       },
     },
+
     {
-      name: 'Mobile Safari',
-      use: { ...devices['iPhone 12'] },
+      name: 'gaming-safari',
+      use: {
+        ...devices['Desktop Safari'],
+        viewport: { width: 1920, height: 1080 },
+        permissions: ['camera', 'microphone']
+      },
     },
+
+    // Mobile gaming devices
+    {
+      name: 'mobile-gaming',
+      use: {
+        ...devices['iPhone 13 Pro'],
+        permissions: ['camera', 'microphone']
+      },
+    },
+
+    {
+      name: 'tablet-gaming',
+      use: {
+        ...devices['iPad Pro'],
+        permissions: ['camera', 'microphone']
+      },
+    },
+
+    // Steam Deck simulation
+    {
+      name: 'steam-deck',
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 1280, height: 800 },
+        permissions: ['camera', 'microphone'],
+        hasTouch: true
+      },
+    }
   ],
 
   webServer: {

@@ -1,0 +1,54 @@
+{
+  "name": "captn-reverse-web",
+  "version": "2.1.0",
+  "description": "Advanced OCR and Text-to-Speech Gaming Companion",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "bun run --watch server.ts",
+    "build": "bun build ./js/app.js --outdir ./dist --minify",
+    "test": "bun test",
+    "test:e2e": "playwright test",
+    "test:ocr": "bun run test-ocr-automated.js",
+    "test:gaming": "bun run test-gaming-features.js",
+    "test:worker": "bun run test-worker-performance.js",
+    "test:system": "bun run test-complete-system.js",
+    "serve": "python3 -m http.server 3000",
+    "lint": "eslint js/**/*.js",
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --write js/**/*.{js,ts}"
+  },
+  "dependencies": {
+    "tesseract.js": "^6.0.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/web": "^0.0.161",
+    "@playwright/test": "^1.48.0",
+    "typescript": "^5.6.2",
+    "eslint": "^9.12.0",
+    "prettier": "^3.3.3"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "keywords": [
+    "ocr",
+    "gaming",
+    "accessibility",
+    "text-to-speech",
+    "tesseract",
+    "web-workers",
+    "gaming-companion"
+  ],
+  "author": "CaptnReverse Gaming Team",
+  "license": "MIT",
+  "engines": {
+    "bun": ">=1.0.0"
+  },
+  "browserslist": [
+    "> 1%",
+    "last 2 versions",
+    "not dead"
+  ]
+}

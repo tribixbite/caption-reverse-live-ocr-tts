@@ -1,0 +1,47 @@
+{
+  "compilerOptions": {
+    // Environment setup for gaming web app
+    "lib": ["ESNext", "DOM", "WebWorker"],
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleDetection": "force",
+    "allowJs": true,
+
+    // Module resolution for web
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "noEmit": true,
+    "resolveJsonModule": true,
+
+    // Strict type checking for gaming reliability
+    "strict": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitReturns": true,
+    "noImplicitOverride": true,
+    "noUncheckedIndexedAccess": true,
+    "noFallthroughCasesInSwitch": true,
+
+    // Gaming-optimized settings
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+
+    // Development experience
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "removeComments": false
+  },
+  "include": [
+    "js/**/*",
+    "tests/**/*",
+    "*.js",
+    "*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "*.min.js"
+  ]
+}

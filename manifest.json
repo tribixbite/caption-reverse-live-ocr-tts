@@ -1,0 +1,161 @@
+{
+  "name": "CaptnReverse Gaming Companion",
+  "short_name": "CaptnReverse",
+  "description": "Advanced OCR and Text-to-Speech Gaming Companion with hotkeys, voice commands, and multi-monitor support",
+  "version": "2.1.0",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#3b82f6",
+  "background_color": "#0f172a",
+
+  "icons": [
+    {
+      "src": "icons/icon-72x72.png",
+      "sizes": "72x72",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-96x96.png",
+      "sizes": "96x96",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-128x128.png",
+      "sizes": "128x128",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-144x144.png",
+      "sizes": "144x144",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-152x152.png",
+      "sizes": "152x152",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/icon-384x384.png",
+      "sizes": "384x384",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+
+  "categories": ["gaming", "productivity", "accessibility", "utilities"],
+
+  "features": [
+    "gaming-hotkeys",
+    "voice-commands",
+    "multi-monitor",
+    "ocr-history",
+    "performance-monitoring",
+    "camera-access",
+    "text-to-speech"
+  ],
+
+  "shortcuts": [
+    {
+      "name": "Read Text Now",
+      "short_name": "Read Text",
+      "description": "Instantly read text from camera view",
+      "url": "/?action=read",
+      "icons": [
+        {
+          "src": "icons/shortcut-read.png",
+          "sizes": "96x96"
+        }
+      ]
+    },
+    {
+      "name": "Toggle Monitoring",
+      "short_name": "Monitor",
+      "description": "Start/stop continuous OCR monitoring",
+      "url": "/?action=monitor",
+      "icons": [
+        {
+          "src": "icons/shortcut-monitor.png",
+          "sizes": "96x96"
+        }
+      ]
+    },
+    {
+      "name": "Auto-Calibrate",
+      "short_name": "Calibrate",
+      "description": "Auto-optimize OCR settings for gaming",
+      "url": "/?action=calibrate",
+      "icons": [
+        {
+          "src": "icons/shortcut-calibrate.png",
+          "sizes": "96x96"
+        }
+      ]
+    },
+    {
+      "name": "Gaming History",
+      "short_name": "History",
+      "description": "View OCR history and session analytics",
+      "url": "/?action=history",
+      "icons": [
+        {
+          "src": "icons/shortcut-history.png",
+          "sizes": "96x96"
+        }
+      ]
+    }
+  ],
+
+  "gaming": {
+    "hotkeys": {
+      "F1": "Read Text Now",
+      "F2": "Toggle Monitoring",
+      "F3": "Auto-Calibrate",
+      "F4": "Toggle History",
+      "F5": "Repeat Last Text",
+      "F9": "Performance Report",
+      "F12": "Show Help"
+    },
+    "voice_commands": [
+      "read text",
+      "start monitoring",
+      "stop monitoring",
+      "calibrate",
+      "show history",
+      "performance report"
+    ],
+    "multi_monitor": true,
+    "accessibility": true
+  },
+
+  "permissions": [
+    "camera",
+    "microphone"
+  ],
+
+  "prefer_related_applications": false,
+
+  "edge_side_panel": {
+    "preferred_width": 400
+  },
+
+  "scope": "/",
+  "id": "captn-reverse-gaming-companion"
+}
