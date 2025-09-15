@@ -11,6 +11,10 @@ import { loadSettings, saveSettings, openSettings, closeSettings, updateSettings
 import { updateStatus, setupCropSelector, setCrop, toggleMonitoring } from './ui.js';
 import { initializeDebugLogging, toggleDebugConsole } from './debug.js';
 import { initPerformanceMonitoring, generatePerformanceReport, stopPerformanceMonitoring } from './performance.js';
+import { initHotkeySystem, cleanupHotkeySystem, updateLastRecognizedText } from './hotkeys.js';
+import { initHistorySystem, cleanupHistorySystem } from './history.js';
+import { initMultiMonitorSupport, cleanupMultiMonitorSystem, updateSecondaryMonitor } from './multimonitor.js';
+import { initVoiceCommands, cleanupVoiceCommands } from './voice-commands.js';
 
 // Initialize application
 async function init() {
@@ -20,9 +24,13 @@ async function init() {
     setupEventListeners();
     initVoices(); // Initialize voice loading
     initPerformanceMonitoring(); // Initialize performance monitoring
+    initHotkeySystem(); // Initialize gaming hotkey system
+    initHistorySystem(); // Initialize OCR history system
+    await initMultiMonitorSupport(); // Initialize multi-monitor gaming support
+    initVoiceCommands(); // Initialize voice command system
     await initOCR();
     checkSecureContext();
-    console.log('✅ CaptnReverse ready!');
+    console.log('✅ CaptnReverse ready with Complete Gaming Arsenal!');
 }
 
 // Set up all event listeners
@@ -240,6 +248,13 @@ function setupSettingsEventListeners() {
             console.error('❌ Auto-calibration failed:', error);
             updateStatus('Auto-calibration failed', 'bg-red-400');
         }
+    });
+
+    // History panel toggle button
+    document.getElementById('toggle-history').addEventListener('click', () => {
+        import('./history.js').then(({ toggleHistoryPanel }) => {
+            toggleHistoryPanel();
+        });
     });
 
     // Performance report button

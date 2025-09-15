@@ -683,6 +683,22 @@ export async function processFrame() {
 
             console.log(`📝 New text detected: "${text}"`);
 
+            // Update hotkey system with new text
+            const { updateLastRecognizedText } = await import('./hotkeys.js');
+            updateLastRecognizedText(text);
+
+            // Add to history system
+            const { addToHistory } = await import('./history.js');
+            addToHistory(text, result.data.confidence, Date.now(), {
+                processingTime,
+                preprocessingTime,
+                cropArea: { ...AppState.currentCrop }
+            });
+
+            // Update secondary monitor if active
+            const { updateSecondaryMonitor } = await import('./multimonitor.js');
+            updateSecondaryMonitor(text, result.data.confidence);
+
             // Play recognition success sound
             const { playRecognitionSound, speak } = await import('./speech.js');
             playRecognitionSound();

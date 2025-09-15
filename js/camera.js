@@ -371,5 +371,13 @@ export function cleanupCamera() {
         AppState.ocrWorker = null;
     }
 
-    console.log('✅ Camera resources cleaned up');
+    // Cleanup hotkey system
+    try {
+        const { cleanupHotkeySystem } = await import('./hotkeys.js');
+        cleanupHotkeySystem();
+    } catch (e) {
+        console.warn('Hotkey cleanup error:', e);
+    }
+
+    console.log('✅ Camera resources and hotkey system cleaned up');
 }
