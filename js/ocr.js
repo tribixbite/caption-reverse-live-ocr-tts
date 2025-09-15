@@ -7,6 +7,10 @@ import { AppState, reusableCanvases, canvasContexts, CONFIG } from './config.js'
 import { updateStatus } from './ui.js';
 import { recordOCRPerformance } from './performance.js';
 
+// Preprocessing worker for off-main-thread image processing
+let preprocessingWorker = null;
+let preprocessingJobCounter = 0;
+
 // Helper function to detect blank, noise, or meaningless OCR results
 export function isBlankOrNoise(text) {
     if (!text || typeof text !== 'string') return true;
@@ -331,31 +335,157 @@ function erode(data, width, height, kernel) {
     return result;
 }
 
+// Process image using Web Worker (eliminates UI jank)
+async function processImageInWorker(canvas, config = {}) {
+    if (!preprocessingWorker) {
+        console.warn('⚠️ Preprocessing worker not initialized, falling back to main thread');
+        return await advancedImagePreprocessingFallback(canvas);
+    }
+
+    return new Promise((resolve, reject) => {
+        const jobId = `preprocess_${++preprocessingJobCounter}_${Date.now()}`;
+
+        // Get image data from canvas
+        const ctx = canvas.getContext('2d');
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+        // Store job promise
+        AppState.preprocessingJobs.set(jobId, { resolve, reject });
+
+        // Send to worker
+        preprocessingWorker.postMessage({
+            type: 'preprocess',
+            imageData: imageData,
+            config: config,
+            jobId: jobId
+        });
+
+        // Timeout after 10 seconds
+        setTimeout(() => {
+            if (AppState.preprocessingJobs.has(jobId)) {
+                AppState.preprocessingJobs.delete(jobId);
+                reject(new Error('Preprocessing worker timeout'));
+            }
+        }, 10000);
+    }).then(result => {
+        // Create canvas from processed image data
+        const processedCanvas = document.createElement('canvas');
+        const processedCtx = processedCanvas.getContext('2d');
+        processedCanvas.width = result.imageData.width;
+        processedCanvas.height = result.imageData.height;
+        processedCtx.putImageData(result.imageData, 0, 0);
+
+        console.log(`✅ Worker preprocessing completed in ${result.processingTime.toFixed(2)}ms`);
+        return processedCanvas;
+    });
+}
+
+// Fallback preprocessing for main thread (if worker fails)
+async function advancedImagePreprocessingFallback(inputCanvas) {
+    console.log('⚠️ Using main thread preprocessing fallback');
+
+    // Use the original preprocessing function (simplified version)
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = inputCanvas.width;
+    canvas.height = inputCanvas.height;
+    ctx.drawImage(inputCanvas, 0, 0);
+
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imageData.data;
+
+    // Basic grayscale conversion only (minimal processing to prevent jank)
+    for (let i = 0; i < data.length; i += 4) {
+        const gray = Math.round(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]);
+        data[i] = gray;
+        data[i + 1] = gray;
+        data[i + 2] = gray;
+    }
+
+    ctx.putImageData(imageData, 0, 0);
+    return canvas;
+}
+
+// Initialize preprocessing Web Worker
+function initPreprocessingWorker() {
+    if (preprocessingWorker) {
+        preprocessingWorker.terminate();
+    }
+
+    preprocessingWorker = new Worker('./js/preprocessing.worker.js');
+    console.log('🎨 Preprocessing worker initialized for gaming performance');
+
+    // Handle worker messages
+    preprocessingWorker.onmessage = (e) => {
+        const { type, jobId, result, error } = e.data;
+
+        // Find and resolve the corresponding promise
+        const job = AppState.preprocessingJobs?.get(jobId);
+        if (job) {
+            AppState.preprocessingJobs.delete(jobId);
+
+            if (type === 'preprocessingComplete') {
+                job.resolve(result);
+            } else if (type === 'preprocessingError') {
+                job.reject(new Error(error));
+            }
+        }
+    };
+
+    preprocessingWorker.onerror = (error) => {
+        console.error('❌ Preprocessing worker error:', error);
+    };
+
+    // Initialize job tracking
+    if (!AppState.preprocessingJobs) {
+        AppState.preprocessingJobs = new Map();
+    }
+}
+
 // Initialize Tesseract OCR worker
 export async function initOCR() {
     try {
-        console.log('🤖 Initializing OCR worker...');
-        AppState.ocrWorker = await Tesseract.createWorker('eng', 1, {
-            logger: ({ status, progress }) => {
-                if (status === 'recognizing text') {
-                    const progressEl = document.getElementById('ocr-progress');
-                    if (progressEl) {
-                        progressEl.textContent = `${Math.round(progress * 100)}%`;
+        console.log('🤖 Initializing OCR systems...');
+
+        // Initialize preprocessing worker first
+        initPreprocessingWorker();
+
+        // Initialize Tesseract scheduler for robust worker pooling
+        const workerCount = Math.min(navigator.hardwareConcurrency || 2, 4); // Max 4 workers
+        console.log(`🤖 Creating OCR scheduler with ${workerCount} workers...`);
+
+        AppState.ocrScheduler = await Tesseract.createScheduler();
+
+        // Add workers to scheduler
+        for (let i = 0; i < workerCount; i++) {
+            const worker = await Tesseract.createWorker('eng', 1, {
+                logger: ({ status, progress, jobId }) => {
+                    if (status === 'recognizing text') {
+                        const progressEl = document.getElementById('ocr-progress');
+                        if (progressEl) {
+                            progressEl.textContent = `${Math.round(progress * 100)}%`;
+                        }
                     }
                 }
-            }
-        });
+            });
 
-        // Optimized OCR parameters based on comprehensive test suite results
-        await AppState.ocrWorker.setParameters({
-            tessedit_pageseg_mode: '6', // OPTIMAL: Single uniform block - best for general text
-            preserve_interword_spaces: '1', // Better word spacing
-            tesseract_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 .,"\'', // Improve accuracy by restricting to common characters
-            tessedit_do_invert: '0', // Disable auto-invert for better consistency
-            classify_enable_adaptive_matcher: '1' // Enable adaptive matching for better accuracy
-        });
+            // Optimized OCR parameters for gaming
+            await worker.setParameters({
+                tessedit_pageseg_mode: '6', // Single uniform block - best for general text
+                preserve_interword_spaces: '1', // Better word spacing
+                tesseract_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 .,"\'',
+                tessedit_do_invert: '0', // Disable auto-invert for consistency
+                classify_enable_adaptive_matcher: '1' // Enable adaptive matching
+            });
 
-        console.log('✅ OCR Worker ready');
+            AppState.ocrScheduler.addWorker(worker);
+            console.log(`✅ OCR Worker ${i + 1}/${workerCount} added to scheduler`);
+        }
+
+        // Keep reference to first worker for legacy compatibility
+        AppState.ocrWorker = AppState.ocrScheduler.workers[0];
+
+        console.log('✅ OCR Scheduler ready with robust worker pooling');
     } catch (error) {
         console.error('❌ OCR initialization failed:', error);
     }
@@ -576,9 +706,9 @@ export async function processFrame() {
             console.log(`📏 Scaled crop to optimal OCR size: ${Math.round(scaledWidth)}×${CONFIG.OCR_TARGET_HEIGHT}px`);
         }
 
-        // *** ADVANCED IMAGE PREPROCESSING PIPELINE ***
+        // *** ADVANCED IMAGE PREPROCESSING PIPELINE (Web Worker) ***
         const preprocessingStartTime = performance.now();
-        const processedCanvas = await advancedImagePreprocessing(cropCanvas);
+        const processedCanvas = await processImageInWorker(cropCanvas);
         const preprocessingTime = performance.now() - preprocessingStartTime;
 
         // Use processed canvas for OCR
@@ -620,11 +750,22 @@ export async function processFrame() {
                     }
                 }
                 
+                // Enhanced confidence estimation for PaddleOCR (JS version lacks native confidence)
                 if (paddleResult && paddleResult.points && paddleResult.points.length > 0) {
-                    // Estimate confidence based on successful detection
-                    avgConfidence = 85; // Default high confidence for successful detection
+                    // Calculate confidence based on detection quality and text characteristics
+                    const textQuality = calculateTextQuality(ocrText);
+                    const detectionQuality = calculateDetectionQuality(paddleResult.points);
+
+                    // Weighted confidence: 60% text quality + 40% detection quality
+                    avgConfidence = Math.round((textQuality * 0.6) + (detectionQuality * 0.4));
+
+                    console.log(`📊 PaddleOCR confidence estimation: text=${textQuality}%, detection=${detectionQuality}%, final=${avgConfidence}%`);
                 } else if (ocrText.length > 0) {
-                    avgConfidence = 75; // Lower confidence if no points but text found
+                    // Text found but no bounding boxes - lower confidence
+                    const textQuality = calculateTextQuality(ocrText);
+                    avgConfidence = Math.max(50, Math.round(textQuality * 0.8)); // Cap at 80% without detection data
+                } else {
+                    avgConfidence = 10; // Very low confidence for no results
                 }
                 
                 result = {
@@ -638,7 +779,7 @@ export async function processFrame() {
             } catch (paddleError) {
                 console.error('❌ PaddleOCR recognition failed:', paddleError);
                 updateStatus('PaddleOCR failed, using Tesseract', 'bg-yellow-400');
-                result = await AppState.ocrWorker.recognize(cropCanvas);
+                result = await AppState.ocrScheduler.addJob('recognize', processedCropCanvas);
             }
 
         } else {
@@ -646,8 +787,9 @@ export async function processFrame() {
                 console.warn('⚠️ PaddleOCR selected but not loaded. Using Tesseract instead.');
                 updateStatus('Using Tesseract (Paddle not ready)', 'bg-blue-400');
             }
-            console.log('🤖 Using Tesseract.js engine...');
-            result = await AppState.ocrWorker.recognize(processedCropCanvas);
+            console.log('🤖 Using Tesseract.js scheduler...');
+            // Use scheduler for robust worker pooling
+            result = await AppState.ocrScheduler.addJob('recognize', processedCropCanvas);
         }
         
         const processingTime = Date.now() - startTime;
@@ -747,16 +889,14 @@ export async function runAutoCalibration() {
 
     const calibrationResults = [];
     const testConfigurations = [
-        // PSM (Page Segmentation Mode) configurations
-        { name: 'Single uniform block', psm: '6', threshold: 150 },
-        { name: 'Single text line', psm: '7', threshold: 150 },
-        { name: 'Single word', psm: '8', threshold: 150 },
-        { name: 'Single character', psm: '10', threshold: 150 },
-
-        // Different threshold values
-        { name: 'High contrast', psm: '6', threshold: 200 },
-        { name: 'Low contrast', psm: '6', threshold: 100 },
-        { name: 'Adaptive threshold', psm: '6', threshold: 'adaptive' }
+        // PSM (Page Segmentation Mode) with actual preprocessing variations
+        { name: 'Standard Sauvola', psm: '6', sauvolaK: 0.2, sauvolaWindow: 15, blurRadius: 0.5 },
+        { name: 'Aggressive Sauvola', psm: '6', sauvolaK: 0.1, sauvolaWindow: 25, blurRadius: 0.5 },
+        { name: 'Conservative Sauvola', psm: '6', sauvolaK: 0.3, sauvolaWindow: 10, blurRadius: 0.3 },
+        { name: 'Single line optimized', psm: '7', sauvolaK: 0.2, sauvolaWindow: 15, blurRadius: 0.2 },
+        { name: 'Single word focused', psm: '8', sauvolaK: 0.15, sauvolaWindow: 20, blurRadius: 0.4 },
+        { name: 'High contrast mode', psm: '6', sauvolaK: 0.1, sauvolaWindow: 20, blurRadius: 0.3 },
+        { name: 'Low noise mode', psm: '6', sauvolaK: 0.25, sauvolaWindow: 12, blurRadius: 0.7 }
     ];
 
     try {
@@ -858,7 +998,7 @@ export async function runAutoCalibration() {
     }
 }
 
-// Test a specific OCR configuration
+// Test a specific OCR configuration using ACTUAL preprocessing pipeline
 async function testConfiguration(config) {
     const video = document.getElementById('camera-feed');
     const canvas = document.createElement('canvas');
@@ -873,7 +1013,7 @@ async function testConfiguration(config) {
 
     ctx.drawImage(video, 0, 0);
 
-    // Apply current crop area
+    // Apply current crop area (same as main processing)
     const cropX = AppState.currentCrop.x * canvas.width;
     const cropY = AppState.currentCrop.y * canvas.height;
     const cropWidth = AppState.currentCrop.width * canvas.width;
@@ -886,25 +1026,44 @@ async function testConfiguration(config) {
 
     cropCtx.drawImage(canvas, cropX, cropY, cropWidth, cropHeight, 0, 0, cropCanvas.width, cropCanvas.height);
 
-    // Apply threshold based on configuration
-    if (config.threshold !== 'adaptive') {
-        const imageData = cropCtx.getImageData(0, 0, cropCanvas.width, cropCanvas.height);
-        const data = imageData.data;
+    // Apply scaling optimization (same as main processing)
+    if (cropCanvas.height > 0 && cropCanvas.height !== CONFIG.OCR_TARGET_HEIGHT) {
+        const aspectRatio = cropCanvas.width / cropCanvas.height;
+        const scaledWidth = CONFIG.OCR_TARGET_HEIGHT * aspectRatio;
 
-        // Simple threshold
-        for (let i = 0; i < data.length; i += 4) {
-            const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
-            const value = avg > config.threshold ? 255 : 0;
-            data[i] = value;
-            data[i + 1] = value;
-            data[i + 2] = value;
-        }
+        const tempCanvas = document.createElement('canvas');
+        const tempCtx = tempCanvas.getContext('2d');
+        tempCanvas.width = scaledWidth;
+        tempCanvas.height = CONFIG.OCR_TARGET_HEIGHT;
 
-        cropCtx.putImageData(imageData, 0, 0);
+        tempCtx.drawImage(cropCanvas, 0, 0, tempCanvas.width, tempCanvas.height);
+
+        cropCanvas.width = tempCanvas.width;
+        cropCanvas.height = tempCanvas.height;
+        cropCtx.clearRect(0, 0, cropCanvas.width, cropCanvas.height);
+        cropCtx.drawImage(tempCanvas, 0, 0);
     }
 
-    // Run OCR with current configuration
-    const result = await AppState.ocrWorker.recognize(cropCanvas);
+    // Use ACTUAL preprocessing pipeline with worker
+    let processedCanvas;
+    try {
+        const preprocessingConfig = {
+            sauvolaK: config.sauvolaK || 0.2,
+            sauvolaWindow: config.sauvolaWindow || 15,
+            blurRadius: config.blurRadius || 0.5,
+            enableMorphology: config.enableMorphology !== false,
+            enableContrast: config.enableContrast !== false
+        };
+
+        console.log(`   🎨 Using preprocessing config:`, preprocessingConfig);
+        processedCanvas = await processImageInWorker(cropCanvas, preprocessingConfig);
+    } catch (error) {
+        console.warn(`   ⚠️ Worker preprocessing failed, using fallback:`, error);
+        processedCanvas = await advancedImagePreprocessingFallback(cropCanvas);
+    }
+
+    // Run OCR with current configuration using scheduler
+    const result = await AppState.ocrScheduler.addJob('recognize', processedCanvas);
 
     return {
         text: result.data.text.trim(),
@@ -946,6 +1105,125 @@ function calculateCalibrationScore(text, confidence, processingTime) {
     }
 
     return Math.max(0, score); // Ensure non-negative score
+}
+
+// Calculate text quality score for confidence estimation
+function calculateTextQuality(text) {
+    if (!text || text.length === 0) return 0;
+
+    let score = 60; // Base score
+
+    // Length scoring
+    if (text.length >= 3 && text.length <= 100) {
+        score += 15; // Good length
+    } else if (text.length > 100) {
+        score -= 10; // Too long, possibly noise
+    } else {
+        score -= 20; // Too short
+    }
+
+    // Alphanumeric ratio
+    const alphanumericCount = (text.match(/[a-zA-Z0-9]/g) || []).length;
+    const alphanumericRatio = alphanumericCount / text.length;
+    score += alphanumericRatio * 20;
+
+    // Common English patterns
+    if (/\b(the|and|that|this|with|for|are|was|you|not|but|can|had|her|any|our|out|day)\b/i.test(text)) {
+        score += 10;
+    }
+
+    // Penalty for excessive punctuation or symbols
+    const symbolCount = (text.match(/[^a-zA-Z0-9\s]/g) || []).length;
+    const symbolRatio = symbolCount / text.length;
+    if (symbolRatio > 0.3) {
+        score -= 15;
+    }
+
+    // Penalty for repetitive characters
+    const uniqueChars = new Set(text.toLowerCase()).size;
+    const diversityRatio = uniqueChars / text.length;
+    if (diversityRatio < 0.3) {
+        score -= 10;
+    }
+
+    return Math.max(10, Math.min(95, score));
+}
+
+// Calculate detection quality score based on bounding box geometry
+function calculateDetectionQuality(points) {
+    if (!points || points.length === 0) return 0;
+
+    let totalScore = 0;
+    let validBoxes = 0;
+
+    for (const point of points) {
+        if (!point || point.length < 4) continue;
+
+        let boxScore = 70; // Base score for detected box
+
+        // Calculate bounding box area and aspect ratio
+        const [topLeft, topRight, bottomRight, bottomLeft] = point;
+        const width = Math.abs(topRight[0] - topLeft[0]);
+        const height = Math.abs(bottomLeft[1] - topLeft[1]);
+        const area = width * height;
+
+        // Reasonable size check
+        if (area > 100 && area < 50000) {
+            boxScore += 15;
+        } else {
+            boxScore -= 10;
+        }
+
+        // Aspect ratio check (text usually has reasonable width/height ratio)
+        const aspectRatio = width / height;
+        if (aspectRatio > 0.5 && aspectRatio < 20) {
+            boxScore += 10;
+        } else {
+            boxScore -= 5;
+        }
+
+        // Rectangle regularity check (corners should form approximate rectangle)
+        const regularity = calculateRectangleRegularity(point);
+        boxScore += regularity * 10;
+
+        totalScore += Math.max(10, Math.min(95, boxScore));
+        validBoxes++;
+    }
+
+    return validBoxes > 0 ? Math.round(totalScore / validBoxes) : 0;
+}
+
+// Calculate how regular/rectangular a set of 4 points is
+function calculateRectangleRegularity(points) {
+    if (points.length !== 4) return 0;
+
+    const [tl, tr, br, bl] = points;
+
+    // Calculate side lengths
+    const topLength = Math.sqrt(Math.pow(tr[0] - tl[0], 2) + Math.pow(tr[1] - tl[1], 2));
+    const rightLength = Math.sqrt(Math.pow(br[0] - tr[0], 2) + Math.pow(br[1] - tr[1], 2));
+    const bottomLength = Math.sqrt(Math.pow(bl[0] - br[0], 2) + Math.pow(bl[1] - br[1], 2));
+    const leftLength = Math.sqrt(Math.pow(tl[0] - bl[0], 2) + Math.pow(tl[1] - bl[1], 2));
+
+    // Check if opposite sides are approximately equal
+    const horizontalRatio = Math.min(topLength, bottomLength) / Math.max(topLength, bottomLength);
+    const verticalRatio = Math.min(leftLength, rightLength) / Math.max(leftLength, rightLength);
+
+    // Average regularity score (1.0 = perfect rectangle, 0 = very irregular)
+    return (horizontalRatio + verticalRatio) / 2;
+}
+
+// Cleanup preprocessing worker
+export function cleanupPreprocessingWorker() {
+    if (preprocessingWorker) {
+        preprocessingWorker.terminate();
+        preprocessingWorker = null;
+        console.log('🎨 Preprocessing worker terminated');
+    }
+
+    if (AppState.preprocessingJobs) {
+        AppState.preprocessingJobs.clear();
+    }
 }
 
 // Read text from current frame immediately

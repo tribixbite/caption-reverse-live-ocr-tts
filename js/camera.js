@@ -365,10 +365,23 @@ export function cleanupCamera() {
         window.monitoringInterval = null;
     }
 
-    // Cleanup OCR worker
+    // Cleanup OCR scheduler and workers
+    if (AppState.ocrScheduler) {
+        AppState.ocrScheduler.terminate().catch(e => console.warn('OCR scheduler cleanup error:', e));
+        AppState.ocrScheduler = null;
+    }
+
     if (AppState.ocrWorker) {
-        AppState.ocrWorker.terminate().catch(e => console.warn('OCR cleanup error:', e));
+        AppState.ocrWorker.terminate().catch(e => console.warn('OCR worker cleanup error:', e));
         AppState.ocrWorker = null;
+    }
+
+    // Cleanup preprocessing worker
+    try {
+        const { cleanupPreprocessingWorker } = await import('./ocr.js');
+        cleanupPreprocessingWorker();
+    } catch (e) {
+        console.warn('Preprocessing worker cleanup error:', e);
     }
 
     // Cleanup hotkey system
