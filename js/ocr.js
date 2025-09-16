@@ -527,56 +527,104 @@ export async function loadPaddleOCR() {
         return;
     }
 
-    // Multiple CDN endpoints to try in order
+    // Multiple CDN endpoints to try in order (updated for better compatibility)
     const paddleOCREndpoints = [
-        'https://unpkg.com/@paddle-js-models/ocr@4.1.1/lib/index.js',
-        'https://cdn.jsdelivr.net/npm/@paddle-js-models/ocr@4.1.1/lib/index.js',
-        'https://cdn.skypack.dev/@paddle-js-models/ocr@4.1.1'
+        {
+            name: 'unpkg (import map)',
+            url: '@paddle-js-models/ocr',
+            useImportMap: true
+        },
+        {
+            name: 'unpkg (direct)',
+            url: 'https://unpkg.com/@paddle-js-models/ocr@4.1.1/lib/index.js',
+            useImportMap: false
+        },
+        {
+            name: 'jsdelivr',
+            url: 'https://cdn.jsdelivr.net/npm/@paddle-js-models/ocr@4.1.1/lib/index.js',
+            useImportMap: false
+        },
+        {
+            name: 'skypack',
+            url: 'https://cdn.skypack.dev/@paddle-js-models/ocr@4.1.1',
+            useImportMap: false
+        }
     ];
 
     let lastError = null;
 
     for (let i = 0; i < paddleOCREndpoints.length; i++) {
-        try {
-            updateStatus(`Loading PaddleOCR... (${i + 1}/${paddleOCREndpoints.length})`, 'bg-yellow-400 animate-pulse');
-            console.log(`⏳ Attempting to load PaddleOCR from CDN ${i + 1}: ${paddleOCREndpoints[i]}`);
+        const endpoint = paddleOCREndpoints[i];
 
-            // Test CDN availability first
-            const response = await fetch(paddleOCREndpoints[i], { method: 'HEAD' });
-            if (!response.ok) {
-                throw new Error(`CDN ${i + 1} not available: ${response.status}`);
+        try {
+            updateStatus(`Loading PaddleOCR... (${i + 1}/${paddleOCREndpoints.length}) - ${endpoint.name}`, 'bg-yellow-400 animate-pulse');
+            console.log(`⏳ Attempting to load PaddleOCR from ${endpoint.name}: ${endpoint.url}`);
+
+            // Test CDN availability first (only for direct URLs)
+            if (!endpoint.useImportMap) {
+                const response = await fetch(endpoint.url, { method: 'HEAD' });
+                if (!response.ok) {
+                    throw new Error(`${endpoint.name} not available: ${response.status}`);
+                }
+                console.log(`✅ ${endpoint.name} CDN accessible`);
             }
 
             // Try dynamic import with current endpoint
             let ocr;
-            if (i === 0) {
-                // Try with import map first (unpkg)
-                ocr = await import('@paddle-js-models/ocr');
+            if (endpoint.useImportMap) {
+                console.log(`📦 Using import map for ${endpoint.name}...`);
+                ocr = await import(endpoint.url);
             } else {
-                // Try direct import for other CDNs
-                ocr = await import(paddleOCREndpoints[i]);
+                console.log(`📦 Direct import from ${endpoint.name}...`);
+                ocr = await import(endpoint.url);
             }
 
-            console.log(`📦 PaddleOCR module loaded from CDN ${i + 1}:`, ocr);
+            console.log(`📦 PaddleOCR module loaded from ${endpoint.name}:`, ocr);
 
-            console.log('🤖 Initializing PaddleOCR model... (this may take a moment)');
-            // Initialize the model. This will download the necessary model files.
-            await ocr.init();
+            // Validate the module has expected methods
+            if (!ocr.init || typeof ocr.init !== 'function') {
+                throw new Error(`${endpoint.name}: Module missing init function`);
+            }
+
+            if (!ocr.recognize || typeof ocr.recognize !== 'function') {
+                throw new Error(`${endpoint.name}: Module missing recognize function`);
+            }
+
+            console.log(`🤖 Initializing PaddleOCR model from ${endpoint.name}... (this may take a moment)`);
+
+            // Initialize with timeout
+            const initTimeout = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('PaddleOCR init timeout')), 30000)
+            );
+
+            await Promise.race([ocr.init(), initTimeout]);
 
             AppState.paddleOCRInstance = ocr;
             AppState.paddleOCRLoaded = true;
 
-            console.log(`✅ PaddleOCR loaded and initialized successfully from CDN ${i + 1}!`);
+            console.log(`✅ PaddleOCR loaded and initialized successfully from ${endpoint.name}!`);
             updateStatus('PaddleOCR ready', 'bg-green-400');
+
+            // Store successful endpoint for future reference
+            localStorage.setItem('paddleOCRSuccessfulEndpoint', JSON.stringify({
+                endpoint: endpoint,
+                timestamp: Date.now(),
+                userAgent: navigator.userAgent
+            }));
+
             return; // Success, exit function
 
         } catch (error) {
             lastError = error;
-            console.warn(`⚠️ CDN ${i + 1} failed:`, error.message);
+            console.warn(`⚠️ ${endpoint.name} failed:`, error.message);
+
+            // Log detailed error information
+            console.warn(`   Error type: ${error.name}`);
+            console.warn(`   Error stack: ${error.stack?.substring(0, 200)}...`);
 
             // Continue to next CDN if available
             if (i < paddleOCREndpoints.length - 1) {
-                console.log(`🔄 Trying next CDN...`);
+                console.log(`🔄 Trying next CDN: ${paddleOCREndpoints[i + 1].name}...`);
                 continue;
             }
         }
@@ -607,7 +655,7 @@ export async function loadPaddleOCR() {
     console.log('🔄 All PaddleOCR CDNs failed. Falling back to Tesseract.js');
     AppState.currentOCREngine = 'tesseract';
 
-    // Update UI to reflect fallback with better information
+    // Update UI to reflect fallback with better information and user guidance
     setTimeout(() => {
         const tesseractBtn = document.getElementById('ocr-tesseract');
         const paddleBtn = document.getElementById('ocr-paddle');
@@ -616,13 +664,36 @@ export async function loadPaddleOCR() {
         if (tesseractBtn && paddleBtn && infoDiv) {
             tesseractBtn.className = 'flex-1 py-3 px-4 rounded-xl font-medium transition-all bg-primary-600 text-white';
             paddleBtn.className = 'flex-1 py-3 px-4 rounded-xl font-medium transition-all bg-dark-600 hover:bg-dark-500 text-white opacity-50 cursor-not-allowed';
-            infoDiv.innerHTML = `<p>Tesseract.js - PaddleOCR unavailable (${errorCategory})</p>`;
 
-            // Disable PaddleOCR button
+            // Enhanced error information with user guidance
+            const troubleshootingTips = {
+                'Network/CDN error': 'Check internet connection and try refreshing',
+                'Module loading error': 'Clear browser cache and reload',
+                'Initialization error': 'PaddleOCR models failed to download'
+            };
+
+            const tip = troubleshootingTips[errorCategory] || 'Unknown error occurred';
+
+            infoDiv.innerHTML = `
+                <div class="space-y-2">
+                    <p class="font-medium">🤖 Tesseract.js Active (PaddleOCR unavailable)</p>
+                    <p class="text-xs text-dark-400">Issue: ${errorCategory}</p>
+                    <p class="text-xs text-gaming-cyan">💡 ${tip}</p>
+                    <button onclick="retryPaddleOCR()" class="text-xs bg-purple-600 hover:bg-purple-700 px-2 py-1 rounded mt-1">
+                        🔄 Retry PaddleOCR
+                    </button>
+                </div>
+            `;
+
+            // Disable PaddleOCR button with detailed tooltip
             paddleBtn.disabled = true;
-            paddleBtn.title = `PaddleOCR failed to load: ${errorCategory}`;
+            paddleBtn.title = `PaddleOCR failed to load: ${errorCategory}\nTesseract.js is working as fallback\nClick "Retry PaddleOCR" to try again`;
         }
+
         updateStatus('Using Tesseract.js (PaddleOCR unavailable)', 'bg-blue-400');
+
+        // Show user-friendly notification about fallback
+        showPaddleOCRFallbackNotification(errorCategory);
     }, 1000);
 
     // Store failure information for debugging
@@ -1226,8 +1297,63 @@ export function cleanupPreprocessingWorker() {
     }
 }
 
+// Show user-friendly notification about PaddleOCR fallback
+function showPaddleOCRFallbackNotification(errorCategory) {
+    const notification = document.createElement('div');
+    notification.className = 'fixed top-20 right-4 gaming-panel p-4 rounded-xl z-40 max-w-xs';
+    notification.innerHTML = `
+        <div class="space-y-2">
+            <div class="flex items-center gap-2">
+                <span class="text-gaming-yellow">⚠️</span>
+                <span class="font-medium text-white">PaddleOCR Unavailable</span>
+            </div>
+            <p class="text-xs text-dark-300">Using Tesseract.js as fallback OCR engine</p>
+            <p class="text-xs text-gaming-cyan">Issue: ${errorCategory}</p>
+            <div class="flex gap-2 mt-3">
+                <button onclick="retryPaddleOCR()" class="text-xs bg-purple-600 hover:bg-purple-700 px-3 py-1 rounded">
+                    🔄 Retry
+                </button>
+                <button onclick="this.closest('.fixed').remove()" class="text-xs bg-dark-600 hover:bg-dark-500 px-3 py-1 rounded">
+                    Dismiss
+                </button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(notification);
+
+    // Auto-remove after 10 seconds
+    setTimeout(() => {
+        notification.remove();
+    }, 10000);
+}
+
+// Retry PaddleOCR loading
+async function retryPaddleOCR() {
+    console.log('🔄 Retrying PaddleOCR loading...');
+
+    // Reset PaddleOCR state
+    AppState.paddleOCRLoaded = false;
+    AppState.paddleOCRInstance = null;
+
+    // Remove existing notification
+    document.querySelectorAll('.fixed.top-20').forEach(el => el.remove());
+
+    // Attempt to load PaddleOCR again
+    try {
+        await loadPaddleOCR();
+        console.log('✅ PaddleOCR retry successful');
+    } catch (error) {
+        console.error('❌ PaddleOCR retry failed:', error);
+    }
+}
+
 // Read text from current frame immediately
 export async function readNow() {
-    if (!AppState.stream || !AppState.ocrWorker) return;
+    if (!AppState.stream || (!AppState.ocrWorker && !AppState.ocrScheduler)) {
+        console.warn('⚠️ OCR system not ready');
+        updateStatus('OCR system not ready', 'bg-red-400');
+        return;
+    }
     await processFrame();
 }

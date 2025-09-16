@@ -14,7 +14,7 @@ import { initPerformanceMonitoring, generatePerformanceReport, stopPerformanceMo
 import { initHotkeySystem, cleanupHotkeySystem, updateLastRecognizedText } from './hotkeys.js';
 import { initHistorySystem, cleanupHistorySystem } from './history.js';
 import { initMultiMonitorSupport, cleanupMultiMonitorSystem, updateSecondaryMonitor } from './multimonitor.js';
-import { initVoiceCommands, cleanupVoiceCommands } from './voice-commands.js';
+import { initVoiceCommands, cleanupVoiceCommands, loadVoicePreferencesDelayed } from './voice-commands.js';
 
 // Initialize application
 async function init() {
@@ -30,6 +30,10 @@ async function init() {
     initVoiceCommands(); // Initialize voice command system
     await initOCR();
     checkSecureContext();
+
+    // Load voice preferences after everything is initialized
+    loadVoicePreferencesDelayed();
+
     console.log('✅ CaptnReverse ready with Complete Gaming Arsenal!');
 }
 

@@ -696,12 +696,12 @@ function loadVoicePreferences() {
     }
 }
 
-// Initialize voice commands with delay for UI setup
-setTimeout(() => {
-    if (document.readyState === 'complete') {
-        initVoiceCommands();
+// Load voice preferences (called after voice commands are initialized)
+export function loadVoicePreferencesDelayed() {
+    setTimeout(() => {
         loadVoicePreferences();
-    }
-}, 2000);
+    }, 1000);
+}
 
-export { initVoiceCommands, toggleVoiceCommands, startVoiceListening, stopVoiceListening };
+// Export functions without auto-initialization (called from app.js when ready)
+export { initVoiceCommands, toggleVoiceCommands, startVoiceListening, stopVoiceListening, cleanupVoiceCommands, loadVoicePreferencesDelayed };

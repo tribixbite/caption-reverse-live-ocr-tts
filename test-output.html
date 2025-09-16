@@ -509,19 +509,6 @@
                 window.setCrop(x, y, width, height);
             }
         }
-
-        // Global function for PaddleOCR retry
-        async function retryPaddleOCR() {
-            try {
-                const { loadPaddleOCR } = await import('./js/ocr.js');
-                await loadPaddleOCR();
-            } catch (error) {
-                console.error('❌ PaddleOCR retry failed:', error);
-            }
-        }
-
-        // Make functions globally accessible
-        window.retryPaddleOCR = retryPaddleOCR;
     </script>
 </body>
 </html>
