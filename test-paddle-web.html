@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PaddleOCR Web Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #0f172a;
+            color: white;
+            padding: 20px;
+            margin: 0;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .test-section {
+            background: rgba(30, 41, 59, 0.8);
+            padding: 20px;
+            border-radius: 12px;
+            margin: 20px 0;
+            border: 1px solid rgba(59, 130, 246, 0.3);
+        }
+        button {
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            margin: 5px;
+        }
+        button:hover {
+            background: linear-gradient(135deg, #60a5fa, #3b82f6);
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .result {
+            background: #1e293b;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            border-left: 4px solid #3b82f6;
+        }
+        .error {
+            border-left-color: #ef4444;
+            background: rgba(239, 68, 68, 0.1);
+        }
+        .success {
+            border-left-color: #10b981;
+            background: rgba(16, 185, 129, 0.1);
+        }
+        #test-image {
+            max-width: 100%;
+            border: 2px solid #3b82f6;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(59, 130, 246, 0.3);
+            border-radius: 50%;
+            border-top-color: #3b82f6;
+            animation: spin 1s ease-in-out infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎮 PaddleOCR Web Test - CaptnReverse Gaming Companion</h1>
+
+        <div class="test-section">
+            <h2>📋 Test Configuration</h2>
+            <p><strong>Test Image:</strong> tests/test2.png</p>
+            <p><strong>Expected Text:</strong> "This year we put" and "a '12' on the box."</p>
+            <p><strong>PaddleOCR Version:</strong> 4.1.1 (latest)</p>
+        </div>
+
+        <div class="test-section">
+            <h2>🖼️ Test Image</h2>
+            <img id="test-image" src="./tests/test2.png" alt="Test image for OCR" crossorigin="anonymous">
+        </div>
+
+        <div class="test-section">
+            <h2>🧪 PaddleOCR Tests</h2>
+
+            <button onclick="testPaddleOCRLoading()" id="load-btn">
+                📦 Test PaddleOCR Loading
+            </button>
+
+            <button onclick="testPaddleOCRRecognition()" id="ocr-btn" disabled>
+                🔍 Test OCR Recognition
+            </button>
+
+            <button onclick="runComparisonTest()" id="compare-btn" disabled>
+                ⚖️ Compare with Tesseract
+            </button>
+
+            <div id="loading-status" style="display: none;">
+                <div class="loading"></div> Loading PaddleOCR...
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>📊 Test Results</h2>
+            <div id="results-container">
+                <p>Click "Test PaddleOCR Loading" to begin tests...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ES Module Import Map for PaddleOCR -->
+    <script type="importmap">
+    {
+        "imports": {
+            "@paddle-js-models/ocr": "https://cdn.jsdelivr.net/npm/@paddle-js-models/ocr@4.1.1/lib/index.js"
+        }
+    }
+    </script>
+
+    <!-- Tesseract.js for comparison -->
+    <script src="https://unpkg.com/tesseract.js@6.0.0/dist/tesseract.min.js"></script>
+
+    <script type="module">
+        let paddleOCR = null;
+        let tesseractWorker = null;
+
+        // Test PaddleOCR loading
+        window.testPaddleOCRLoading = async function() {
+            const loadBtn = document.getElementById('load-btn');
+            const ocrBtn = document.getElementById('ocr-btn');
+            const compareBtn = document.getElementById('compare-btn');
+            const loadingStatus = document.getElementById('loading-status');
+            const resultsContainer = document.getElementById('results-container');
+
+            loadBtn.disabled = true;
+            loadingStatus.style.display = 'block';
+
+            try {
+                addResult('📦 Testing PaddleOCR Loading...', 'info');
+
+                console.log('📦 Attempting to load PaddleOCR from CDN...');
+                const startTime = performance.now();
+
+                // Import PaddleOCR module
+                paddleOCR = await import('@paddle-js-models/ocr');
+                console.log('✅ PaddleOCR module loaded:', paddleOCR);
+
+                addResult('✅ PaddleOCR module loaded successfully', 'success');
+
+                // Check for required methods
+                if (!paddleOCR.init || typeof paddleOCR.init !== 'function') {
+                    throw new Error('PaddleOCR module missing init function');
+                }
+
+                if (!paddleOCR.recognize || typeof paddleOCR.recognize !== 'function') {
+                    throw new Error('PaddleOCR module missing recognize function');
+                }
+
+                addResult('✅ PaddleOCR methods validated (init, recognize)', 'success');
+
+                console.log('🤖 Initializing PaddleOCR model...');
+                addResult('🤖 Initializing PaddleOCR model... (may take 30+ seconds)', 'info');
+
+                // Initialize with timeout
+                const initTimeout = new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error('PaddleOCR init timeout after 60 seconds')), 60000)
+                );
+
+                await Promise.race([paddleOCR.init(), initTimeout]);
+
+                const loadTime = performance.now() - startTime;
+                console.log(`✅ PaddleOCR loaded and initialized in ${loadTime.toFixed(0)}ms`);
+
+                addResult(`✅ PaddleOCR initialized successfully in ${(loadTime/1000).toFixed(1)}s`, 'success');
+
+                // Enable OCR test button
+                ocrBtn.disabled = false;
+                compareBtn.disabled = false;
+
+            } catch (error) {
+                console.error('❌ PaddleOCR loading failed:', error);
+                addResult(`❌ PaddleOCR loading failed: ${error.message}`, 'error');
+
+                // Test fallback CDNs
+                await testFallbackCDNs();
+            } finally {
+                loadBtn.disabled = false;
+                loadingStatus.style.display = 'none';
+            }
+        };
+
+        // Test fallback CDNs
+        async function testFallbackCDNs() {
+            const fallbackEndpoints = [
+                'https://unpkg.com/@paddle-js-models/ocr@1.2.4/lib/index.js',
+                'https://cdn.jsdelivr.net/npm/@paddle-js-models/ocr@1.2.4/lib/index.js'
+            ];
+
+            addResult('🔄 Testing fallback CDNs...', 'info');
+
+            for (const [index, endpoint] of fallbackEndpoints.entries()) {
+                try {
+                    console.log(`📦 Testing fallback CDN ${index + 1}: ${endpoint}`);
+
+                    const response = await fetch(endpoint, { method: 'HEAD' });
+                    if (response.ok) {
+                        addResult(`✅ Fallback CDN ${index + 1} accessible: ${endpoint}`, 'success');
+
+                        // Try importing from this CDN
+                        try {
+                            paddleOCR = await import(endpoint);
+                            addResult(`📦 Successfully imported from fallback CDN ${index + 1}`, 'success');
+
+                            await paddleOCR.init();
+                            addResult(`🤖 PaddleOCR initialized from fallback CDN ${index + 1}`, 'success');
+
+                            document.getElementById('ocr-btn').disabled = false;
+                            document.getElementById('compare-btn').disabled = false;
+                            return;
+                        } catch (importError) {
+                            addResult(`❌ Import failed from CDN ${index + 1}: ${importError.message}`, 'error');
+                        }
+                    } else {
+                        addResult(`❌ Fallback CDN ${index + 1} not accessible: ${response.status}`, 'error');
+                    }
+                } catch (error) {
+                    addResult(`❌ Fallback CDN ${index + 1} error: ${error.message}`, 'error');
+                }
+            }
+
+            addResult('❌ All PaddleOCR CDNs failed. Only Tesseract.js available.', 'error');
+        }
+
+        // Test PaddleOCR recognition
+        window.testPaddleOCRRecognition = async function() {
+            if (!paddleOCR) {
+                addResult('❌ PaddleOCR not loaded. Run loading test first.', 'error');
+                return;
+            }
+
+            try {
+                addResult('🔍 Testing PaddleOCR recognition with test2.png...', 'info');
+
+                const img = document.getElementById('test-image');
+                const startTime = performance.now();
+
+                console.log('🤖 Running PaddleOCR recognition...');
+                const result = await paddleOCR.recognize(img);
+
+                const processingTime = performance.now() - startTime;
+
+                console.log('📊 PaddleOCR result:', result);
+
+                // Extract text
+                let extractedText = '';
+                if (result.text) {
+                    if (Array.isArray(result.text)) {
+                        extractedText = result.text.join(' ');
+                    } else {
+                        extractedText = result.text;
+                    }
+                }
+
+                // Validate results
+                const expectedTexts = ['This year we put', '12', 'box'];
+                const foundExpected = expectedTexts.some(expected =>
+                    extractedText.toLowerCase().includes(expected.toLowerCase())
+                );
+
+                addResult(`📝 PaddleOCR Text: "${extractedText}"`, foundExpected ? 'success' : 'error');
+                addResult(`⏱️ Processing Time: ${processingTime.toFixed(0)}ms`, 'info');
+                addResult(`🎯 Expected Text Found: ${foundExpected ? 'YES' : 'NO'}`, foundExpected ? 'success' : 'error');
+
+                if (result.points && result.points.length > 0) {
+                    addResult(`📍 Detected ${result.points.length} text regions`, 'success');
+                } else {
+                    addResult('⚠️ No bounding boxes detected', 'error');
+                }
+
+            } catch (error) {
+                console.error('❌ PaddleOCR recognition failed:', error);
+                addResult(`❌ PaddleOCR recognition failed: ${error.message}`, 'error');
+            }
+        };
+
+        // Run comparison test between PaddleOCR and Tesseract
+        window.runComparisonTest = async function() {
+            if (!paddleOCR) {
+                addResult('❌ PaddleOCR not loaded. Run loading test first.', 'error');
+                return;
+            }
+
+            try {
+                addResult('⚖️ Running PaddleOCR vs Tesseract comparison...', 'info');
+
+                const img = document.getElementById('test-image');
+
+                // Test PaddleOCR
+                console.log('🤖 Testing PaddleOCR...');
+                const paddleStart = performance.now();
+                const paddleResult = await paddleOCR.recognize(img);
+                const paddleTime = performance.now() - paddleStart;
+
+                let paddleText = '';
+                if (paddleResult.text) {
+                    paddleText = Array.isArray(paddleResult.text)
+                        ? paddleResult.text.join(' ')
+                        : paddleResult.text;
+                }
+
+                // Test Tesseract
+                console.log('🤖 Testing Tesseract.js...');
+                const tesseractStart = performance.now();
+
+                if (!tesseractWorker) {
+                    tesseractWorker = await Tesseract.createWorker('eng');
+                }
+
+                const tesseractResult = await tesseractWorker.recognize(img);
+                const tesseractTime = performance.now() - tesseractStart;
+
+                // Display comparison results
+                addResult('📊 COMPARISON RESULTS:', 'info');
+                addResult(`🏷️ PaddleOCR: "${paddleText}" (${paddleTime.toFixed(0)}ms)`, 'success');
+                addResult(`🏷️ Tesseract: "${tesseractResult.data.text.trim()}" (${tesseractTime.toFixed(0)}ms, ${tesseractResult.data.confidence.toFixed(1)}% confidence)`, 'success');
+
+                // Performance comparison
+                const speedWinner = paddleTime < tesseractTime ? 'PaddleOCR' : 'Tesseract.js';
+                addResult(`🏆 Speed Winner: ${speedWinner} (${Math.abs(paddleTime - tesseractTime).toFixed(0)}ms difference)`, 'info');
+
+                // Accuracy comparison (basic)
+                const expectedTexts = ['This year we put', '12', 'box'];
+                const paddleAccuracy = expectedTexts.filter(expected =>
+                    paddleText.toLowerCase().includes(expected.toLowerCase())
+                ).length;
+                const tesseractAccuracy = expectedTexts.filter(expected =>
+                    tesseractResult.data.text.toLowerCase().includes(expected.toLowerCase())
+                ).length;
+
+                addResult(`🎯 PaddleOCR found ${paddleAccuracy}/${expectedTexts.length} expected phrases`, paddleAccuracy > 0 ? 'success' : 'error');
+                addResult(`🎯 Tesseract found ${tesseractAccuracy}/${expectedTexts.length} expected phrases`, tesseractAccuracy > 0 ? 'success' : 'error');
+
+                const accuracyWinner = paddleAccuracy > tesseractAccuracy ? 'PaddleOCR' :
+                                     tesseractAccuracy > paddleAccuracy ? 'Tesseract.js' : 'Tie';
+                addResult(`🏆 Accuracy Winner: ${accuracyWinner}`, 'info');
+
+            } catch (error) {
+                console.error('❌ Comparison test failed:', error);
+                addResult(`❌ Comparison test failed: ${error.message}`, 'error');
+            }
+        };
+
+        // Add result to UI
+        function addResult(message, type = 'info') {
+            const resultsContainer = document.getElementById('results-container');
+            const result = document.createElement('div');
+            result.className = `result ${type}`;
+            result.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span>${message}</span>
+                    <small>${new Date().toLocaleTimeString()}</small>
+                </div>
+            `;
+            resultsContainer.appendChild(result);
+
+            // Auto-scroll to latest result
+            result.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // Initialize test environment
+        window.addEventListener('load', () => {
+            addResult('🎮 PaddleOCR Web Test Environment Ready', 'success');
+            addResult('📋 Click "Test PaddleOCR Loading" to begin comprehensive testing', 'info');
+        });
+
+        // Handle errors
+        window.addEventListener('error', (event) => {
+            addResult(`💥 JavaScript Error: ${event.error.message}`, 'error');
+        });
+
+        window.addEventListener('unhandledrejection', (event) => {
+            addResult(`💥 Unhandled Promise Rejection: ${event.reason}`, 'error');
+        });
+    </script>
+</body>
+</html>

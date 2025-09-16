@@ -527,25 +527,25 @@ export async function loadPaddleOCR() {
         return;
     }
 
-    // Working PaddleOCR endpoints (using stable version 1.2.4)
+    // Working PaddleOCR endpoints (using correct version 4.1.1)
     const paddleOCREndpoints = [
         {
             name: 'jsdelivr (import map)',
             url: '@paddle-js-models/ocr',
             useImportMap: true,
-            version: '1.2.4'
+            version: '4.1.1'
         },
         {
             name: 'jsdelivr (direct)',
-            url: 'https://cdn.jsdelivr.net/npm/@paddle-js-models/ocr@1.2.4/lib/index.js',
+            url: 'https://cdn.jsdelivr.net/npm/@paddle-js-models/ocr@4.1.1/lib/index.js',
             useImportMap: false,
-            version: '1.2.4'
+            version: '4.1.1'
         },
         {
             name: 'unpkg (direct)',
-            url: 'https://unpkg.com/@paddle-js-models/ocr@1.2.4/lib/index.js',
+            url: 'https://unpkg.com/@paddle-js-models/ocr@4.1.1/lib/index.js',
             useImportMap: false,
-            version: '1.2.4'
+            version: '4.1.1'
         }
     ];
 
