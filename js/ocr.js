@@ -527,27 +527,25 @@ export async function loadPaddleOCR() {
         return;
     }
 
-    // Multiple CDN endpoints to try in order (updated for better compatibility)
+    // Working PaddleOCR endpoints (using stable version 1.2.4)
     const paddleOCREndpoints = [
         {
-            name: 'unpkg (import map)',
+            name: 'jsdelivr (import map)',
             url: '@paddle-js-models/ocr',
-            useImportMap: true
+            useImportMap: true,
+            version: '1.2.4'
+        },
+        {
+            name: 'jsdelivr (direct)',
+            url: 'https://cdn.jsdelivr.net/npm/@paddle-js-models/ocr@1.2.4/lib/index.js',
+            useImportMap: false,
+            version: '1.2.4'
         },
         {
             name: 'unpkg (direct)',
-            url: 'https://unpkg.com/@paddle-js-models/ocr@4.1.1/lib/index.js',
-            useImportMap: false
-        },
-        {
-            name: 'jsdelivr',
-            url: 'https://cdn.jsdelivr.net/npm/@paddle-js-models/ocr@4.1.1/lib/index.js',
-            useImportMap: false
-        },
-        {
-            name: 'skypack',
-            url: 'https://cdn.skypack.dev/@paddle-js-models/ocr@4.1.1',
-            useImportMap: false
+            url: 'https://unpkg.com/@paddle-js-models/ocr@1.2.4/lib/index.js',
+            useImportMap: false,
+            version: '1.2.4'
         }
     ];
 
@@ -779,7 +777,18 @@ export async function processFrame() {
 
         // *** ADVANCED IMAGE PREPROCESSING PIPELINE (Web Worker) ***
         const preprocessingStartTime = performance.now();
-        const processedCanvas = await processImageInWorker(cropCanvas);
+
+        // Use optimal preprocessing config if available from auto-calibration
+        const preprocessingConfig = AppState.optimalPreprocessingConfig || {
+            sauvolaK: 0.2,
+            sauvolaWindow: 15,
+            blurRadius: 0.5,
+            enableMorphology: true,
+            enableContrast: true
+        };
+
+        console.log('🎨 Using preprocessing config:', preprocessingConfig);
+        const processedCanvas = await processImageInWorker(cropCanvas, preprocessingConfig);
         const preprocessingTime = performance.now() - preprocessingStartTime;
 
         // Use processed canvas for OCR
@@ -979,14 +988,26 @@ export async function runAutoCalibration() {
 
             const startTime = Date.now();
 
-            // Temporarily update OCR parameters
-            await AppState.ocrWorker.setParameters({
+            // Temporarily update OCR parameters on ALL workers in scheduler
+            const parameters = {
                 tessedit_pageseg_mode: config.psm,
                 preserve_interword_spaces: '1',
                 tesseract_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 .,"\'',
                 tessedit_do_invert: '0',
                 classify_enable_adaptive_matcher: '1'
-            });
+            };
+
+            // Update all workers in the scheduler
+            if (AppState.ocrScheduler && AppState.ocrScheduler.workers) {
+                for (const worker of AppState.ocrScheduler.workers) {
+                    await worker.setParameters(parameters);
+                }
+                console.log(`🔧 Updated ${AppState.ocrScheduler.workers.length} workers with config: ${config.name}`);
+            } else if (AppState.ocrWorker) {
+                // Fallback for single worker mode
+                await AppState.ocrWorker.setParameters(parameters);
+                console.log(`🔧 Updated single worker with config: ${config.name}`);
+            }
 
             // Process current frame with this configuration
             const result = await testConfiguration(config);
@@ -1019,14 +1040,37 @@ export async function runAutoCalibration() {
         console.log(`   Confidence: ${Math.round(bestConfig.confidence)}%`);
         console.log(`   Processing time: ${bestConfig.processingTime}ms`);
 
-        // Apply best configuration
-        await AppState.ocrWorker.setParameters({
+        // Apply best configuration to ALL workers in scheduler
+        const bestParameters = {
             tessedit_pageseg_mode: bestConfig.psm,
             preserve_interword_spaces: '1',
             tesseract_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 .,"\'',
             tessedit_do_invert: '0',
             classify_enable_adaptive_matcher: '1'
-        });
+        };
+
+        if (AppState.ocrScheduler && AppState.ocrScheduler.workers) {
+            // Apply to all workers in scheduler
+            for (const worker of AppState.ocrScheduler.workers) {
+                await worker.setParameters(bestParameters);
+            }
+            console.log(`✅ Applied optimal config to ${AppState.ocrScheduler.workers.length} workers: ${bestConfig.name}`);
+        } else if (AppState.ocrWorker) {
+            // Fallback for single worker
+            await AppState.ocrWorker.setParameters(bestParameters);
+            console.log(`✅ Applied optimal config to single worker: ${bestConfig.name}`);
+        }
+
+        // CRITICAL: Store optimal preprocessing config in AppState for main processing
+        AppState.optimalPreprocessingConfig = {
+            sauvolaK: bestConfig.sauvolaK,
+            sauvolaWindow: bestConfig.sauvolaWindow,
+            blurRadius: bestConfig.blurRadius,
+            enableMorphology: bestConfig.enableMorphology !== false,
+            enableContrast: bestConfig.enableContrast !== false
+        };
+
+        console.log('🎯 Stored optimal preprocessing config:', AppState.optimalPreprocessingConfig);
 
         // Update UI settings to reflect optimal values
         if (bestConfig.threshold !== 'adaptive') {
@@ -1056,14 +1100,27 @@ export async function runAutoCalibration() {
         console.error('❌ Auto-calibration failed:', error);
         updateStatus('Auto-calibration failed', 'bg-red-400');
 
-        // Restore default settings
-        await AppState.ocrWorker.setParameters({
+        // Restore default settings to all workers
+        const defaultParameters = {
             tessedit_pageseg_mode: '6',
             preserve_interword_spaces: '1',
             tesseract_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 .,"\'',
             tessedit_do_invert: '0',
             classify_enable_adaptive_matcher: '1'
-        });
+        };
+
+        if (AppState.ocrScheduler && AppState.ocrScheduler.workers) {
+            for (const worker of AppState.ocrScheduler.workers) {
+                await worker.setParameters(defaultParameters);
+            }
+            console.log('🔄 Restored default settings to all workers');
+        } else if (AppState.ocrWorker) {
+            await AppState.ocrWorker.setParameters(defaultParameters);
+            console.log('🔄 Restored default settings to single worker');
+        }
+
+        // Clear optimal config
+        AppState.optimalPreprocessingConfig = null;
 
         throw error;
     }

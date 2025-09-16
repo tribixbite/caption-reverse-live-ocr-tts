@@ -301,30 +301,122 @@ export async function applyCameraZoom() {
     }
 }
 
-// Apply camera focus
+// Apply camera focus with enhanced constraint handling
 export async function applyCameraFocus(focusDistance) {
-    if (!AppState.mediaStreamTrack) return;
-    
+    if (!AppState.mediaStreamTrack) {
+        console.warn('⚠️ No media stream track available for focus control');
+        return;
+    }
+
     try {
         const capabilities = AppState.mediaStreamTrack.getCapabilities();
-        
+        console.log('📷 Camera capabilities for focus:', capabilities);
+
         if (capabilities.focusDistance) {
-            // Use the actual focus distance value from camera capabilities
-            const constraints = {
-                focusMode: 'manual',
-                focusDistance: { ideal: parseFloat(focusDistance) }
-            };
-            
-            await AppState.mediaStreamTrack.applyConstraints({ advanced: [constraints] });
-            console.log(`🎯 Applied manual focus: ${focusDistance}`);
-            updateStatus(`Focus: ${parseFloat(focusDistance).toFixed(2)}`, 'bg-blue-400');
+            const focusValue = parseFloat(focusDistance);
+            console.log(`🎯 Attempting to set focus distance: ${focusValue}`);
+
+            // Try multiple constraint approaches for better compatibility
+            const constraintApproaches = [
+                // Approach 1: Advanced constraints (most cameras)
+                {
+                    advanced: [{
+                        focusMode: 'manual',
+                        focusDistance: { exact: focusValue }
+                    }]
+                },
+                // Approach 2: Basic constraints
+                {
+                    focusMode: 'manual',
+                    focusDistance: { ideal: focusValue }
+                },
+                // Approach 3: Simple focus mode only
+                {
+                    focusMode: 'manual'
+                }
+            ];
+
+            let focusApplied = false;
+
+            for (const constraints of constraintApproaches) {
+                try {
+                    await AppState.mediaStreamTrack.applyConstraints(constraints);
+                    console.log(`✅ Focus applied using constraints:`, constraints);
+                    focusApplied = true;
+                    break;
+                } catch (constraintError) {
+                    console.warn(`❌ Focus constraint failed:`, constraints, constraintError.message);
+                }
+            }
+
+            if (focusApplied) {
+                console.log(`🎯 Manual focus successfully applied: ${focusValue}`);
+                updateStatus(`Focus: ${focusValue.toFixed(2)}`, 'bg-blue-400');
+
+                // Update UI
+                document.getElementById('focus-value').textContent = focusValue.toFixed(2);
+
+                // Show visual focus indicator
+                showFocusIndicator(focusValue);
+            } else {
+                throw new Error('All focus constraint approaches failed');
+            }
+
+        } else if (capabilities.focusMode) {
+            // Camera supports focus mode but not distance
+            console.log('📷 Camera supports focus mode but not distance control');
+            await AppState.mediaStreamTrack.applyConstraints({
+                focusMode: 'manual'
+            });
+            updateStatus('Focus mode: Manual', 'bg-blue-400');
         } else {
             console.warn('⚠️ Manual focus not supported on this camera');
             updateStatus('Focus control not supported', 'bg-yellow-400');
         }
     } catch (error) {
-        console.warn('⚠️ Focus control error:', error);
+        console.error('❌ Focus control error:', error);
+        console.error('Error details:', error.message);
         updateStatus('Focus adjustment failed', 'bg-red-400');
+    }
+}
+
+// Show visual focus indicator overlay
+function showFocusIndicator(focusValue) {
+    // Remove existing focus indicator
+    const existingIndicator = document.getElementById('focus-indicator');
+    if (existingIndicator) {
+        existingIndicator.remove();
+    }
+
+    // Create focus indicator overlay
+    const indicator = document.createElement('div');
+    indicator.id = 'focus-indicator';
+    indicator.className = 'absolute inset-0 pointer-events-none z-10';
+
+    // Calculate focus ring size based on focus distance
+    const focusPercentage = (focusValue - 0) / (1000 - 0); // Normalize 0-1000 to 0-1
+    const ringSize = 50 + (focusPercentage * 100); // 50-150px ring
+
+    indicator.innerHTML = `
+        <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+            <div class="border-2 border-gaming-cyan rounded-full animate-pulse"
+                 style="width: ${ringSize}px; height: ${ringSize}px; border-style: dashed;">
+            </div>
+            <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-gaming-cyan text-white text-xs px-2 py-1 rounded">
+                Focus: ${focusValue.toFixed(1)}
+            </div>
+        </div>
+    `;
+
+    // Add to camera container
+    const cameraContainer = document.getElementById('camera-container');
+    if (cameraContainer) {
+        cameraContainer.appendChild(indicator);
+
+        // Remove after 3 seconds
+        setTimeout(() => {
+            indicator.remove();
+        }, 3000);
     }
 }
 
