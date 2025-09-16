@@ -15,6 +15,8 @@ import { initHotkeySystem, cleanupHotkeySystem, updateLastRecognizedText } from 
 import { initHistorySystem, cleanupHistorySystem } from './history.js';
 import { initMultiMonitorSupport, cleanupMultiMonitorSystem, updateSecondaryMonitor } from './multimonitor.js';
 import { initVoiceCommands, cleanupVoiceCommands, loadVoicePreferencesDelayed } from './voice-commands.js';
+import { initDiscordRPC, cleanupDiscordRPC } from './discord-rpc.js';
+import { initSteamDeckOptimizations, cleanupHandheldOptimizations } from './steamdeck.js';
 
 // Initialize application
 async function init() {
@@ -28,13 +30,15 @@ async function init() {
     initHistorySystem(); // Initialize OCR history system
     await initMultiMonitorSupport(); // Initialize multi-monitor gaming support
     initVoiceCommands(); // Initialize voice command system
+    initDiscordRPC(); // Initialize Discord Rich Presence
+    initSteamDeckOptimizations(); // Initialize handheld gaming optimizations
     await initOCR();
     checkSecureContext();
 
     // Load voice preferences after everything is initialized
     loadVoicePreferencesDelayed();
 
-    console.log('✅ CaptnReverse ready with Complete Gaming Arsenal!');
+    console.log('✅ CaptnReverse ready with Ultimate Gaming Arsenal!');
 }
 
 // Set up all event listeners
