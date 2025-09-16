@@ -1,6 +1,13 @@
-# CaptnReverse Web - Advanced OCR & TTS
+# CaptnReverse Gaming Companion 🎮
 
-A cutting-edge web application that combines real-time camera feed processing with advanced OCR (Optical Character Recognition) and Text-to-Speech capabilities using the latest browser APIs.
+**The Ultimate OCR & Text-to-Speech Gaming Companion**
+
+Advanced OCR system optimized for gaming with hotkeys, voice commands, multi-monitor support, and professional-grade performance.
+
+![Gaming Companion](https://img.shields.io/badge/Gaming-Companion-blue?style=for-the-badge&logo=gamepad)
+![OCR Engine](https://img.shields.io/badge/OCR-Tesseract.js%20v6.0.0-green?style=for-the-badge)
+![PWA Ready](https://img.shields.io/badge/PWA-Ready-purple?style=for-the-badge)
+![Steam Deck](https://img.shields.io/badge/Steam%20Deck-Optimized-orange?style=for-the-badge)
 
 ## 🚀 Features
 
