@@ -469,20 +469,18 @@ export function cleanupCamera() {
     }
 
     // Cleanup preprocessing worker
-    try {
-        const { cleanupPreprocessingWorker } = await import('./ocr.js');
+    import('./ocr.js').then(({ cleanupPreprocessingWorker }) => {
         cleanupPreprocessingWorker();
-    } catch (e) {
+    }).catch(e => {
         console.warn('Preprocessing worker cleanup error:', e);
-    }
+    });
 
     // Cleanup hotkey system
-    try {
-        const { cleanupHotkeySystem } = await import('./hotkeys.js');
+    import('./hotkeys.js').then(({ cleanupHotkeySystem }) => {
         cleanupHotkeySystem();
-    } catch (e) {
+    }).catch(e => {
         console.warn('Hotkey cleanup error:', e);
-    }
+    });
 
     console.log('✅ Camera resources and hotkey system cleaned up');
 }
