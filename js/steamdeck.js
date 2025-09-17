@@ -635,4 +635,4 @@ if (document.readyState === 'loading') {
     }, 2000);
 }
 
-export { initSteamDeckOptimizations, createHandheldUI, optimizeForHandheldGaming, handleSteamDeckFeatures, getHandheldInfo, cleanupHandheldOptimizations };
+// Functions exported individually above

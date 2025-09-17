@@ -305,4 +305,4 @@ setTimeout(() => {
 // Make functions globally accessible
 window.enableDiscordRPC = enableDiscordRPC;
 
-export { initDiscordRPC, updateDiscordWithOCR, getDiscordRPCStatus, disableDiscordRPC, cleanupDiscordRPC };
+// Functions exported individually above

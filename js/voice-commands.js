@@ -703,5 +703,4 @@ export function loadVoicePreferencesDelayed() {
     }, 1000);
 }
 
-// Export functions without auto-initialization (called from app.js when ready)
-export { initVoiceCommands, toggleVoiceCommands, startVoiceListening, stopVoiceListening, cleanupVoiceCommands, loadVoicePreferencesDelayed };
+// Functions exported individually above

@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PaddleOCR Standalone Test</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 2em;
+            background: #0f172a;
+            color: white;
+        }
+        #output {
+            background: #1e293b;
+            border: 1px solid #3b82f6;
+            padding: 1em;
+            margin-top: 1em;
+            border-radius: 8px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .success { color: #10b981; }
+        .error { color: #ef4444; }
+        .info { color: #3b82f6; }
+        img {
+            border: 2px solid #3b82f6;
+            border-radius: 8px;
+            max-width: 100%;
+        }
+        button {
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: linear-gradient(135deg, #60a5fa, #3b82f6);
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎮 PaddleOCR Standalone Test</h1>
+    <p>Testing with actual test2.png image:</p>
+    <img id="test-image" src="./tests/test2.png" alt="Test image" crossorigin="anonymous">
+
+    <p>
+        <button onclick="runOCRTest()">🧪 Run PaddleOCR Test</button>
+        <button onclick="clearOutput()">🧹 Clear Output</button>
+    </p>
+
+    <h3>Test Output:</h3>
+    <div id="output">Ready to test PaddleOCR...</div>
+
+    <!-- Exact import map from main app -->
+    <script type="importmap">
+    {
+        "imports": {
+            "@paddle-js-models/ocr": "https://cdn.jsdelivr.net/npm/@paddle-js-models/ocr@4.1.1/lib/index.js"
+        }
+    }
+    </script>
+
+    <script type="module">
+        // Helper function to log messages
+        function log(message, type = 'info') {
+            const output = document.getElementById('output');
+            const line = document.createElement('div');
+            line.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            line.className = type;
+            output.appendChild(line);
+            console.log(message);
+
+            // Auto-scroll to latest
+            line.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // Main test function
+        window.runOCRTest = async function() {
+            const output = document.getElementById('output');
+            output.innerHTML = ''; // Clear output
+
+            log('🧪 Starting PaddleOCR Standalone Test');
+            log('=====================================');
+
+            try {
+                // Step 1: Import the module
+                log('📦 Step 1: Importing @paddle-js-models/ocr...');
+                const ocr = await import('@paddle-js-models/ocr');
+                log('✅ Module imported successfully', 'success');
+                log(`📊 Module object: ${Object.keys(ocr).join(', ')}`);
+
+                // Step 2: Validate module methods
+                log('🔍 Step 2: Validating module methods...');
+                if (!ocr.init || typeof ocr.init !== 'function') {
+                    throw new Error('Module missing init function');
+                }
+                if (!ocr.recognize || typeof ocr.recognize !== 'function') {
+                    throw new Error('Module missing recognize function');
+                }
+                log('✅ Required methods (init, recognize) found', 'success');
+
+                // Step 3: Initialize OCR
+                log('🤖 Step 3: Initializing PaddleOCR (may take 30+ seconds)...');
+                const initStart = performance.now();
+
+                await ocr.init();
+
+                const initTime = performance.now() - initStart;
+                log(`✅ PaddleOCR initialized successfully in ${(initTime/1000).toFixed(1)}s`, 'success');
+
+                // Step 4: Get test image
+                log('🖼️  Step 4: Preparing test image...');
+                const img = document.getElementById('test-image');
+                if (!img) {
+                    throw new Error('Test image element not found');
+                }
+
+                // Wait for image to load if needed
+                if (!img.complete) {
+                    await new Promise((resolve, reject) => {
+                        img.onload = resolve;
+                        img.onerror = reject;
+                    });
+                }
+                log('✅ Test image ready', 'success');
+
+                // Step 5: Run OCR recognition
+                log('🔍 Step 5: Running OCR recognition...');
+                const ocrStart = performance.now();
+
+                const result = await ocr.recognize(img);
+
+                const ocrTime = performance.now() - ocrStart;
+                log(`✅ OCR recognition completed in ${(ocrTime/1000).toFixed(1)}s`, 'success');
+
+                // Step 6: Analyze results
+                log('📊 Step 6: Analyzing results...');
+                log('=====================================');
+
+                if (result) {
+                    log(`📝 Full Result: ${JSON.stringify(result, null, 2)}`);
+
+                    // Extract text
+                    let extractedText = '';
+                    if (result.text) {
+                        if (Array.isArray(result.text)) {
+                            extractedText = result.text.join(' ');
+                        } else {
+                            extractedText = result.text;
+                        }
+                    }
+
+                    log(`📝 Extracted Text: "${extractedText}"`, extractedText ? 'success' : 'error');
+
+                    // Check for expected content
+                    const expectedTexts = ['This year we put', '12', 'box'];
+                    const foundExpected = expectedTexts.some(expected =>
+                        extractedText.toLowerCase().includes(expected.toLowerCase())
+                    );
+
+                    log(`🎯 Expected Content Found: ${foundExpected ? 'YES' : 'NO'}`, foundExpected ? 'success' : 'error');
+
+                    // Check for bounding boxes
+                    if (result.points && result.points.length > 0) {
+                        log(`📍 Text Regions Detected: ${result.points.length}`, 'success');
+                    } else {
+                        log('📍 No text regions detected', 'error');
+                    }
+
+                } else {
+                    log('❌ No result returned from OCR', 'error');
+                }
+
+                log('=====================================');
+                log('🎉 PaddleOCR test completed successfully!', 'success');
+
+            } catch (error) {
+                log('=====================================');
+                log('💥 TEST FAILED', 'error');
+                log(`Error Type: ${error.name}`, 'error');
+                log(`Error Message: ${error.message}`, 'error');
+                log(`Error Stack: ${error.stack}`, 'error');
+
+                console.error('Full error object:', error);
+
+                // Additional debugging info
+                log('🔍 Debugging Information:', 'info');
+                log(`Browser: ${navigator.userAgent}`, 'info');
+                log(`URL: ${window.location.href}`, 'info');
+                log(`Secure Context: ${window.isSecureContext}`, 'info');
+            }
+        };
+
+        // Clear output function
+        window.clearOutput = function() {
+            document.getElementById('output').innerHTML = 'Output cleared...';
+        };
+
+        // Auto-run test after page loads
+        window.addEventListener('load', () => {
+            log('🎮 PaddleOCR Standalone Test Environment Ready');
+            log('Click "Run PaddleOCR Test" to begin validation');
+        });
+    </script>
+</body>
+</html>

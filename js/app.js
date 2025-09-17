@@ -16,7 +16,7 @@ import { initHistorySystem, cleanupHistorySystem } from './history.js';
 import { initMultiMonitorSupport, cleanupMultiMonitorSystem, updateSecondaryMonitor } from './multimonitor.js';
 import { initVoiceCommands, cleanupVoiceCommands, loadVoicePreferencesDelayed } from './voice-commands.js';
 import { initDiscordRPC, cleanupDiscordRPC } from './discord-rpc.js';
-import { initSteamDeckOptimizations, cleanupHandheldOptimizations } from './steamdeck.js';
+import { initSteamDeckOptimizations } from './steamdeck.js';
 
 // Initialize application
 async function init() {
