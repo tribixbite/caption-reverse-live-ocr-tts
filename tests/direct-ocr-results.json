@@ -1,0 +1,43 @@
+{
+  "timestamp": "2025-09-19T03:54:02.117Z",
+  "expectedText": "This year we put a \"12\" on the box.",
+  "testResults": [
+    {
+      "configName": "Default Config",
+      "processingTime": 1200,
+      "confidence": 43,
+      "detectedText": "THE HEEL BAA\nds seid 5.0.1 LY2BDORA.\n- 1\nre\na \"12\" on the box.\n\\ |",
+      "similarity": 0,
+      "status": "FAIL"
+    },
+    {
+      "configName": "Single Line Mode",
+      "processingTime": 752,
+      "confidence": 33,
+      "detectedText": ": |",
+      "similarity": 0,
+      "status": "FAIL"
+    },
+    {
+      "configName": "Single Word Mode",
+      "processingTime": 1222,
+      "confidence": 15,
+      "detectedText": "is",
+      "similarity": 0,
+      "status": "FAIL"
+    },
+    {
+      "configName": "Gaming Optimized",
+      "processingTime": 797,
+      "confidence": 22,
+      "detectedText": "Hiss asiees tesesesstittl lo ~\nVOTE Bl As ~]-]\no r\n    re\nER PARTIR YT\n                      |",
+      "similarity": 0,
+      "status": "FAIL"
+    }
+  ],
+  "analysis": {
+    "successRate": 0,
+    "averageProcessingTime": 992.75,
+    "averageAccuracy": null
+  }
+}

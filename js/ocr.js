@@ -53,7 +53,7 @@ export function isBlankOrNoise(text) {
     return false;
 }
 
-// Advanced image preprocessing pipeline for optimal OCR accuracy
+// Advanced image preprocessing pipeline optimized for challenging text scenarios
 async function advancedImagePreprocessing(inputCanvas) {
     console.log('🎨 Starting advanced image preprocessing...');
     const startTime = performance.now();
@@ -73,7 +73,12 @@ async function advancedImagePreprocessing(inputCanvas) {
 
     console.log(`📐 Processing image: ${width}x${height} pixels`);
 
-    // Step 1: Convert to grayscale with luminance weighting
+    // Step 1: Analyze image to detect white text on dark background
+    console.log('   🔍 Analyzing image characteristics...');
+    const imageStats = analyzeImageCharacteristics(data);
+    console.log(`   📊 Image stats: brightness=${imageStats.avgBrightness}, contrast=${imageStats.contrast}, isDarkBackground=${imageStats.isDarkBackground}`);
+
+    // Step 2: Convert to grayscale with luminance weighting
     console.log('   1️⃣ Converting to grayscale with luminance weighting...');
     for (let i = 0; i < data.length; i += 4) {
         // Use luminance formula: 0.299*R + 0.587*G + 0.114*B
@@ -83,24 +88,31 @@ async function advancedImagePreprocessing(inputCanvas) {
         data[i + 2] = gray;
     }
 
-    // Step 2: Noise reduction with Gaussian blur
-    console.log('   2️⃣ Applying noise reduction...');
-    const blurredData = gaussianBlur(data, width, height, 0.5);
+    // Step 3: Enhanced contrast for white text on dark backgrounds
+    if (imageStats.isDarkBackground) {
+        console.log('   2️⃣ Applying dark background optimizations...');
+        enhanceWhiteTextOnDark(data);
+    } else {
+        console.log('   2️⃣ Applying standard contrast enhancement...');
+        enhanceContrast(data);
+    }
+
+    // Step 4: Intelligent noise reduction
+    console.log('   3️⃣ Applying intelligent noise reduction...');
+    const blurredData = gaussianBlur(data, width, height, imageStats.isDarkBackground ? 0.3 : 0.5);
     for (let i = 0; i < data.length; i += 4) {
         data[i] = blurredData[i];
         data[i + 1] = blurredData[i + 1];
         data[i + 2] = blurredData[i + 2];
     }
 
-    // Step 3: Contrast enhancement with histogram stretching
-    console.log('   3️⃣ Enhancing contrast...');
-    enhanceContrast(data);
+    // Step 5: Adaptive thresholding (Sauvola method with dynamic parameters)
+    console.log('   4️⃣ Applying adaptive thresholding...');
+    const sauvolaK = imageStats.isDarkBackground ? 0.1 : 0.2;
+    const sauvolaWindow = Math.max(10, Math.min(25, Math.round(Math.min(width, height) / 20)));
+    sauvolaThreshold(data, width, height, sauvolaWindow, sauvolaK);
 
-    // Step 4: Adaptive thresholding (Sauvola method)
-    console.log('   4️⃣ Applying adaptive thresholding (Sauvola)...');
-    sauvolaThreshold(data, width, height, 15, 0.2);
-
-    // Step 5: Morphological operations to clean up text
+    // Step 6: Morphological operations to clean up text
     console.log('   5️⃣ Applying morphological operations...');
     morphologicalCleanup(data, width, height);
 
@@ -969,14 +981,17 @@ export async function runAutoCalibration() {
 
     const calibrationResults = [];
     const testConfigurations = [
-        // PSM (Page Segmentation Mode) with actual preprocessing variations
-        { name: 'Standard Sauvola', psm: '6', sauvolaK: 0.2, sauvolaWindow: 15, blurRadius: 0.5 },
-        { name: 'Aggressive Sauvola', psm: '6', sauvolaK: 0.1, sauvolaWindow: 25, blurRadius: 0.5 },
-        { name: 'Conservative Sauvola', psm: '6', sauvolaK: 0.3, sauvolaWindow: 10, blurRadius: 0.3 },
-        { name: 'Single line optimized', psm: '7', sauvolaK: 0.2, sauvolaWindow: 15, blurRadius: 0.2 },
-        { name: 'Single word focused', psm: '8', sauvolaK: 0.15, sauvolaWindow: 20, blurRadius: 0.4 },
-        { name: 'High contrast mode', psm: '6', sauvolaK: 0.1, sauvolaWindow: 20, blurRadius: 0.3 },
-        { name: 'Low noise mode', psm: '6', sauvolaK: 0.25, sauvolaWindow: 12, blurRadius: 0.7 }
+        // Standard configurations with preprocessing variations
+        { name: 'Standard Sauvola', psm: '6', sauvolaK: 0.2, sauvolaWindow: 15, blurRadius: 0.5, invert: false },
+        { name: 'Aggressive Sauvola', psm: '6', sauvolaK: 0.1, sauvolaWindow: 25, blurRadius: 0.5, invert: false },
+        { name: 'Conservative Sauvola', psm: '6', sauvolaK: 0.3, sauvolaWindow: 10, blurRadius: 0.3, invert: false },
+        { name: 'Single line optimized', psm: '7', sauvolaK: 0.2, sauvolaWindow: 15, blurRadius: 0.2, invert: false },
+        { name: 'Single word focused', psm: '8', sauvolaK: 0.15, sauvolaWindow: 20, blurRadius: 0.4, invert: false },
+        // Optimized for white text on dark backgrounds
+        { name: 'Dark Background + Invert', psm: '6', sauvolaK: 0.1, sauvolaWindow: 20, blurRadius: 0.3, invert: true },
+        { name: 'White Text Single Line', psm: '7', sauvolaK: 0.15, sauvolaWindow: 15, blurRadius: 0.2, invert: true },
+        { name: 'White Text Sparse', psm: '11', sauvolaK: 0.1, sauvolaWindow: 25, blurRadius: 0.3, invert: true },
+        { name: 'High Contrast Gaming', psm: '6', sauvolaK: 0.05, sauvolaWindow: 30, blurRadius: 0.4, invert: true }
     ];
 
     try {
@@ -993,7 +1008,7 @@ export async function runAutoCalibration() {
                 tessedit_pageseg_mode: config.psm,
                 preserve_interword_spaces: '1',
                 tesseract_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 .,"\'',
-                tessedit_do_invert: '0',
+                tessedit_do_invert: config.invert ? '1' : '0',
                 classify_enable_adaptive_matcher: '1'
             };
 
@@ -1413,4 +1428,59 @@ export async function readNow() {
         return;
     }
     await processFrame();
+}
+
+// =================== ENHANCED PREPROCESSING FUNCTIONS ===================
+
+// Analyze image characteristics to optimize preprocessing
+function analyzeImageCharacteristics(data) {
+    let totalBrightness = 0;
+    let darkPixels = 0;
+    let brightPixels = 0;
+    const pixelCount = data.length / 4;
+
+    for (let i = 0; i < data.length; i += 4) {
+        const brightness = (data[i] + data[i + 1] + data[i + 2]) / 3;
+        totalBrightness += brightness;
+
+        if (brightness < 80) darkPixels++;
+        if (brightness > 200) brightPixels++;
+    }
+
+    const avgBrightness = totalBrightness / pixelCount;
+    const darkRatio = darkPixels / pixelCount;
+    const brightRatio = brightPixels / pixelCount;
+
+    return {
+        avgBrightness: Math.round(avgBrightness),
+        contrast: Math.round((brightRatio - darkRatio) * 100),
+        isDarkBackground: darkRatio > 0.6 && avgBrightness < 100,
+        darkRatio,
+        brightRatio
+    };
+}
+
+// Enhanced contrast for white text on dark backgrounds
+function enhanceWhiteTextOnDark(data) {
+    // First pass: identify likely text pixels (bright pixels)
+    const textThreshold = 120;
+    const backgroundThreshold = 80;
+
+    for (let i = 0; i < data.length; i += 4) {
+        const brightness = data[i];
+
+        if (brightness > textThreshold) {
+            // Enhance white text - make it brighter
+            const enhanced = Math.min(255, brightness * 1.5);
+            data[i] = enhanced;
+            data[i + 1] = enhanced;
+            data[i + 2] = enhanced;
+        } else if (brightness < backgroundThreshold) {
+            // Suppress dark background - make it darker
+            const suppressed = Math.max(0, brightness * 0.5);
+            data[i] = suppressed;
+            data[i + 1] = suppressed;
+            data[i + 2] = suppressed;
+        }
+    }
 }

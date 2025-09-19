@@ -119,11 +119,45 @@ export function stopSpeech() {
     updateStatus(AppState.isMonitoring ? 'Monitoring active' : 'Ready', 'bg-green-400');
 }
 
+// Global audio context for better browser compatibility
+let globalAudioContext = null;
+
+// Initialize audio context with user interaction
+function initAudioContext() {
+    if (!globalAudioContext) {
+        try {
+            globalAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+            // Handle audio context state for better browser compatibility
+            if (globalAudioContext.state === 'suspended') {
+                // Auto-resume on next user interaction
+                const resumeAudio = () => {
+                    globalAudioContext.resume().then(() => {
+                        console.log('🔊 Audio context resumed');
+                        document.removeEventListener('click', resumeAudio);
+                        document.removeEventListener('touchstart', resumeAudio);
+                    });
+                };
+                document.addEventListener('click', resumeAudio, { once: true });
+                document.addEventListener('touchstart', resumeAudio, { once: true });
+            }
+
+            console.log('🎵 Audio context initialized');
+        } catch (error) {
+            console.warn('⚠️ Could not initialize audio context:', error);
+        }
+    }
+    return globalAudioContext;
+}
+
 // Audio feedback for OCR recognition events
 export function playRecognitionSound() {
-    // Create audio context for sound effects
     try {
-        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const audioContext = initAudioContext();
+        if (!audioContext || audioContext.state === 'suspended') {
+            console.warn('⚠️ Audio context not available or suspended');
+            return;
+        }
 
         // Create a pleasant recognition chime (C major chord)
         const frequencies = [261.63, 329.63, 392.00]; // C4, E4, G4
@@ -157,7 +191,12 @@ export function playRecognitionSound() {
 // Audio feedback for processing start
 export function playProcessingSound() {
     try {
-        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const audioContext = initAudioContext();
+        if (!audioContext || audioContext.state === 'suspended') {
+            console.warn('⚠️ Audio context not available or suspended');
+            return;
+        }
+
         const oscillator = audioContext.createOscillator();
         const gainNode = audioContext.createGain();
 

@@ -1,0 +1,51 @@
+{
+  "timestamp": "2025-09-19T03:55:03.233Z",
+  "expectedText": "This year we put a \"12\" on the box.",
+  "testResults": [
+    {
+      "methodName": "Raw Image (No Preprocessing)",
+      "processingTime": 783,
+      "confidence": 43,
+      "detectedText": "THE HEEL BAA\nds seid 5.0.1 LY2BDORA.\n- 1\nre\na \"12\" on the box.\n\\ |",
+      "similarity": 0,
+      "status": "FAIL"
+    },
+    {
+      "methodName": "Basic Inversion",
+      "processingTime": 730,
+      "confidence": 43,
+      "detectedText": "THE HEEL BAA\nds seid 5.0.1 LY2BDORA.\n- 1\nre\na \"12\" on the box.\n\\ |",
+      "similarity": 0,
+      "status": "FAIL"
+    },
+    {
+      "methodName": "Gaming Optimized + Inversion",
+      "processingTime": 724,
+      "confidence": 43,
+      "detectedText": "THE HEEL BAA\nds seid 5.0.1 LY2BDORA.\n- 1\n    re\na \"12\" on the box.\n\\                      |",
+      "similarity": 0,
+      "status": "FAIL"
+    },
+    {
+      "methodName": "Single Line + Inversion",
+      "processingTime": 522,
+      "confidence": 33,
+      "detectedText": ": |",
+      "similarity": 0,
+      "status": "FAIL"
+    },
+    {
+      "methodName": "Sparse Text + Inversion",
+      "processingTime": 755,
+      "confidence": 30,
+      "detectedText": "a\n\nEE —\n\nFT YY ye\n\nSri\n\nHEI\n\ntes\n\n@ »\n\n4 - [\n\nMS ede oo.\n\n| fr ——\n\na \"12\" on the box.",
+      "similarity": 0,
+      "status": "FAIL"
+    }
+  ],
+  "analysis": {
+    "bestMethod": "None",
+    "maxAccuracy": 0,
+    "recommendInversion": false
+  }
+}

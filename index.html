@@ -520,6 +520,45 @@
             }
         }
 
+        // Global function for user feedback handling
+        window.handleUserFeedback = function(isCorrect, text, confidence) {
+            console.log(`📊 User feedback: ${isCorrect ? 'Correct' : 'Incorrect'} for "${text}" (${confidence}%)`);
+
+            // Store feedback for future improvements
+            const feedback = {
+                timestamp: Date.now(),
+                isCorrect,
+                text,
+                confidence,
+                userAgent: navigator.userAgent
+            };
+
+            // Save to localStorage for analytics
+            const existingFeedback = JSON.parse(localStorage.getItem('ocrUserFeedback') || '[]');
+            existingFeedback.push(feedback);
+
+            // Keep only last 100 feedback entries
+            if (existingFeedback.length > 100) {
+                existingFeedback.splice(0, existingFeedback.length - 100);
+            }
+
+            localStorage.setItem('ocrUserFeedback', JSON.stringify(existingFeedback));
+
+            // Remove feedback prompt
+            const prompt = document.getElementById('user-feedback-prompt');
+            if (prompt) {
+                prompt.remove();
+            }
+
+            // Show thank you message
+            const thankYou = document.createElement('div');
+            thankYou.className = 'fixed bottom-4 right-4 bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg z-50';
+            thankYou.textContent = isCorrect ? '✅ Thanks! This helps improve accuracy.' : '❌ Thanks! We\'ll work on improving this.';
+            document.body.appendChild(thankYou);
+
+            setTimeout(() => thankYou.remove(), 3000);
+        };
+
         // Make functions globally accessible
         window.retryPaddleOCR = retryPaddleOCR;
     </script>
