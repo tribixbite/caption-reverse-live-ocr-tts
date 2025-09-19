@@ -539,7 +539,7 @@ export async function loadPaddleOCR() {
         return;
     }
 
-    // Working PaddleOCR endpoints (using correct version 4.1.1)
+    // Updated PaddleOCR endpoints with better availability and fallback options
     const paddleOCREndpoints = [
         {
             name: 'jsdelivr (import map)',
@@ -548,14 +548,32 @@ export async function loadPaddleOCR() {
             version: '4.1.1'
         },
         {
-            name: 'jsdelivr (direct)',
+            name: 'jsdelivr (direct v4.1.1)',
             url: 'https://cdn.jsdelivr.net/npm/@paddle-js-models/ocr@4.1.1/lib/index.js',
             useImportMap: false,
             version: '4.1.1'
         },
         {
-            name: 'unpkg (direct)',
+            name: 'jsdelivr (latest stable)',
+            url: 'https://cdn.jsdelivr.net/npm/@paddle-js-models/ocr@latest/lib/index.js',
+            useImportMap: false,
+            version: 'latest'
+        },
+        {
+            name: 'unpkg (v4.1.1)',
             url: 'https://unpkg.com/@paddle-js-models/ocr@4.1.1/lib/index.js',
+            useImportMap: false,
+            version: '4.1.1'
+        },
+        {
+            name: 'unpkg (latest)',
+            url: 'https://unpkg.com/@paddle-js-models/ocr@latest/lib/index.js',
+            useImportMap: false,
+            version: 'latest'
+        },
+        {
+            name: 'skypack (ESM)',
+            url: 'https://cdn.skypack.dev/@paddle-js-models/ocr@4.1.1',
             useImportMap: false,
             version: '4.1.1'
         }
@@ -602,12 +620,31 @@ export async function loadPaddleOCR() {
 
             console.log(`🤖 Initializing PaddleOCR model from ${endpoint.name}... (this may take a moment)`);
 
-            // Initialize with timeout
+            // Initialize with enhanced timeout and retry logic
             const initTimeout = new Promise((_, reject) =>
-                setTimeout(() => reject(new Error('PaddleOCR init timeout')), 30000)
+                setTimeout(() => reject(new Error('PaddleOCR init timeout (30s)')), 30000)
             );
 
-            await Promise.race([ocr.init(), initTimeout]);
+            let initAttempts = 0;
+            const maxAttempts = 3;
+
+            while (initAttempts < maxAttempts) {
+                try {
+                    console.log(`🔄 PaddleOCR init attempt ${initAttempts + 1}/${maxAttempts}...`);
+                    await Promise.race([ocr.init(), initTimeout]);
+                    break; // Success, exit retry loop
+                } catch (initError) {
+                    initAttempts++;
+                    console.warn(`⚠️ PaddleOCR init attempt ${initAttempts} failed:`, initError.message);
+
+                    if (initAttempts >= maxAttempts) {
+                        throw new Error(`PaddleOCR init failed after ${maxAttempts} attempts: ${initError.message}`);
+                    }
+
+                    // Wait before retry
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                }
+            }
 
             AppState.paddleOCRInstance = ocr;
             AppState.paddleOCRLoaded = true;

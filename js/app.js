@@ -17,6 +17,8 @@ import { initMultiMonitorSupport, cleanupMultiMonitorSystem, updateSecondaryMoni
 import { initVoiceCommands, cleanupVoiceCommands, loadVoicePreferencesDelayed } from './voice-commands.js';
 import { initDiscordRPC, cleanupDiscordRPC } from './discord-rpc.js';
 import { initSteamDeckOptimizations } from './steamdeck.js';
+import { startSetupWizard } from './setup-wizard.js';
+import { startWebTestSuite } from './web-test-suite.js';
 
 // Initialize application
 async function init() {
@@ -72,7 +74,21 @@ function setupEventListeners() {
         testTTSBtn.addEventListener('click', testTTS);
         console.log('✅ Test TTS button listener added');
     }
-    
+
+    // Setup wizard
+    const setupWizardBtn = document.getElementById('setup-wizard-btn');
+    if (setupWizardBtn) {
+        setupWizardBtn.addEventListener('click', startSetupWizard);
+        console.log('✅ Setup wizard button listener added');
+    }
+
+    // Web test suite
+    const webTestsBtn = document.getElementById('run-web-tests');
+    if (webTestsBtn) {
+        webTestsBtn.addEventListener('click', startWebTestSuite);
+        console.log('✅ Web test suite button listener added');
+    }
+
     // Stop speech
     const stopSpeechBtn = document.getElementById('stop-speech-btn');
     if (stopSpeechBtn) {

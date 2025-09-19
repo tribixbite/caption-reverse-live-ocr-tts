@@ -1,11 +1,24 @@
 /**
- * Image Preprocessing Web Worker
- * Performs advanced image preprocessing off the main thread to eliminate UI jank
+ * Optimized Image Preprocessing Web Worker
+ * Performs advanced image preprocessing off the main thread with performance optimizations
  */
+
+// Performance optimization: Reuse typed arrays to avoid GC pressure
+let reusableArrays = new Map();
+
+// Get or create reusable typed array
+function getReusableArray(size, type = 'Uint8ClampedArray') {
+    const key = `${type}_${size}`;
+    if (!reusableArrays.has(key)) {
+        const ArrayClass = type === 'Float32Array' ? Float32Array : Uint8ClampedArray;
+        reusableArrays.set(key, new ArrayClass(size));
+    }
+    return reusableArrays.get(key);
+}
 
 // Advanced image preprocessing pipeline for optimal OCR accuracy
 async function advancedImagePreprocessing(imageData, config = {}) {
-    console.log('🎨 Worker: Starting advanced image preprocessing...');
+    console.log('🎨 Worker: Starting optimized image preprocessing...');
     const startTime = performance.now();
 
     const {
@@ -69,12 +82,12 @@ async function advancedImagePreprocessing(imageData, config = {}) {
     };
 }
 
-// Gaussian blur for noise reduction
+// Optimized Gaussian blur for noise reduction using reusable arrays
 function gaussianBlur(data, width, height, radius) {
     const kernel = generateGaussianKernel(radius);
     const kernelSize = kernel.length;
     const halfKernel = Math.floor(kernelSize / 2);
-    const blurredData = new Uint8ClampedArray(data.length);
+    const blurredData = getReusableArray(data.length);
 
     for (let y = 0; y < height; y++) {
         for (let x = 0; x < width; x++) {
@@ -217,9 +230,9 @@ function morphologicalCleanup(data, width, height) {
     }
 }
 
-// Morphological dilation
+// Optimized morphological dilation using reusable arrays
 function dilate(data, width, height, kernel) {
-    const result = new Uint8ClampedArray(data.length);
+    const result = getReusableArray(data.length);
     const kh = kernel.length;
     const kw = kernel[0].length;
     const kcy = Math.floor(kh / 2);
@@ -254,9 +267,9 @@ function dilate(data, width, height, kernel) {
     return result;
 }
 
-// Morphological erosion
+// Optimized morphological erosion using reusable arrays
 function erode(data, width, height, kernel) {
-    const result = new Uint8ClampedArray(data.length);
+    const result = getReusableArray(data.length);
     const kh = kernel.length;
     const kw = kernel[0].length;
     const kcy = Math.floor(kh / 2);
