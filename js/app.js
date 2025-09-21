@@ -326,10 +326,111 @@ function setupLifecycleListeners() {
 }
 
 // Initialize when page loads
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     init();
     setupLifecycleListeners();
+    setupQuickToolButtons();
+
+    // Initialize gesture controls for gaming handhelds
+    if ('ontouchstart' in window) {
+        try {
+            const { initGestureControls } = await import('./gesture-controls.js');
+            initGestureControls();
+            console.log('🎮 Gesture controls loaded for gaming handhelds');
+        } catch (error) {
+            console.warn('⚠️ Gesture controls failed to load:', error);
+        }
+    }
 });
+
+// Setup event listeners for Setup Wizard and Web Test Suite buttons
+function setupQuickToolButtons() {
+    // Setup Wizard button
+    const setupWizardBtn = document.getElementById('setup-wizard-btn');
+    if (setupWizardBtn) {
+        setupWizardBtn.addEventListener('click', async () => {
+            try {
+                const { SetupWizard } = await import('./setup-wizard.js');
+                const wizard = new SetupWizard();
+                wizard.showWizard();
+            } catch (error) {
+                console.error('❌ Failed to load Setup Wizard:', error);
+                alert('Failed to load Setup Wizard. Please check console for details.');
+            }
+        });
+    }
+
+    // Web Test Suite button
+    const webTestSuiteBtn = document.getElementById('web-test-suite-btn');
+    if (webTestSuiteBtn) {
+        webTestSuiteBtn.addEventListener('click', async () => {
+            try {
+                const { WebTestSuite } = await import('./web-test-suite.js');
+                const testSuite = new WebTestSuite();
+                testSuite.showTestSuite();
+            } catch (error) {
+                console.error('❌ Failed to load Web Test Suite:', error);
+                alert('Failed to load Web Test Suite. Please check console for details.');
+            }
+        });
+    }
+
+    // Setup theme switching
+    setupThemeSystem();
+}
+
+// Advanced Theme System
+function setupThemeSystem() {
+    // Load saved theme
+    const savedTheme = localStorage.getItem('captnreverse-theme') || '';
+    applyTheme(savedTheme);
+
+    // Theme option buttons
+    const themeButtons = document.querySelectorAll('.theme-option');
+    themeButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            const theme = button.dataset.theme;
+            applyTheme(theme);
+            localStorage.setItem('captnreverse-theme', theme);
+
+            // Update button states
+            themeButtons.forEach(btn => {
+                btn.classList.remove('border-primary-600', 'bg-primary-600/10', 'text-primary-300');
+                btn.classList.add('border-dark-600', 'bg-dark-700', 'text-dark-300');
+            });
+
+            button.classList.remove('border-dark-600', 'bg-dark-700', 'text-dark-300');
+            button.classList.add('border-primary-600', 'bg-primary-600/10', 'text-primary-300');
+        });
+    });
+
+    // Set initial button state
+    const currentTheme = document.documentElement.dataset.theme || '';
+    const activeButton = document.querySelector(`[data-theme="${currentTheme}"]`);
+    if (activeButton) {
+        activeButton.classList.remove('border-dark-600', 'bg-dark-700', 'text-dark-300');
+        activeButton.classList.add('border-primary-600', 'bg-primary-600/10', 'text-primary-300');
+    }
+}
+
+function applyTheme(theme) {
+    // Add transition class for smooth theme changes
+    document.documentElement.classList.add('theme-transition');
+
+    // Apply theme
+    if (theme) {
+        document.documentElement.setAttribute('data-theme', theme);
+    } else {
+        document.documentElement.removeAttribute('data-theme');
+    }
+
+    // Remove transition class after animation
+    setTimeout(() => {
+        document.documentElement.classList.remove('theme-transition');
+    }, 500);
+
+    console.log(`🎨 Applied theme: ${theme || 'default'}`);
+}
 
 // Live reload for development
 if (location.hostname === 'localhost') {

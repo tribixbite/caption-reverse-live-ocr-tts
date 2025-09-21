@@ -284,9 +284,19 @@
                     <!-- Monitoring Control -->
                     <div class="glass rounded-2xl p-6">
                         <h3 class="text-lg font-semibold mb-4 text-primary-300">Control Center</h3>
-                        <button id="monitor-toggle" class="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-4 px-6 rounded-xl transition-all duration-200 transform hover:scale-105">
+                        <button id="monitor-toggle" class="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-4 px-6 rounded-xl transition-all duration-200 transform hover:scale-105 mb-4">
                             ▶️ Start Monitoring
                         </button>
+
+                        <!-- Quick Tools -->
+                        <div class="space-y-2">
+                            <button id="setup-wizard-btn" class="w-full bg-primary-600 hover:bg-primary-700 text-white font-medium py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center gap-2">
+                                🧙 Setup Wizard
+                            </button>
+                            <button id="web-test-suite-btn" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-medium py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center gap-2">
+                                🧪 System Tests
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -370,6 +380,35 @@
                         <div>
                             <label class="block text-sm font-medium mb-2">Processing Interval: <span id="interval-value">2000</span>ms</label>
                             <input id="processing-interval" type="range" min="500" max="5000" step="250" value="2000" class="w-full h-2 bg-dark-600 rounded-lg">
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Theme Selection -->
+                <section>
+                    <h3 class="text-lg font-medium mb-4 text-primary-300">Gaming Themes</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium mb-3">Select Theme</label>
+                            <div class="grid grid-cols-2 gap-3">
+                                <button id="theme-default" class="theme-option p-3 rounded-lg border-2 border-primary-600 bg-primary-600/10 text-primary-300 font-medium transition-all hover:bg-primary-600/20" data-theme="">
+                                    <div class="w-4 h-4 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 mx-auto mb-1"></div>
+                                    Default
+                                </button>
+                                <button id="theme-cyberpunk" class="theme-option p-3 rounded-lg border-2 border-dark-600 bg-dark-700 text-dark-300 font-medium transition-all hover:bg-dark-600" data-theme="cyberpunk">
+                                    <div class="w-4 h-4 rounded-full bg-gradient-to-r from-cyan-400 to-purple-500 mx-auto mb-1"></div>
+                                    Cyberpunk
+                                </button>
+                                <button id="theme-retro" class="theme-option p-3 rounded-lg border-2 border-dark-600 bg-dark-700 text-dark-300 font-medium transition-all hover:bg-dark-600" data-theme="retro">
+                                    <div class="w-4 h-4 rounded-full bg-gradient-to-r from-red-400 to-yellow-400 mx-auto mb-1"></div>
+                                    Retro Gaming
+                                </button>
+                                <button id="theme-high-contrast" class="theme-option p-3 rounded-lg border-2 border-dark-600 bg-dark-700 text-dark-300 font-medium transition-all hover:bg-dark-600" data-theme="high-contrast">
+                                    <div class="w-4 h-4 rounded-full bg-gradient-to-r from-white to-yellow-300 mx-auto mb-1"></div>
+                                    High Contrast
+                                </button>
+                            </div>
+                            <p class="text-xs text-dark-400 mt-2">Choose a theme that matches your gaming setup</p>
                         </div>
                     </div>
                 </section>

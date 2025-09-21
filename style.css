@@ -3,24 +3,87 @@
 /* Enhanced Gaming UI Glassmorphism */
 .glass {
     background: rgba(15, 23, 42, 0.75);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: blur(16px) saturate(1.2);
+    -webkit-backdrop-filter: blur(16px) saturate(1.2);
     border: 1px solid rgba(148, 163, 184, 0.12);
     box-shadow:
         0 8px 32px rgba(0, 0, 0, 0.35),
         inset 0 1px 0 rgba(255, 255, 255, 0.1),
-        0 0 20px rgba(59, 130, 246, 0.05);
+        0 0 20px rgba(59, 130, 246, 0.05),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+    position: relative;
+    overflow: hidden;
+}
+
+.glass::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -50%;
+    width: 200%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(59, 130, 246, 0.4), transparent);
+    animation: shimmer 6s linear infinite;
+}
+
+@keyframes shimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
 }
 
 .glass-strong {
     background: rgba(15, 23, 42, 0.85);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
+    backdrop-filter: blur(20px) saturate(1.3) brightness(1.1);
+    -webkit-backdrop-filter: blur(20px) saturate(1.3) brightness(1.1);
     border: 1px solid rgba(148, 163, 184, 0.2);
     box-shadow:
         0 12px 40px rgba(0, 0, 0, 0.4),
         inset 0 1px 0 rgba(255, 255, 255, 0.15),
-        0 0 30px rgba(59, 130, 246, 0.1);
+        0 0 30px rgba(59, 130, 246, 0.1),
+        inset 0 0 20px rgba(59, 130, 246, 0.02);
+    position: relative;
+}
+
+.glass-gaming {
+    background: linear-gradient(135deg, rgba(15, 23, 42, 0.7) 0%, rgba(30, 41, 59, 0.6) 50%, rgba(15, 23, 42, 0.8) 100%);
+    backdrop-filter: blur(24px) saturate(1.4) hue-rotate(5deg);
+    -webkit-backdrop-filter: blur(24px) saturate(1.4) hue-rotate(5deg);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    box-shadow:
+        0 16px 48px rgba(0, 0, 0, 0.5),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2),
+        inset 0 -1px 0 rgba(59, 130, 246, 0.1),
+        0 0 40px rgba(59, 130, 246, 0.08),
+        inset 0 0 30px rgba(139, 92, 246, 0.03);
+    position: relative;
+    overflow: hidden;
+}
+
+.glass-gaming::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(45deg, transparent 30%, rgba(59, 130, 246, 0.05) 50%, transparent 70%);
+    animation: gaming-pulse 4s ease-in-out infinite;
+}
+
+@keyframes gaming-pulse {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 1; }
+}
+
+.glass-cyberpunk {
+    background: linear-gradient(135deg, rgba(6, 182, 212, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
+    backdrop-filter: blur(20px) saturate(1.5) contrast(1.1);
+    -webkit-backdrop-filter: blur(20px) saturate(1.5) contrast(1.1);
+    border: 1px solid;
+    border-image: linear-gradient(45deg, rgba(6, 182, 212, 0.3), rgba(139, 92, 246, 0.3)) 1;
+    box-shadow:
+        0 12px 40px rgba(0, 0, 0, 0.4),
+        inset 0 1px 0 rgba(6, 182, 212, 0.2),
+        0 0 30px rgba(6, 182, 212, 0.1);
+    position: relative;
 }
 
 /* Gaming-Inspired Primary Buttons */
@@ -335,7 +398,9 @@ button:focus {
     .text-gaming-glow,
     .status-dot-gaming::after,
     .btn-primary::before,
-    .btn-gaming::before {
+    .btn-gaming::before,
+    .glass::before,
+    .glass-gaming::after {
         animation: none;
     }
 
@@ -344,4 +409,134 @@ button:focus {
     .btn-gaming {
         transition: none;
     }
+}
+
+/* Advanced Theme System */
+:root {
+    /* Default Theme Variables */
+    --theme-primary: #3b82f6;
+    --theme-secondary: #8b5cf6;
+    --theme-accent: #06b6d4;
+    --theme-bg-primary: rgba(15, 23, 42, 0.75);
+    --theme-bg-secondary: rgba(30, 41, 59, 0.6);
+    --theme-border: rgba(148, 163, 184, 0.12);
+    --theme-glow: rgba(59, 130, 246, 0.05);
+    --theme-text-glow: 0 0 10px rgba(34, 211, 238, 0.6);
+}
+
+/* Cyberpunk Theme */
+[data-theme="cyberpunk"] {
+    --theme-primary: #06b6d4;
+    --theme-secondary: #8b5cf6;
+    --theme-accent: #10b981;
+    --theme-bg-primary: rgba(6, 78, 82, 0.8);
+    --theme-bg-secondary: rgba(75, 0, 130, 0.6);
+    --theme-border: rgba(6, 182, 212, 0.3);
+    --theme-glow: rgba(6, 182, 212, 0.15);
+    --theme-text-glow: 0 0 15px rgba(6, 182, 212, 0.8);
+}
+
+[data-theme="cyberpunk"] .glass {
+    background: var(--theme-bg-primary);
+    border-color: var(--theme-border);
+    box-shadow:
+        0 8px 32px rgba(0, 0, 0, 0.35),
+        inset 0 1px 0 rgba(6, 182, 212, 0.2),
+        0 0 20px var(--theme-glow),
+        inset 0 0 0 1px rgba(6, 182, 212, 0.05);
+}
+
+[data-theme="cyberpunk"] .glass::before {
+    background: linear-gradient(90deg, transparent, rgba(6, 182, 212, 0.6), transparent);
+}
+
+/* Retro Gaming Theme */
+[data-theme="retro"] {
+    --theme-primary: #ff6b6b;
+    --theme-secondary: #feca57;
+    --theme-accent: #48dbfb;
+    --theme-bg-primary: rgba(26, 26, 46, 0.85);
+    --theme-bg-secondary: rgba(46, 26, 46, 0.7);
+    --theme-border: rgba(255, 107, 107, 0.3);
+    --theme-glow: rgba(255, 107, 107, 0.1);
+    --theme-text-glow: 0 0 15px rgba(255, 107, 107, 0.8);
+}
+
+[data-theme="retro"] .glass {
+    background: var(--theme-bg-primary);
+    border-color: var(--theme-border);
+    box-shadow:
+        0 8px 32px rgba(0, 0, 0, 0.4),
+        inset 0 1px 0 rgba(255, 107, 107, 0.2),
+        0 0 25px var(--theme-glow),
+        inset 0 0 0 1px rgba(254, 202, 87, 0.05);
+}
+
+[data-theme="retro"] .glass::before {
+    background: linear-gradient(90deg, transparent, rgba(255, 107, 107, 0.6), rgba(254, 202, 87, 0.4), transparent);
+}
+
+/* High Contrast Theme */
+[data-theme="high-contrast"] {
+    --theme-primary: #ffffff;
+    --theme-secondary: #ffff00;
+    --theme-accent: #00ffff;
+    --theme-bg-primary: rgba(0, 0, 0, 0.95);
+    --theme-bg-secondary: rgba(20, 20, 20, 0.9);
+    --theme-border: rgba(255, 255, 255, 0.8);
+    --theme-glow: rgba(255, 255, 255, 0.2);
+    --theme-text-glow: 0 0 5px rgba(255, 255, 255, 1);
+}
+
+[data-theme="high-contrast"] .glass {
+    background: var(--theme-bg-primary);
+    border: 2px solid var(--theme-border);
+    box-shadow:
+        0 4px 16px rgba(255, 255, 255, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.5);
+    backdrop-filter: none; /* Remove blur for accessibility */
+}
+
+[data-theme="high-contrast"] .glass::before {
+    display: none; /* Remove animations for accessibility */
+}
+
+/* Gaming Aesthetic Enhancements */
+.theme-transition {
+    transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-enhanced {
+    background: var(--theme-bg-primary);
+    border-color: var(--theme-border);
+    box-shadow:
+        0 8px 32px rgba(0, 0, 0, 0.35),
+        inset 0 1px 0 var(--theme-primary, #3b82f6),
+        0 0 20px var(--theme-glow);
+}
+
+.btn-themed {
+    background: linear-gradient(135deg, var(--theme-primary), var(--theme-secondary));
+    box-shadow: 0 4px 15px var(--theme-glow);
+}
+
+.text-themed-glow {
+    text-shadow: var(--theme-text-glow);
+}
+
+/* Advanced Hover Effects */
+.glass:hover {
+    transform: translateY(-2px);
+    box-shadow:
+        0 12px 40px rgba(0, 0, 0, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.15),
+        0 0 30px var(--theme-glow, rgba(59, 130, 246, 0.1));
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-gaming:hover {
+    box-shadow:
+        0 20px 56px rgba(0, 0, 0, 0.6),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25),
+        0 0 50px var(--theme-glow, rgba(59, 130, 246, 0.15));
 }
