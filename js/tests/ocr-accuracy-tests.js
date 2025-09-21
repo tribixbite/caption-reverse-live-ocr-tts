@@ -78,11 +78,24 @@ export class OCRAccuracyTests {
         const startTime = Date.now();
 
         try {
-            // Test Tesseract.js loading
-            if (typeof window !== 'undefined' && window.Tesseract) {
-                console.log('✅ Tesseract.js available globally');
+            // Test Tesseract.js loading (browser environment)
+            if (typeof window !== 'undefined') {
+                if (window.Tesseract) {
+                    console.log('✅ Tesseract.js available globally');
+                } else {
+                    throw new Error('Tesseract.js not available globally');
+                }
             } else {
-                throw new Error('Tesseract.js not available globally');
+                // Node.js environment - skip browser-specific tests
+                return {
+                    name: 'OCR Module Loading',
+                    status: 'skipped',
+                    duration: Date.now() - startTime,
+                    details: {
+                        environment: 'Node.js',
+                        reason: 'Browser-only test skipped in CLI environment'
+                    }
+                };
             }
 
             // Test OCR worker creation

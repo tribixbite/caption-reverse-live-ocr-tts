@@ -351,26 +351,72 @@ class MasterTestPipeline {
     }
 
     async runGestureControlsTests() {
-        const tests = [];
+        try {
+            // Check if running in CLI environment
+            if (typeof window === 'undefined') {
+                return {
+                    testSuiteName: 'Gesture Controls Tests',
+                    category: 'interaction',
+                    priority: 'medium',
+                    description: 'Skipped in CLI environment - requires touch APIs',
+                    tests: [{
+                        name: 'Gesture Controls Tests (CLI)',
+                        status: 'skipped',
+                        error: 'Browser-only test suite - requires touch event APIs',
+                        duration: 0
+                    }],
+                    summary: { total: 1, passed: 0, failed: 0, skipped: 1 }
+                };
+            }
 
-        // Test gesture controls module loading
-        tests.push(await this.testModuleImport('./gesture-controls.js', 'Gesture controls module loads'));
+            const { GestureControlsTests } = await import('./tests/gesture-controls-tests.js');
+            const gestureTests = new GestureControlsTests();
+            const results = await gestureTests.runTests();
 
-        // Test touch device detection
-        tests.push(await this.testTouchDeviceDetection());
-
-        // Test gesture initialization on touch devices
-        if ('ontouchstart' in window) {
-            tests.push(await this.testGestureInitialization());
-        } else {
-            tests.push({ name: 'Gesture initialization (skipped - not touch device)', status: 'skipped' });
+            return {
+                testSuiteName: gestureTests.name,
+                category: gestureTests.category,
+                priority: gestureTests.priority,
+                description: gestureTests.description,
+                tests: results,
+                summary: this.summarizeTests(results)
+            };
+        } catch (error) {
+            return {
+                testSuiteName: 'Gesture Controls Tests',
+                category: 'interaction',
+                priority: 'medium',
+                description: 'Failed to load gesture controls test suite',
+                tests: [{
+                    name: 'Gesture Controls Test Suite Loading',
+                    status: 'failed',
+                    error: `Failed to load test suite: ${error.message}`,
+                    duration: 0
+                }],
+                summary: { total: 1, passed: 0, failed: 1, skipped: 0 }
+            };
         }
-
-        return { tests, summary: this.summarizeTests(tests) };
     }
 
     async runOCRAccuracyTests() {
         try {
+            // Check if running in CLI environment
+            if (typeof window === 'undefined') {
+                return {
+                    testSuiteName: 'OCR Accuracy Tests',
+                    category: 'core',
+                    priority: 'critical',
+                    description: 'Skipped in CLI environment - requires browser APIs',
+                    tests: [{
+                        name: 'OCR Accuracy Tests (CLI)',
+                        status: 'skipped',
+                        error: 'Browser-only test suite - requires Tesseract.js and canvas APIs',
+                        duration: 0
+                    }],
+                    summary: { total: 1, passed: 0, failed: 0, skipped: 1 }
+                };
+            }
+
             const { OCRAccuracyTests } = await import('./tests/ocr-accuracy-tests.js');
             const ocrTests = new OCRAccuracyTests();
             const results = await ocrTests.runTests();
@@ -402,6 +448,23 @@ class MasterTestPipeline {
 
     async runAudioSystemTests() {
         try {
+            // Check if running in CLI environment
+            if (typeof window === 'undefined') {
+                return {
+                    testSuiteName: 'Audio System Tests',
+                    category: 'core',
+                    priority: 'high',
+                    description: 'Skipped in CLI environment - requires Web Audio APIs',
+                    tests: [{
+                        name: 'Audio System Tests (CLI)',
+                        status: 'skipped',
+                        error: 'Browser-only test suite - requires SpeechSynthesis and AudioContext APIs',
+                        duration: 0
+                    }],
+                    summary: { total: 1, passed: 0, failed: 0, skipped: 1 }
+                };
+            }
+
             const { AudioSystemTests } = await import('./tests/audio-system-tests.js');
             const audioTests = new AudioSystemTests();
             const results = await audioTests.runTests();
@@ -433,6 +496,23 @@ class MasterTestPipeline {
 
     async runCameraControlsTests() {
         try {
+            // Check if running in CLI environment
+            if (typeof window === 'undefined') {
+                return {
+                    testSuiteName: 'Camera Controls Tests',
+                    category: 'core',
+                    priority: 'high',
+                    description: 'Skipped in CLI environment - requires MediaDevices APIs',
+                    tests: [{
+                        name: 'Camera Controls Tests (CLI)',
+                        status: 'skipped',
+                        error: 'Browser-only test suite - requires navigator.mediaDevices APIs',
+                        duration: 0
+                    }],
+                    summary: { total: 1, passed: 0, failed: 0, skipped: 1 }
+                };
+            }
+
             const { CameraControlsTests } = await import('./tests/camera-controls-tests.js');
             const cameraTests = new CameraControlsTests();
             const results = await cameraTests.runTests();
@@ -699,6 +779,14 @@ class MasterTestPipeline {
     }
 
     async testHTTPSContext() {
+        if (typeof location === 'undefined') {
+            return {
+                name: 'HTTPS context',
+                status: 'skipped',
+                message: 'CLI environment - no location object'
+            };
+        }
+
         const isHTTPS = location.protocol === 'https:' || location.hostname === 'localhost';
         return {
             name: 'HTTPS context',
@@ -750,5 +838,7 @@ const masterTestPipeline = new MasterTestPipeline();
 // Export for module use
 export { MasterTestPipeline, masterTestPipeline };
 
-// Global access for console debugging
-window.masterTestPipeline = masterTestPipeline;
+// Global access for console debugging (browser only)
+if (typeof window !== 'undefined') {
+    window.masterTestPipeline = masterTestPipeline;
+}
