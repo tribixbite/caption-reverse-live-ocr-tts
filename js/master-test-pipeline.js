@@ -370,56 +370,96 @@ class MasterTestPipeline {
     }
 
     async runOCRAccuracyTests() {
-        const tests = [];
+        try {
+            const { OCRAccuracyTests } = await import('./tests/ocr-accuracy-tests.js');
+            const ocrTests = new OCRAccuracyTests();
+            const results = await ocrTests.runTests();
 
-        // Test OCR module loading
-        tests.push(await this.testModuleImport('./ocr.js', 'OCR module loads'));
-
-        // Test Tesseract.js initialization
-        tests.push(await this.testTesseractInitialization());
-
-        // Test image preprocessing
-        tests.push(await this.testImagePreprocessing());
-
-        // Test OCR with test2.png (if available)
-        tests.push(await this.testOCRWithTestImage());
-
-        return { tests, summary: this.summarizeTests(tests) };
+            return {
+                testSuiteName: ocrTests.name,
+                category: ocrTests.category,
+                priority: ocrTests.priority,
+                description: ocrTests.description,
+                tests: results,
+                summary: this.summarizeTests(results)
+            };
+        } catch (error) {
+            return {
+                testSuiteName: 'OCR Accuracy Tests',
+                category: 'core',
+                priority: 'critical',
+                description: 'Failed to load OCR accuracy test suite',
+                tests: [{
+                    name: 'OCR Accuracy Test Suite Loading',
+                    status: 'failed',
+                    error: `Failed to load test suite: ${error.message}`,
+                    duration: 0
+                }],
+                summary: { total: 1, passed: 0, failed: 1, skipped: 0 }
+            };
+        }
     }
 
     async runAudioSystemTests() {
-        const tests = [];
+        try {
+            const { AudioSystemTests } = await import('./tests/audio-system-tests.js');
+            const audioTests = new AudioSystemTests();
+            const results = await audioTests.runTests();
 
-        // Test audio module loading
-        tests.push(await this.testModuleImport('./speech.js', 'Speech module loads'));
-
-        // Test Web Audio API support
-        tests.push(await this.testWebAudioSupport());
-
-        // Test audio context initialization
-        tests.push(await this.testAudioContextInitialization());
-
-        // Test TTS functionality
-        tests.push(await this.testTTSFunctionality());
-
-        return { tests, summary: this.summarizeTests(tests) };
+            return {
+                testSuiteName: audioTests.name,
+                category: audioTests.category,
+                priority: audioTests.priority,
+                description: audioTests.description,
+                tests: results,
+                summary: this.summarizeTests(results)
+            };
+        } catch (error) {
+            return {
+                testSuiteName: 'Audio System Tests',
+                category: 'core',
+                priority: 'high',
+                description: 'Failed to load audio system test suite',
+                tests: [{
+                    name: 'Audio System Test Suite Loading',
+                    status: 'failed',
+                    error: `Failed to load test suite: ${error.message}`,
+                    duration: 0
+                }],
+                summary: { total: 1, passed: 0, failed: 1, skipped: 0 }
+            };
+        }
     }
 
     async runCameraControlsTests() {
-        const tests = [];
+        try {
+            const { CameraControlsTests } = await import('./tests/camera-controls-tests.js');
+            const cameraTests = new CameraControlsTests();
+            const results = await cameraTests.runTests();
 
-        // Test camera module loading
-        tests.push(await this.testModuleImport('./camera.js', 'Camera module loads'));
-
-        // Test camera elements
-        tests.push(await this.testElementExists('#camera-feed', 'Camera feed element exists'));
-        tests.push(await this.testElementExists('#camera-zoom', 'Camera zoom control exists'));
-        tests.push(await this.testElementExists('#camera-focus', 'Camera focus control exists'));
-
-        // Test crop functionality
-        tests.push(await this.testCropFunctionality());
-
-        return { tests, summary: this.summarizeTests(tests) };
+            return {
+                testSuiteName: cameraTests.name,
+                category: cameraTests.category,
+                priority: cameraTests.priority,
+                description: cameraTests.description,
+                tests: results,
+                summary: this.summarizeTests(results)
+            };
+        } catch (error) {
+            return {
+                testSuiteName: 'Camera Controls Tests',
+                category: 'core',
+                priority: 'high',
+                description: 'Failed to load camera controls test suite',
+                tests: [{
+                    name: 'Camera Controls Test Suite Loading',
+                    status: 'failed',
+                    error: `Failed to load test suite: ${error.message}`,
+                    duration: 0
+                }],
+                summary: { total: 1, passed: 0, failed: 1, skipped: 0 }
+            };
+        }
     }
 
     async runPerformanceTests() {
