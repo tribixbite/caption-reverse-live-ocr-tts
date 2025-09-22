@@ -1,0 +1,280 @@
+{
+  "timestamp": "2025-09-22T02:23:14.070Z",
+  "summary": {
+    "successes": 37,
+    "warnings": 6,
+    "issues": 1
+  },
+  "details": {
+    "successes": [
+      {
+        "level": "success",
+        "message": "Setup Wizard button found in HTML",
+        "details": null,
+        "timestamp": "2025-09-22T02:23:13.865Z"
+      },
+      {
+        "level": "success",
+        "message": "Web Test Suite button found in HTML",
+        "details": null,
+        "timestamp": "2025-09-22T02:23:13.872Z"
+      },
+      {
+        "level": "success",
+        "message": "Start Monitoring button found in HTML",
+        "details": null,
+        "timestamp": "2025-09-22T02:23:13.872Z"
+      },
+      {
+        "level": "success",
+        "message": "Video element for camera found in HTML",
+        "details": null,
+        "timestamp": "2025-09-22T02:23:13.872Z"
+      },
+      {
+        "level": "success",
+        "message": "Canvas element for OCR found in HTML",
+        "details": null,
+        "timestamp": "2025-09-22T02:23:13.872Z"
+      },
+      {
+        "level": "success",
+        "message": "Status indicator found in HTML",
+        "details": null,
+        "timestamp": "2025-09-22T02:23:13.873Z"
+      },
+      {
+        "level": "success",
+        "message": "Tailwind CSS CDN loaded from CDN",
+        "details": null,
+        "timestamp": "2025-09-22T02:23:13.874Z"
+      },
+      {
+        "level": "success",
+        "message": "Tesseract.js CDN loaded from CDN",
+        "details": null,
+        "timestamp": "2025-09-22T02:23:13.874Z"
+      },
+      {
+        "level": "success",
+        "message": "PaddleOCR CDN loaded from CDN",
+        "details": null,
+        "timestamp": "2025-09-22T02:23:13.874Z"
+      },
+      {
+        "level": "success",
+        "message": "event listeners: 4 occurrences found",
+        "details": null,
+        "timestamp": "2025-09-22T02:23:13.875Z"
+      },
+      {
+        "level": "success",
+        "message": "js/app.js exists",
+        "details": null,
+        "timestamp": "2025-09-22T02:23:13.877Z"
+      },
+      {
+        "level": "success",
+        "message": "js/app.js sets up event listeners",
+        "details": null,
+        "timestamp": "2025-09-22T02:23:13.877Z"
+      },
+      {
+        "level": "success",
+        "message": "js/app.js uses modern async/await",
+        "details": null,
+        "timestamp": "2025-09-22T02:23:13.877Z"
+      },
+      {
+        "level": "success",
+        "message": "js/setup-wizard.js exists",
+        "details": null,
+        "timestamp": "2025-09-22T02:23:13.877Z"
+      },
+      {
+        "level": "success",
+        "message": "js/setup-wizard.js sets up event listeners",
+        "details": null,
+        "timestamp": "2025-09-22T02:23:13.879Z"
+      },
+      {
+        "level": "success",
+        "message": "js/setup-wizard.js uses modern async/await",
+        "details": null,
+        "timestamp": "2025-09-22T02:23:13.879Z"
+      },
+      {
+        "level": "success",
+        "message": "js/web-test-suite.js exists",
+        "details": null,
+        "timestamp": "2025-09-22T02:23:13.879Z"
+      },
+      {
+        "level": "success",
+        "message": "js/web-test-suite.js uses modern async/await",
+        "details": null,
+        "timestamp": "2025-09-22T02:23:13.880Z"
+      },
+      {
+        "level": "success",
+        "message": "js/master-test-pipeline.js exists",
+        "details": null,
+        "timestamp": "2025-09-22T02:23:13.880Z"
+      },
+      {
+        "level": "success",
+        "message": "js/master-test-pipeline.js uses modern async/await",
+        "details": null,
+        "timestamp": "2025-09-22T02:23:13.881Z"
+      },
+      {
+        "level": "success",
+        "message": "js/ocr.js exists",
+        "details": null,
+        "timestamp": "2025-09-22T02:23:13.881Z"
+      },
+      {
+        "level": "success",
+        "message": "js/ocr.js uses modern async/await",
+        "details": null,
+        "timestamp": "2025-09-22T02:23:13.882Z"
+      },
+      {
+        "level": "success",
+        "message": "js/camera.js exists",
+        "details": null,
+        "timestamp": "2025-09-22T02:23:13.882Z"
+      },
+      {
+        "level": "success",
+        "message": "js/camera.js sets up event listeners",
+        "details": null,
+        "timestamp": "2025-09-22T02:23:13.883Z"
+      },
+      {
+        "level": "success",
+        "message": "js/camera.js uses modern async/await",
+        "details": null,
+        "timestamp": "2025-09-22T02:23:13.883Z"
+      },
+      {
+        "level": "success",
+        "message": "js/speech.js exists",
+        "details": null,
+        "timestamp": "2025-09-22T02:23:13.883Z"
+      },
+      {
+        "level": "success",
+        "message": "js/speech.js sets up event listeners",
+        "details": null,
+        "timestamp": "2025-09-22T02:23:13.883Z"
+      },
+      {
+        "level": "success",
+        "message": "Test file run-tests.js exists",
+        "details": null,
+        "timestamp": "2025-09-22T02:23:13.888Z"
+      },
+      {
+        "level": "success",
+        "message": "Test file js/master-test-pipeline.js exists",
+        "details": null,
+        "timestamp": "2025-09-22T02:23:13.888Z"
+      },
+      {
+        "level": "success",
+        "message": "Test file js/cli-test-adapter.js exists",
+        "details": null,
+        "timestamp": "2025-09-22T02:23:13.888Z"
+      },
+      {
+        "level": "success",
+        "message": "Test file tests/captn-reverse.spec.ts exists",
+        "details": null,
+        "timestamp": "2025-09-22T02:23:13.890Z"
+      },
+      {
+        "level": "success",
+        "message": "Test file playwright.config.ts exists",
+        "details": null,
+        "timestamp": "2025-09-22T02:23:13.891Z"
+      },
+      {
+        "level": "success",
+        "message": "Test script defined in package.json",
+        "details": null,
+        "timestamp": "2025-09-22T02:23:13.891Z"
+      },
+      {
+        "level": "success",
+        "message": "Build script defined in package.json",
+        "details": null,
+        "timestamp": "2025-09-22T02:23:13.891Z"
+      },
+      {
+        "level": "success",
+        "message": "Playwright test runner available",
+        "details": null,
+        "timestamp": "2025-09-22T02:23:13.891Z"
+      },
+      {
+        "level": "success",
+        "message": "Server is running and accessible",
+        "details": null,
+        "timestamp": "2025-09-22T02:23:14.070Z"
+      },
+      {
+        "level": "success",
+        "message": "Server returns HTML content",
+        "details": null,
+        "timestamp": "2025-09-22T02:23:14.070Z"
+      }
+    ],
+    "warnings": [
+      {
+        "level": "warning",
+        "message": "console.error calls: 1 occurrences found",
+        "details": null,
+        "timestamp": "2025-09-22T02:23:13.875Z"
+      },
+      {
+        "level": "warning",
+        "message": "js/setup-wizard.js uses navigator without safety checks",
+        "details": null,
+        "timestamp": "2025-09-22T02:23:13.879Z"
+      },
+      {
+        "level": "warning",
+        "message": "js/web-test-suite.js uses navigator without safety checks",
+        "details": null,
+        "timestamp": "2025-09-22T02:23:13.880Z"
+      },
+      {
+        "level": "warning",
+        "message": "js/master-test-pipeline.js uses navigator without safety checks",
+        "details": null,
+        "timestamp": "2025-09-22T02:23:13.881Z"
+      },
+      {
+        "level": "warning",
+        "message": "js/ocr.js uses navigator without safety checks",
+        "details": null,
+        "timestamp": "2025-09-22T02:23:13.882Z"
+      },
+      {
+        "level": "warning",
+        "message": "js/camera.js uses navigator without safety checks",
+        "details": null,
+        "timestamp": "2025-09-22T02:23:13.883Z"
+      }
+    ],
+    "issues": [
+      {
+        "level": "error",
+        "message": "Text output element missing from HTML",
+        "details": null,
+        "timestamp": "2025-09-22T02:23:13.873Z"
+      }
+    ]
+  }
+}
