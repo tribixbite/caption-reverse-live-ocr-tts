@@ -83,7 +83,7 @@ function setupEventListeners() {
     }
 
     // Web test suite
-    const webTestsBtn = document.getElementById('run-web-tests');
+    const webTestsBtn = document.getElementById('web-test-suite-btn');
     if (webTestsBtn) {
         webTestsBtn.addEventListener('click', startWebTestSuite);
         console.log('✅ Web test suite button listener added');

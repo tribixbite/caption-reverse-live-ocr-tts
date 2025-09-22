@@ -1,0 +1,291 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Web API Tests</title>
+    <script src="https://unpkg.com/tesseract.js@6.0.0/dist/tesseract.min.js"></script>
+</head>
+<body>
+    <script>
+        console.log('🧪 Starting Web API Tests...');
+
+        const results = {
+            timestamp: new Date().toISOString(),
+            tests: {}
+        };
+
+        // Test 1: MediaDevices API
+        async function testMediaDevices() {
+            console.log('📷 Testing MediaDevices API...');
+
+            try {
+                if (!('mediaDevices' in navigator)) {
+                    return { supported: false, error: 'MediaDevices API not available' };
+                }
+
+                if (!('getUserMedia' in navigator.mediaDevices)) {
+                    return { supported: false, error: 'getUserMedia not available' };
+                }
+
+                // Test device enumeration
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const videoDevices = devices.filter(device => device.kind === 'videoinput');
+
+                // Test constraints support
+                const constraints = { video: { width: 1280, height: 720 } };
+                const supportedConstraints = navigator.mediaDevices.getSupportedConstraints();
+
+                return {
+                    supported: true,
+                    devicesFound: devices.length,
+                    videoDevices: videoDevices.length,
+                    supportedConstraints: Object.keys(supportedConstraints).length,
+                    hasAdvancedConstraints: 'zoom' in supportedConstraints && 'focusMode' in supportedConstraints
+                };
+            } catch (error) {
+                return { supported: false, error: error.message };
+            }
+        }
+
+        // Test 2: Web Speech API
+        function testWebSpeechAPI() {
+            console.log('🔊 Testing Web Speech API...');
+
+            try {
+                if (!('speechSynthesis' in window)) {
+                    return { supported: false, error: 'SpeechSynthesis API not available' };
+                }
+
+                const voices = speechSynthesis.getVoices();
+                const synthesis = speechSynthesis;
+
+                return {
+                    supported: true,
+                    voicesAvailable: voices.length,
+                    defaultVoice: synthesis.getVoices().find(v => v.default)?.name || 'None',
+                    supportsPause: 'pause' in synthesis,
+                    supportsResume: 'resume' in synthesis,
+                    supportsCancel: 'cancel' in synthesis
+                };
+            } catch (error) {
+                return { supported: false, error: error.message };
+            }
+        }
+
+        // Test 3: Canvas API
+        function testCanvasAPI() {
+            console.log('🎨 Testing Canvas API...');
+
+            try {
+                const canvas = document.createElement('canvas');
+                if (!canvas.getContext) {
+                    return { supported: false, error: 'Canvas not supported' };
+                }
+
+                const ctx2d = canvas.getContext('2d');
+                const webgl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+
+                // Test canvas features
+                canvas.width = 640;
+                canvas.height = 480;
+                ctx2d.fillStyle = 'red';
+                ctx2d.fillRect(0, 0, 100, 100);
+
+                const imageData = ctx2d.getImageData(0, 0, 100, 100);
+
+                return {
+                    supported: true,
+                    has2D: !!ctx2d,
+                    hasWebGL: !!webgl,
+                    imageDataSupport: imageData.data.length > 0,
+                    canvasToBlob: 'toBlob' in canvas,
+                    canvasToDataURL: 'toDataURL' in canvas
+                };
+            } catch (error) {
+                return { supported: false, error: error.message };
+            }
+        }
+
+        // Test 4: WebAssembly
+        function testWebAssembly() {
+            console.log('⚡ Testing WebAssembly...');
+
+            try {
+                if (typeof WebAssembly === 'undefined') {
+                    return { supported: false, error: 'WebAssembly not available' };
+                }
+
+                // Test basic WebAssembly features
+                const hasInstantiate = 'instantiate' in WebAssembly;
+                const hasCompile = 'compile' in WebAssembly;
+                const hasModule = 'Module' in WebAssembly;
+                const hasInstance = 'Instance' in WebAssembly;
+
+                return {
+                    supported: true,
+                    hasInstantiate,
+                    hasCompile,
+                    hasModule,
+                    hasInstance,
+                    supportsSIMD: typeof WebAssembly.SIMD !== 'undefined',
+                    supportsThreads: typeof SharedArrayBuffer !== 'undefined'
+                };
+            } catch (error) {
+                return { supported: false, error: error.message };
+            }
+        }
+
+        // Test 5: Local Storage
+        function testLocalStorage() {
+            console.log('💾 Testing Local Storage...');
+
+            try {
+                if (typeof Storage === 'undefined') {
+                    return { supported: false, error: 'Storage API not available' };
+                }
+
+                // Test localStorage functionality
+                const testKey = 'captnreverse_test';
+                const testValue = JSON.stringify({ test: true, timestamp: Date.now() });
+
+                localStorage.setItem(testKey, testValue);
+                const retrieved = localStorage.getItem(testKey);
+                localStorage.removeItem(testKey);
+
+                return {
+                    supported: true,
+                    canWrite: true,
+                    canRead: retrieved === testValue,
+                    canDelete: localStorage.getItem(testKey) === null,
+                    estimatedQuota: navigator.storage ? 'available' : 'unknown'
+                };
+            } catch (error) {
+                return { supported: false, error: error.message };
+            }
+        }
+
+        // Test 6: Tesseract.js
+        function testTesseractJS() {
+            console.log('📖 Testing Tesseract.js...');
+
+            try {
+                if (typeof Tesseract === 'undefined') {
+                    return { supported: false, error: 'Tesseract.js not loaded' };
+                }
+
+                // Check Tesseract.js API
+                const hasCreateWorker = 'createWorker' in Tesseract;
+                const hasRecognize = 'recognize' in Tesseract;
+                const hasCreateScheduler = 'createScheduler' in Tesseract;
+
+                return {
+                    supported: true,
+                    version: Tesseract.version || 'unknown',
+                    hasCreateWorker,
+                    hasRecognize,
+                    hasCreateScheduler,
+                    supportedLanguages: ['eng'], // Default languages
+                    wasmSupport: typeof WebAssembly !== 'undefined'
+                };
+            } catch (error) {
+                return { supported: false, error: error.message };
+            }
+        }
+
+        // Test 7: Permissions API
+        async function testPermissionsAPI() {
+            console.log('🔐 Testing Permissions API...');
+
+            try {
+                if (!('permissions' in navigator)) {
+                    return { supported: false, error: 'Permissions API not available' };
+                }
+
+                // Test camera permission
+                const cameraPermission = await navigator.permissions.query({ name: 'camera' });
+
+                // Test microphone permission (if available)
+                let microphonePermission = null;
+                try {
+                    microphonePermission = await navigator.permissions.query({ name: 'microphone' });
+                } catch (e) {
+                    // Microphone permission might not be supported
+                }
+
+                return {
+                    supported: true,
+                    cameraPermission: cameraPermission.state,
+                    microphonePermission: microphonePermission ? microphonePermission.state : 'not-available',
+                    supportsQuery: 'query' in navigator.permissions
+                };
+            } catch (error) {
+                return { supported: false, error: error.message };
+            }
+        }
+
+        // Test 8: Screen Capture API
+        function testScreenCaptureAPI() {
+            console.log('🖥️ Testing Screen Capture API...');
+
+            try {
+                if (!('mediaDevices' in navigator) || !('getDisplayMedia' in navigator.mediaDevices)) {
+                    return { supported: false, error: 'getDisplayMedia not available' };
+                }
+
+                return {
+                    supported: true,
+                    hasGetDisplayMedia: 'getDisplayMedia' in navigator.mediaDevices,
+                    requiresUserGesture: true // Always requires user gesture
+                };
+            } catch (error) {
+                return { supported: false, error: error.message };
+            }
+        }
+
+        // Run all tests
+        async function runAllAPITests() {
+            console.log('🚀 Running all Web API tests...');
+
+            results.tests.mediaDevices = await testMediaDevices();
+            results.tests.webSpeech = testWebSpeechAPI();
+            results.tests.canvas = testCanvasAPI();
+            results.tests.webAssembly = testWebAssembly();
+            results.tests.localStorage = testLocalStorage();
+            results.tests.tesseractJS = testTesseractJS();
+            results.tests.permissions = await testPermissionsAPI();
+            results.tests.screenCapture = testScreenCaptureAPI();
+
+            // Calculate summary
+            const totalTests = Object.keys(results.tests).length;
+            const passedTests = Object.values(results.tests).filter(test => test.supported).length;
+            const failedTests = totalTests - passedTests;
+
+            results.summary = {
+                total: totalTests,
+                passed: passedTests,
+                failed: failedTests,
+                successRate: Math.round((passedTests / totalTests) * 100)
+            };
+
+            console.log('📊 Test Results Summary:');
+            console.log('========================');
+            Object.entries(results.tests).forEach(([name, result]) => {
+                const status = result.supported ? '✅' : '❌';
+                const details = result.supported ? '' : ` (${result.error})`;
+                console.log(`${status} ${name}: ${result.supported ? 'SUPPORTED' : 'NOT SUPPORTED'}${details}`);
+            });
+
+            console.log(`\n📈 Success Rate: ${results.summary.successRate}% (${results.summary.passed}/${results.summary.total})`);
+
+            // Store results globally
+            window.webAPITestResults = results;
+
+            return results;
+        }
+
+        // Auto-run tests
+        runAllAPITests();
+    </script>
+</body>
+</html>

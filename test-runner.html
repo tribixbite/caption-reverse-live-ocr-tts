@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CaptnReverse Test Runner</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background: #0f172a;
+            color: #e2e8f0;
+            margin: 0;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #1e293b;
+            border-radius: 10px;
+            border-left: 5px solid #3b82f6;
+        }
+        .test-controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            color: white;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background-color 0.3s;
+        }
+        .btn-primary { background: #3b82f6; }
+        .btn-primary:hover { background: #2563eb; }
+        .btn-success { background: #10b981; }
+        .btn-success:hover { background: #059669; }
+        .btn-warning { background: #f59e0b; }
+        .btn-warning:hover { background: #d97706; }
+        .btn-danger { background: #ef4444; }
+        .btn-danger:hover { background: #dc2626; }
+
+        .test-results {
+            background: #1e293b;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .console-output {
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 5px;
+            padding: 15px;
+            height: 400px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+        }
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .status-card {
+            background: #334155;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        .status-number {
+            font-size: 2em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .status-passed { color: #10b981; }
+        .status-failed { color: #ef4444; }
+        .status-warning { color: #f59e0b; }
+        .status-total { color: #3b82f6; }
+
+        .iframe-container {
+            border: 2px solid #334155;
+            border-radius: 10px;
+            height: 600px;
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+        .iframe-container iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+
+        .test-details {
+            background: #1e293b;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        .test-item {
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 5px;
+            border-left: 4px solid;
+        }
+        .test-pass { background: #064e3b; border-color: #10b981; }
+        .test-fail { background: #7f1d1d; border-color: #ef4444; }
+        .test-warning { background: #78350f; border-color: #f59e0b; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🧪 CaptnReverse Comprehensive Test Suite</h1>
+            <p>Automated testing for OCR & TTS application functionality</p>
+        </div>
+
+        <div class="test-controls">
+            <button class="btn btn-primary" onclick="runComprehensiveTests()">🚀 Run All Tests</button>
+            <button class="btn btn-success" onclick="openMainApp()">🔗 Open Main App</button>
+            <button class="btn btn-warning" onclick="testCameraAccess()">📷 Test Camera</button>
+            <button class="btn btn-danger" onclick="clearResults()">🗑️ Clear Results</button>
+        </div>
+
+        <div class="status-grid">
+            <div class="status-card">
+                <div class="status-number status-total" id="total-count">0</div>
+                <div>Total Tests</div>
+            </div>
+            <div class="status-card">
+                <div class="status-number status-passed" id="passed-count">0</div>
+                <div>Passed</div>
+            </div>
+            <div class="status-card">
+                <div class="status-number status-failed" id="failed-count">0</div>
+                <div>Failed</div>
+            </div>
+            <div class="status-card">
+                <div class="status-number status-warning" id="warning-count">0</div>
+                <div>Warnings</div>
+            </div>
+        </div>
+
+        <div class="test-results">
+            <h3>📋 Test Console Output</h3>
+            <div class="console-output" id="console-output">
+                <div style="color: #10b981;">✅ Test runner loaded successfully</div>
+                <div style="color: #3b82f6;">🔧 Ready to run tests...</div>
+                <div style="color: #f59e0b;">⚠️ Click "Run All Tests" to begin comprehensive testing</div>
+            </div>
+        </div>
+
+        <div class="iframe-container">
+            <iframe id="app-iframe" src="http://localhost:3000" title="CaptnReverse Application"></iframe>
+        </div>
+
+        <div class="test-details" id="test-details" style="display: none;">
+            <h3>📊 Detailed Test Results</h3>
+            <div id="test-list"></div>
+        </div>
+    </div>
+
+    <script>
+        let testResults = null;
+        const consoleOutput = document.getElementById('console-output');
+
+        // Console logging capture
+        function addToConsole(message, type = 'info') {
+            const colors = {
+                info: '#e2e8f0',
+                success: '#10b981',
+                warning: '#f59e0b',
+                error: '#ef4444',
+                primary: '#3b82f6'
+            };
+
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.style.color = colors[type] || colors.info;
+            logEntry.textContent = `[${timestamp}] ${message}`;
+            consoleOutput.appendChild(logEntry);
+            consoleOutput.scrollTop = consoleOutput.scrollHeight;
+        }
+
+        // Open main application in new tab
+        function openMainApp() {
+            window.open('http://localhost:3000', '_blank');
+            addToConsole('🔗 Main application opened in new tab', 'primary');
+        }
+
+        // Test camera access
+        async function testCameraAccess() {
+            addToConsole('📷 Testing camera access...', 'warning');
+
+            try {
+                if ('mediaDevices' in navigator && 'getUserMedia' in navigator.mediaDevices) {
+                    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                    addToConsole('✅ Camera access successful', 'success');
+
+                    // Stop the stream immediately
+                    stream.getTracks().forEach(track => track.stop());
+                    addToConsole('🔒 Camera stream stopped', 'info');
+                } else {
+                    addToConsole('❌ getUserMedia not supported', 'error');
+                }
+            } catch (error) {
+                addToConsole(`❌ Camera access failed: ${error.message}`, 'error');
+            }
+        }
+
+        // Clear test results
+        function clearResults() {
+            consoleOutput.innerHTML = '<div style="color: #10b981;">🗑️ Results cleared</div>';
+            document.getElementById('test-details').style.display = 'none';
+
+            // Reset counters
+            document.getElementById('total-count').textContent = '0';
+            document.getElementById('passed-count').textContent = '0';
+            document.getElementById('failed-count').textContent = '0';
+            document.getElementById('warning-count').textContent = '0';
+
+            addToConsole('🔧 Ready to run tests...', 'primary');
+        }
+
+        // Run comprehensive tests
+        async function runComprehensiveTests() {
+            addToConsole('🚀 Starting comprehensive test suite...', 'primary');
+
+            try {
+                const iframe = document.getElementById('app-iframe');
+                const iframeWindow = iframe.contentWindow;
+
+                // Wait for iframe to load
+                if (!iframeWindow || !iframeWindow.document.readyState === 'complete') {
+                    addToConsole('⏳ Waiting for application to load...', 'warning');
+                    iframe.onload = () => runComprehensiveTests();
+                    return;
+                }
+
+                // Inject and run test script in iframe
+                const script = iframeWindow.document.createElement('script');
+                script.type = 'module';
+                script.src = '/comprehensive-test.js';
+                iframeWindow.document.head.appendChild(script);
+
+                // Wait for test completion
+                setTimeout(() => {
+                    if (iframeWindow.comprehensiveTest) {
+                        addToConsole('✅ Test script loaded in application', 'success');
+
+                        // Capture console output from iframe
+                        const originalLog = iframeWindow.console.log;
+                        iframeWindow.console.log = function(...args) {
+                            addToConsole(args.join(' '), 'info');
+                            originalLog.apply(console, args);
+                        };
+
+                        // Run tests
+                        iframeWindow.comprehensiveTest.runAllTests().then(results => {
+                            testResults = results;
+                            updateTestStats(results);
+                            displayDetailedResults(results);
+                            addToConsole('🎉 All tests completed!', 'success');
+                        });
+                    } else {
+                        addToConsole('❌ Failed to load test script', 'error');
+                    }
+                }, 3000);
+
+            } catch (error) {
+                addToConsole(`❌ Test execution error: ${error.message}`, 'error');
+            }
+        }
+
+        // Update test statistics
+        function updateTestStats(results) {
+            document.getElementById('total-count').textContent = results.summary.total;
+            document.getElementById('passed-count').textContent = results.summary.passed;
+            document.getElementById('failed-count').textContent = results.summary.failed;
+            document.getElementById('warning-count').textContent = results.summary.warnings;
+        }
+
+        // Display detailed test results
+        function displayDetailedResults(results) {
+            const testDetails = document.getElementById('test-details');
+            const testList = document.getElementById('test-list');
+
+            testList.innerHTML = '';
+
+            results.tests.forEach(test => {
+                const testItem = document.createElement('div');
+                testItem.className = `test-item test-${test.status.toLowerCase()}`;
+
+                const icon = test.status === 'PASS' ? '✅' : test.status === 'WARNING' ? '⚠️' : '❌';
+                testItem.innerHTML = `
+                    <strong>${icon} ${test.name}</strong><br>
+                    <small>${test.message}</small>
+                `;
+
+                testList.appendChild(testItem);
+            });
+
+            testDetails.style.display = 'block';
+        }
+
+        // Initialize
+        addToConsole('🔧 Test runner initialized', 'success');
+        addToConsole('📱 Application loaded in iframe below', 'info');
+    </script>
+</body>
+</html>

@@ -1,0 +1,41 @@
+{
+  "timestamp": "2025-09-22T02:33:13.760Z",
+  "server": {
+    "running": true,
+    "url": "http://localhost:3000"
+  },
+  "buttons": {
+    "setup-wizard-btn": true,
+    "web-test-suite-btn": true,
+    "request-camera": true
+  },
+  "features": {
+    "hasModules": true,
+    "hasTesseract": true,
+    "hasTailwind": true,
+    "hasDarkTheme": true
+  },
+  "structure": {
+    "hasSetupScreen": true,
+    "hasMainApp": true,
+    "hasCameraElements": true
+  },
+  "javascriptFiles": {
+    "/js/app.js": {
+      "accessible": true,
+      "hasExports": false
+    },
+    "/js/setup-wizard.js": {
+      "accessible": true,
+      "hasExports": true
+    },
+    "/js/web-test-suite.js": {
+      "accessible": true,
+      "hasExports": true
+    },
+    "/js/master-test-pipeline.js": {
+      "accessible": true,
+      "hasExports": true
+    }
+  }
+}

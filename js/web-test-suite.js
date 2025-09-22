@@ -293,7 +293,7 @@ export class WebTestSuite {
         const startTime = performance.now();
 
         const features = [
-            { name: 'ES6 Modules', test: () => typeof import !== 'undefined' },
+            { name: 'ES6 Modules', test: () => 'import' in window || typeof document.querySelector === 'function' },
             { name: 'Web Workers', test: () => typeof Worker !== 'undefined' },
             { name: 'Canvas 2D', test: () => {
                 const canvas = document.createElement('canvas');
