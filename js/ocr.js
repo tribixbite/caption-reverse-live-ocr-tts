@@ -669,6 +669,15 @@ export async function loadPaddleOCR() {
             console.warn(`   Error type: ${error.name}`);
             console.warn(`   Error stack: ${error.stack?.substring(0, 200)}...`);
 
+            // Handle specific browser compatibility issues
+            if (error.message.includes('exports is not defined')) {
+                console.warn(`   🔧 Diagnosis: ${endpoint.name} uses Node.js CommonJS modules, incompatible with browser ES modules`);
+            } else if (error.message.includes('fs') && error.message.includes('does not exist')) {
+                console.warn(`   🔧 Diagnosis: ${endpoint.name} requires Node.js file system access, unavailable in browser`);
+            } else if (error.message.includes('require is not defined')) {
+                console.warn(`   🔧 Diagnosis: ${endpoint.name} uses CommonJS require(), not supported in browser ES modules`);
+            }
+
             // Continue to next CDN if available
             if (i < paddleOCREndpoints.length - 1) {
                 console.log(`🔄 Trying next CDN: ${paddleOCREndpoints[i + 1].name}...`);
@@ -680,9 +689,14 @@ export async function loadPaddleOCR() {
     // All CDN attempts failed
     console.error('❌ All PaddleOCR CDNs failed. Last error:', lastError);
 
-    // Enhanced error reporting
+    // Enhanced error reporting with browser compatibility detection
     let errorCategory = 'Unknown error';
-    if (lastError.message.includes('NetworkError') || lastError.message.includes('fetch')) {
+    if (lastError.message.includes('exports is not defined') ||
+        lastError.message.includes('require is not defined') ||
+        (lastError.message.includes('fs') && lastError.message.includes('does not exist'))) {
+        errorCategory = 'Browser compatibility issue';
+        updateStatus('PaddleOCR unavailable: Browser incompatible', 'bg-yellow-400');
+    } else if (lastError.message.includes('NetworkError') || lastError.message.includes('fetch')) {
         errorCategory = 'Network/CDN error';
         updateStatus('PaddleOCR unavailable: Network error', 'bg-red-400');
     } else if (lastError.message.includes('import') || lastError.message.includes('module')) {
@@ -714,6 +728,7 @@ export async function loadPaddleOCR() {
 
             // Enhanced error information with user guidance
             const troubleshootingTips = {
+                'Browser compatibility issue': 'PaddleOCR requires Node.js environment - using Tesseract.js instead',
                 'Network/CDN error': 'Check internet connection and try refreshing',
                 'Module loading error': 'Clear browser cache and reload',
                 'Initialization error': 'PaddleOCR models failed to download'
