@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Import Validation Test</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background: #0a0a0b;
+            color: #e5e5e5;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .test-result {
+            transition: all 0.3s ease;
+        }
+        .success { background-color: rgba(34, 197, 94, 0.1); border-left: 4px solid rgb(34, 197, 94); }
+        .failed { background-color: rgba(239, 68, 68, 0.1); border-left: 4px solid rgb(239, 68, 68); }
+        .pending { background-color: rgba(234, 179, 8, 0.1); border-left: 4px solid rgb(234, 179, 8); }
+        .console-output {
+            font-family: monospace;
+            font-size: 12px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 6px;
+            padding: 12px;
+            margin-top: 8px;
+            max-height: 200px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body class="p-6">
+    <div class="max-w-4xl mx-auto">
+        <div class="text-center mb-8">
+            <h1 class="text-3xl font-bold bg-gradient-to-r from-cyan-400 to-purple-600 bg-clip-text text-transparent mb-2">
+                🧪 Dynamic Import Validation Test
+            </h1>
+            <p class="text-gray-400">Testing PaddleOCR and Tesseract.js CDN imports with functionality validation</p>
+        </div>
+
+        <!-- Test Controls -->
+        <div class="bg-gray-900 rounded-lg p-6 mb-6 border border-gray-700">
+            <div class="flex gap-4 mb-4">
+                <button id="run-all-tests" class="bg-gradient-to-r from-cyan-500 to-purple-600 hover:from-cyan-600 hover:to-purple-700 text-white px-6 py-3 rounded-lg font-medium transition-all duration-200 transform hover:scale-105">
+                    🚀 Run All Tests
+                </button>
+                <button id="test-tesseract" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-all duration-200">
+                    📖 Test Tesseract.js
+                </button>
+                <button id="test-paddle" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium transition-all duration-200">
+                    🚀 Test PaddleOCR
+                </button>
+                <button id="clear-results" class="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-medium transition-all duration-200">
+                    🗑️ Clear
+                </button>
+            </div>
+            <div class="text-sm text-gray-400">
+                <p>This test validates CDN imports and actual functionality of OCR libraries.</p>
+            </div>
+        </div>
+
+        <!-- Test Results -->
+        <div id="test-results" class="space-y-4">
+            <!-- Results will be populated here -->
+        </div>
+
+        <!-- Summary Stats -->
+        <div id="summary-stats" class="hidden bg-gray-900 rounded-lg p-6 mt-6 border border-gray-700">
+            <h3 class="text-xl font-bold mb-4 text-cyan-400">📊 Test Summary</h3>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div class="bg-gray-800 rounded-lg p-4 text-center">
+                    <div id="total-tests" class="text-2xl font-bold text-white">0</div>
+                    <div class="text-gray-400 text-sm">Total Tests</div>
+                </div>
+                <div class="bg-green-900/30 rounded-lg p-4 text-center">
+                    <div id="passed-tests" class="text-2xl font-bold text-green-400">0</div>
+                    <div class="text-gray-400 text-sm">Passed</div>
+                </div>
+                <div class="bg-red-900/30 rounded-lg p-4 text-center">
+                    <div id="failed-tests" class="text-2xl font-bold text-red-400">0</div>
+                    <div class="text-gray-400 text-sm">Failed</div>
+                </div>
+                <div class="bg-purple-900/30 rounded-lg p-4 text-center">
+                    <div id="success-rate" class="text-2xl font-bold text-purple-400">0%</div>
+                    <div class="text-gray-400 text-sm">Success Rate</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { DynamicImportValidator } from './js/dynamic-import-validator.js';
+
+        let validator = null;
+        const resultsContainer = document.getElementById('test-results');
+        const summaryStats = document.getElementById('summary-stats');
+
+        // Console capture for display
+        const originalLog = console.log;
+        const originalError = console.error;
+        const originalWarn = console.warn;
+        let consoleOutput = [];
+
+        function captureConsole() {
+            console.log = (...args) => {
+                consoleOutput.push({ type: 'log', message: args.join(' '), timestamp: Date.now() });
+                originalLog.apply(console, args);
+            };
+            console.error = (...args) => {
+                consoleOutput.push({ type: 'error', message: args.join(' '), timestamp: Date.now() });
+                originalError.apply(console, args);
+            };
+            console.warn = (...args) => {
+                consoleOutput.push({ type: 'warn', message: args.join(' '), timestamp: Date.now() });
+                originalWarn.apply(console, args);
+            };
+        }
+
+        function restoreConsole() {
+            console.log = originalLog;
+            console.error = originalError;
+            console.warn = originalWarn;
+        }
+
+        function createTestResultElement(result) {
+            const div = document.createElement('div');
+            div.className = `test-result p-4 rounded-lg ${result.success ? 'success' : 'failed'}`;
+
+            const statusIcon = result.success ? '✅' : '❌';
+            const duration = Math.round(result.duration);
+            const cached = result.cached ? ' (cached)' : '';
+
+            div.innerHTML = `
+                <div class="flex justify-between items-start mb-2">
+                    <div class="font-medium">${statusIcon} ${result.name}</div>
+                    <div class="text-sm text-gray-400">${duration}ms${cached}</div>
+                </div>
+                ${result.error ? `<div class="text-red-400 text-sm mb-2">Error: ${result.error}</div>` : ''}
+                ${result.result ? `<div class="text-green-400 text-sm mb-2">✅ Module loaded successfully</div>` : ''}
+                <div class="console-output" style="display: none;">
+                    <div class="text-gray-400 text-xs mb-2">Console Output:</div>
+                    <div id="console-${result.name.replace(/\s+/g, '-').toLowerCase()}" class="text-xs"></div>
+                </div>
+            `;
+
+            // Add click handler to toggle console output
+            div.addEventListener('click', () => {
+                const consoleDiv = div.querySelector('.console-output');
+                consoleDiv.style.display = consoleDiv.style.display === 'none' ? 'block' : 'none';
+
+                if (consoleDiv.style.display === 'block') {
+                    const consoleContent = div.querySelector(`#console-${result.name.replace(/\s+/g, '-').toLowerCase()}`);
+                    const relevantLogs = consoleOutput.filter(log =>
+                        log.message.toLowerCase().includes(result.name.toLowerCase()) ||
+                        log.message.toLowerCase().includes('import') ||
+                        log.message.toLowerCase().includes('load')
+                    ).slice(-10); // Last 10 relevant logs
+
+                    consoleContent.innerHTML = relevantLogs.map(log => {
+                        const color = log.type === 'error' ? 'text-red-400' :
+                                     log.type === 'warn' ? 'text-yellow-400' : 'text-gray-300';
+                        return `<div class="${color}">[${log.type.toUpperCase()}] ${log.message}</div>`;
+                    }).join('');
+                }
+            });
+
+            return div;
+        }
+
+        function updateSummary(results) {
+            const passed = results.filter(r => r.success).length;
+            const failed = results.filter(r => !r.success).length;
+            const total = results.length;
+            const successRate = total > 0 ? Math.round((passed / total) * 100) : 0;
+
+            document.getElementById('total-tests').textContent = total;
+            document.getElementById('passed-tests').textContent = passed;
+            document.getElementById('failed-tests').textContent = failed;
+            document.getElementById('success-rate').textContent = `${successRate}%`;
+
+            summaryStats.classList.remove('hidden');
+        }
+
+        function displayResults(results) {
+            results.forEach(result => {
+                const element = createTestResultElement(result);
+                resultsContainer.appendChild(element);
+            });
+
+            updateSummary(results);
+        }
+
+        function clearResults() {
+            resultsContainer.innerHTML = '';
+            summaryStats.classList.add('hidden');
+            consoleOutput = [];
+        }
+
+        async function runAllTests() {
+            clearResults();
+            captureConsole();
+
+            try {
+                validator = new DynamicImportValidator();
+
+                // Add status indicator
+                const statusDiv = document.createElement('div');
+                statusDiv.className = 'pending p-4 rounded-lg text-center';
+                statusDiv.innerHTML = `
+                    <div class="animate-pulse">
+                        <div class="text-yellow-400 font-medium">🔄 Running comprehensive dynamic import tests...</div>
+                        <div class="text-sm text-gray-400 mt-2">This may take 30-60 seconds</div>
+                    </div>
+                `;
+                resultsContainer.appendChild(statusDiv);
+
+                const results = await validator.runAllTests();
+
+                // Remove status indicator
+                statusDiv.remove();
+
+                displayResults(results);
+
+                // Show recommendations
+                const recommendations = document.createElement('div');
+                recommendations.className = 'bg-blue-900/30 rounded-lg p-4 border border-blue-700';
+                recommendations.innerHTML = `
+                    <h4 class="text-blue-400 font-medium mb-2">💡 Recommendations</h4>
+                    <div class="text-sm text-gray-300">
+                        ${results.filter(r => r.success).length > 0 ?
+                            `<p class="text-green-400 mb-2">✅ Working libraries found: ${results.filter(r => r.success).map(r => r.name).join(', ')}</p>` :
+                            '<p class="text-red-400 mb-2">❌ No working libraries found</p>'
+                        }
+                        ${results.filter(r => !r.success).length > 0 ?
+                            `<p class="text-red-400">❌ Failed libraries: ${results.filter(r => !r.success).map(r => r.name).join(', ')}</p>` : ''
+                        }
+                    </div>
+                `;
+                resultsContainer.appendChild(recommendations);
+
+            } catch (error) {
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'failed p-4 rounded-lg';
+                errorDiv.innerHTML = `
+                    <div class="font-medium">❌ Test Suite Error</div>
+                    <div class="text-red-400 text-sm mt-2">Error: ${error.message}</div>
+                `;
+                resultsContainer.appendChild(errorDiv);
+            } finally {
+                restoreConsole();
+            }
+        }
+
+        async function testTesseract() {
+            clearResults();
+            captureConsole();
+
+            try {
+                validator = new DynamicImportValidator();
+                const results = await validator.testTesseractImports();
+                displayResults(results);
+            } catch (error) {
+                console.error('Tesseract test error:', error);
+            } finally {
+                restoreConsole();
+            }
+        }
+
+        async function testPaddle() {
+            clearResults();
+            captureConsole();
+
+            try {
+                validator = new DynamicImportValidator();
+                const results = await validator.testPaddleOCRImports();
+                displayResults(results);
+            } catch (error) {
+                console.error('PaddleOCR test error:', error);
+            } finally {
+                restoreConsole();
+            }
+        }
+
+        // Event listeners
+        document.getElementById('run-all-tests').addEventListener('click', runAllTests);
+        document.getElementById('test-tesseract').addEventListener('click', testTesseract);
+        document.getElementById('test-paddle').addEventListener('click', testPaddle);
+        document.getElementById('clear-results').addEventListener('click', clearResults);
+
+        // Auto-run on load if requested
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('autorun') === 'true') {
+            setTimeout(runAllTests, 1000);
+        }
+    </script>
+</body>
+</html>
