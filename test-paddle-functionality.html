@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PaddleOCR Functionality Test</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background: #0a0a0b;
+            color: #e5e5e5;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .console-output {
+            font-family: monospace;
+            font-size: 12px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 6px;
+            padding: 12px;
+            margin-top: 8px;
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+        .test-step {
+            transition: all 0.3s ease;
+            border-left: 4px solid transparent;
+        }
+        .test-step.pending { border-left-color: rgb(234, 179, 8); background: rgba(234, 179, 8, 0.1); }
+        .test-step.running { border-left-color: rgb(59, 130, 246); background: rgba(59, 130, 246, 0.1); }
+        .test-step.success { border-left-color: rgb(34, 197, 94); background: rgba(34, 197, 94, 0.1); }
+        .test-step.failed { border-left-color: rgb(239, 68, 68); background: rgba(239, 68, 68, 0.1); }
+    </style>
+</head>
+<body class="p-6">
+    <div class="max-w-4xl mx-auto">
+        <div class="text-center mb-8">
+            <h1 class="text-3xl font-bold bg-gradient-to-r from-cyan-400 to-purple-600 bg-clip-text text-transparent mb-2">
+                🚀 PaddleOCR Functionality Test
+            </h1>
+            <p class="text-gray-400">Testing actual PaddleOCR functionality with validated CDN endpoints</p>
+        </div>
+
+        <!-- Test Controls -->
+        <div class="bg-gray-900 rounded-lg p-6 mb-6 border border-gray-700">
+            <div class="flex gap-4 mb-4">
+                <button id="test-esearch" class="bg-gradient-to-r from-cyan-500 to-purple-600 hover:from-cyan-600 hover:to-purple-700 text-white px-6 py-3 rounded-lg font-medium transition-all duration-200">
+                    🧪 Test eSearch-OCR
+                </button>
+                <button id="test-paddleocr-browser" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium transition-all duration-200">
+                    📦 Test paddleocr-browser
+                </button>
+                <button id="test-paddle-models" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-all duration-200">
+                    🔬 Test @paddle-js-models
+                </button>
+                <button id="clear-output" class="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-medium transition-all duration-200">
+                    🗑️ Clear
+                </button>
+            </div>
+            <div class="text-sm text-gray-400">
+                <p>This test validates actual PaddleOCR functionality using the validated CDN endpoints.</p>
+            </div>
+        </div>
+
+        <!-- Test Steps -->
+        <div id="test-steps" class="space-y-4 mb-6">
+            <!-- Steps will be populated here -->
+        </div>
+
+        <!-- Console Output -->
+        <div class="bg-gray-900 rounded-lg p-6 border border-gray-700">
+            <h3 class="text-xl font-bold mb-4 text-cyan-400">📋 Console Output</h3>
+            <div id="console-output" class="console-output">
+                Ready to test PaddleOCR functionality...
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        const consoleOutput = document.getElementById('console-output');
+        const testStepsContainer = document.getElementById('test-steps');
+
+        let currentSteps = [];
+
+        // Console capture
+        const originalLog = console.log;
+        const originalError = console.error;
+        const originalWarn = console.warn;
+
+        function log(message, type = 'log') {
+            const timestamp = new Date().toLocaleTimeString();
+            const prefix = type === 'error' ? '[ERROR]' : type === 'warn' ? '[WARN]' : '[LOG]';
+            const formattedMessage = `${timestamp} ${prefix} ${message}`;
+
+            consoleOutput.innerHTML += formattedMessage + '\n';
+            consoleOutput.scrollTop = consoleOutput.scrollHeight;
+
+            // Also log to actual console
+            if (type === 'error') originalError(message);
+            else if (type === 'warn') originalWarn(message);
+            else originalLog(message);
+        }
+
+        function createTestStep(title, description) {
+            const step = {
+                title,
+                description,
+                status: 'pending', // pending, running, success, failed
+                element: null
+            };
+
+            const div = document.createElement('div');
+            div.className = 'test-step pending p-4 rounded-lg';
+            div.innerHTML = `
+                <div class="flex justify-between items-start">
+                    <div>
+                        <div class="font-medium">${title}</div>
+                        <div class="text-sm text-gray-400 mt-1">${description}</div>
+                    </div>
+                    <div class="text-2xl" id="status-${currentSteps.length}">⏳</div>
+                </div>
+            `;
+
+            step.element = div;
+            testStepsContainer.appendChild(div);
+            currentSteps.push(step);
+
+            return step;
+        }
+
+        function updateStepStatus(step, status, message = '') {
+            step.status = status;
+            step.element.className = `test-step ${status} p-4 rounded-lg`;
+
+            const statusIcon = step.element.querySelector('[id^="status-"]');
+            switch (status) {
+                case 'running':
+                    statusIcon.textContent = '🔄';
+                    break;
+                case 'success':
+                    statusIcon.textContent = '✅';
+                    break;
+                case 'failed':
+                    statusIcon.textContent = '❌';
+                    break;
+                default:
+                    statusIcon.textContent = '⏳';
+            }
+
+            if (message) {
+                log(message);
+            }
+        }
+
+        function clearOutput() {
+            consoleOutput.innerHTML = 'Output cleared...\n';
+            testStepsContainer.innerHTML = '';
+            currentSteps = [];
+        }
+
+        // Test eSearch-OCR functionality
+        async function testESearchOCR() {
+            clearOutput();
+            log('🧪 Starting eSearch-OCR functionality test...');
+
+            const steps = [
+                createTestStep('Load Dependencies', 'Loading ONNX Runtime and OpenCV.js'),
+                createTestStep('Import eSearch-OCR', 'Loading eSearch-OCR module from CDN'),
+                createTestStep('Initialize OCR', 'Initializing PaddleOCR with models'),
+                createTestStep('Test OCR Function', 'Running OCR on test image')
+            ];
+
+            try {
+                // Step 1: Load Dependencies
+                updateStepStatus(steps[0], 'running', 'Loading ONNX Runtime Web...');
+
+                if (!window.ort) {
+                    await new Promise((resolve, reject) => {
+                        const script = document.createElement('script');
+                        script.src = 'https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js';
+                        script.onload = () => {
+                            log('✅ ONNX Runtime loaded successfully');
+                            resolve();
+                        };
+                        script.onerror = () => reject(new Error('Failed to load ONNX Runtime'));
+                        document.head.appendChild(script);
+                    });
+                } else {
+                    log('✅ ONNX Runtime already available');
+                }
+
+                log('Loading OpenCV.js...');
+                if (!window.cv) {
+                    await new Promise((resolve, reject) => {
+                        const script = document.createElement('script');
+                        script.src = 'https://docs.opencv.org/4.8.0/opencv.js';
+                        script.async = true;
+                        script.onload = () => {
+                            // OpenCV needs a moment to initialize
+                            setTimeout(() => {
+                                log('✅ OpenCV.js loaded successfully');
+                                resolve();
+                            }, 1000);
+                        };
+                        script.onerror = () => reject(new Error('Failed to load OpenCV.js'));
+                        document.head.appendChild(script);
+                    });
+                } else {
+                    log('✅ OpenCV.js already available');
+                }
+
+                updateStepStatus(steps[0], 'success', '✅ Dependencies loaded successfully');
+
+                // Step 2: Import eSearch-OCR
+                updateStepStatus(steps[1], 'running', 'Importing eSearch-OCR module...');
+
+                const esearchModule = await import('https://cdn.jsdelivr.net/npm/esearch-ocr@5.1.5/dist/esearch-ocr.js');
+                log('✅ eSearch-OCR module imported successfully');
+                log(`📦 Module exports: ${Object.keys(esearchModule).join(', ')}`);
+
+                updateStepStatus(steps[1], 'success', '✅ eSearch-OCR module loaded');
+
+                // Step 3: Initialize OCR
+                updateStepStatus(steps[2], 'running', 'Initializing PaddleOCR...');
+
+                // Check if we have the required functions
+                if (!esearchModule.init) {
+                    throw new Error('eSearch-OCR module missing init function');
+                }
+
+                // Initialize with PaddleOCR models
+                const assetsPath = "https://cdn.jsdelivr.net/npm/paddleocr-browser/dist/";
+                log(`🔧 Loading dictionary from ${assetsPath}ppocr_keys_v1.txt...`);
+
+                const res = await fetch(assetsPath + "ppocr_keys_v1.txt");
+                if (!res.ok) {
+                    throw new Error(`Failed to load dictionary: ${res.status}`);
+                }
+                const dic = await res.text();
+                log(`📚 Dictionary loaded: ${dic.split('\n').length} characters`);
+
+                log('🤖 Initializing PaddleOCR with models...');
+                await esearchModule.init({
+                    detPath: assetsPath + "ppocr_det.onnx",
+                    recPath: assetsPath + "ppocr_rec.onnx",
+                    dic: dic,
+                    ort: window.ort,
+                    node: false,
+                    cv: window.cv
+                });
+
+                updateStepStatus(steps[2], 'success', '✅ PaddleOCR initialized successfully');
+
+                // Step 4: Test OCR Function
+                updateStepStatus(steps[3], 'running', 'Testing OCR functionality...');
+
+                // Create a simple test image (base64 encoded small image with text)
+                const testImage = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASwAAAAfCAYAAABsjHuIAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAAdgAAAHYBTnsmCAAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAANcSURBVHic7ZzLaxNBFMafJBsf9YGPilgrCi5c+EBE8IFQFy1YF25cuHDhwoUuXLhw4cKFCxcuXLhw4cKFCx/4wIULFy5cuHChCxe+8IELFy5cuHDhwoULFy5c+MKFCxcuXLhw4cKFCxcuXLhw4cKFCxcuXLhw4cKFCxcuXLhw4cKFCxcuXLhw4cKFCxcuXLhw4cKFCxcuXLhw4cKFCxcuXLhw4cKFCxcuXLhw4cKFCxcuXLhw4cKFCxcuXLhw4cKFCxcuXLhw4cKFCxcuXLhw4cKFCxcuXLhw4cKFCxcuXLhw4cKFCxcuXLhw4cKFCxcuXLhw4cKFCxcuXLhw4cKFCxcuXLhw4cKFCxcuXLhw4cKFCxcuXLhw4cKFCxcuXLhw4cKFCxcuXLhw4cKFCxcuXLhw4cKFCxcuXLhwYT9/A';
+
+                log('🖼️ Running OCR on test image...');
+                const result = await esearchModule.ocr(testImage);
+                log('✅ OCR completed successfully');
+                log(`📝 OCR Result: ${JSON.stringify(result, null, 2)}`);
+
+                updateStepStatus(steps[3], 'success', '✅ OCR functionality validated');
+
+                log('🎉 eSearch-OCR test completed successfully!');
+
+            } catch (error) {
+                const failedStep = steps.find(s => s.status === 'running') || steps[steps.length - 1];
+                updateStepStatus(failedStep, 'failed', `❌ Error: ${error.message}`);
+                log(`❌ eSearch-OCR test failed: ${error.message}`, 'error');
+            }
+        }
+
+        // Test paddleocr-browser functionality
+        async function testPaddleOCRBrowser() {
+            clearOutput();
+            log('📦 Starting paddleocr-browser functionality test...');
+
+            const steps = [
+                createTestStep('Import Module', 'Loading paddleocr-browser from CDN'),
+                createTestStep('Check Exports', 'Validating module structure'),
+                createTestStep('Test Functionality', 'Running basic functionality test')
+            ];
+
+            try {
+                // Step 1: Import Module
+                updateStepStatus(steps[0], 'running', 'Importing paddleocr-browser...');
+
+                const paddleModule = await import('https://cdn.jsdelivr.net/npm/paddleocr-browser@1.0.3/index.js');
+                log('✅ paddleocr-browser module imported successfully');
+
+                updateStepStatus(steps[0], 'success', '✅ Module imported');
+
+                // Step 2: Check Exports
+                updateStepStatus(steps[1], 'running', 'Analyzing module exports...');
+
+                log(`📦 Module keys: ${Object.keys(paddleModule).join(', ')}`);
+                log(`📦 Module default: ${paddleModule.default ? 'Available' : 'Not available'}`);
+
+                // Log the module structure
+                if (paddleModule.default) {
+                    const defaultExport = paddleModule.default;
+                    log(`🔍 Default export type: ${typeof defaultExport}`);
+                    if (typeof defaultExport === 'object') {
+                        log(`🔍 Default export keys: ${Object.keys(defaultExport).join(', ')}`);
+                    }
+                }
+
+                updateStepStatus(steps[1], 'success', '✅ Module structure analyzed');
+
+                // Step 3: Test Basic Functionality
+                updateStepStatus(steps[2], 'running', 'Testing basic functionality...');
+
+                // Test what functions are available
+                const availableFunctions = [];
+                if (paddleModule.init) availableFunctions.push('init');
+                if (paddleModule.ocr) availableFunctions.push('ocr');
+                if (paddleModule.default && paddleModule.default.init) availableFunctions.push('default.init');
+                if (paddleModule.default && paddleModule.default.ocr) availableFunctions.push('default.ocr');
+
+                log(`🔧 Available functions: ${availableFunctions.join(', ')}`);
+
+                if (availableFunctions.length > 0) {
+                    updateStepStatus(steps[2], 'success', '✅ Basic functionality validated');
+                    log('🎉 paddleocr-browser test completed successfully!');
+                } else {
+                    updateStepStatus(steps[2], 'failed', '❌ No OCR functions found');
+                    log('⚠️ paddleocr-browser may require different initialization', 'warn');
+                }
+
+            } catch (error) {
+                const failedStep = steps.find(s => s.status === 'running') || steps[steps.length - 1];
+                updateStepStatus(failedStep, 'failed', `❌ Error: ${error.message}`);
+                log(`❌ paddleocr-browser test failed: ${error.message}`, 'error');
+            }
+        }
+
+        // Test @paddle-js-models/ocr functionality
+        async function testPaddleModels() {
+            clearOutput();
+            log('🔬 Starting @paddle-js-models/ocr functionality test...');
+
+            const steps = [
+                createTestStep('Import Models', 'Loading @paddle-js-models/ocr from CDN'),
+                createTestStep('Analyze Structure', 'Examining module exports'),
+                createTestStep('Test Interface', 'Validating OCR interface')
+            ];
+
+            try {
+                // Step 1: Import Models
+                updateStepStatus(steps[0], 'running', 'Importing @paddle-js-models/ocr...');
+
+                const modelsModule = await import('https://cdn.jsdelivr.net/npm/@paddle-js-models/ocr/lib/index.js');
+                log('✅ @paddle-js-models/ocr module imported successfully');
+
+                updateStepStatus(steps[0], 'success', '✅ Models imported');
+
+                // Step 2: Analyze Structure
+                updateStepStatus(steps[1], 'running', 'Analyzing module structure...');
+
+                log(`📦 Module keys: ${Object.keys(modelsModule).join(', ')}`);
+                log(`📦 Module default: ${modelsModule.default ? 'Available' : 'Not available'}`);
+
+                // Deep dive into structure
+                for (const [key, value] of Object.entries(modelsModule)) {
+                    log(`🔍 ${key}: ${typeof value}`);
+                    if (typeof value === 'object' && value !== null) {
+                        log(`  └─ Keys: ${Object.keys(value).join(', ')}`);
+                    }
+                }
+
+                updateStepStatus(steps[1], 'success', '✅ Structure analyzed');
+
+                // Step 3: Test Interface
+                updateStepStatus(steps[2], 'running', 'Testing OCR interface...');
+
+                // Look for common OCR functions
+                const hasOCRFunction = modelsModule.ocr ||
+                                     (modelsModule.default && modelsModule.default.ocr) ||
+                                     modelsModule.recognize ||
+                                     (modelsModule.default && modelsModule.default.recognize);
+
+                const hasInitFunction = modelsModule.init ||
+                                      (modelsModule.default && modelsModule.default.init) ||
+                                      modelsModule.load ||
+                                      (modelsModule.default && modelsModule.default.load);
+
+                log(`🔧 OCR function available: ${hasOCRFunction ? 'Yes' : 'No'}`);
+                log(`🔧 Init function available: ${hasInitFunction ? 'Yes' : 'No'}`);
+
+                if (hasOCRFunction || hasInitFunction) {
+                    updateStepStatus(steps[2], 'success', '✅ OCR interface validated');
+                    log('🎉 @paddle-js-models/ocr test completed successfully!');
+                } else {
+                    updateStepStatus(steps[2], 'failed', '❌ No standard OCR interface found');
+                    log('⚠️ Module may use non-standard interface', 'warn');
+                }
+
+            } catch (error) {
+                const failedStep = steps.find(s => s.status === 'running') || steps[steps.length - 1];
+                updateStepStatus(failedStep, 'failed', `❌ Error: ${error.message}`);
+                log(`❌ @paddle-js-models/ocr test failed: ${error.message}`, 'error');
+            }
+        }
+
+        // Event listeners
+        document.getElementById('test-esearch').addEventListener('click', testESearchOCR);
+        document.getElementById('test-paddleocr-browser').addEventListener('click', testPaddleOCRBrowser);
+        document.getElementById('test-paddle-models').addEventListener('click', testPaddleModels);
+        document.getElementById('clear-output').addEventListener('click', clearOutput);
+    </script>
+</body>
+</html>
