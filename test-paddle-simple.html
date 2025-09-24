@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PaddleOCR Browser Test</title>
+    <style>
+        body {
+            font-family: monospace;
+            background: #0a0a0b;
+            color: #e5e5e5;
+            padding: 20px;
+        }
+        .console {
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 16px;
+            margin: 20px 0;
+            min-height: 400px;
+            font-size: 14px;
+            white-space: pre-wrap;
+            overflow-y: auto;
+        }
+        button {
+            background: linear-gradient(135deg, #0ea5e9, #8b5cf6);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 8px;
+        }
+        button:hover {
+            opacity: 0.9;
+        }
+    </style>
+</head>
+<body>
+    <h1>🚀 PaddleOCR Browser Functionality Test</h1>
+    <p>Testing actual PaddleOCR functionality in browser environment.</p>
+
+    <div>
+        <button onclick="runPaddleTest()">🧪 Test eSearch-OCR</button>
+        <button onclick="testPaddleBrowserPackage()">📦 Test paddleocr-browser</button>
+        <button onclick="clearConsole()">🗑️ Clear</button>
+    </div>
+
+    <div class="console" id="console-output">
+        Ready to test PaddleOCR functionality...
+    </div>
+
+    <script>
+        const consoleOutput = document.getElementById('console-output');
+
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const prefix = type === 'error' ? '❌' : type === 'success' ? '✅' : type === 'warn' ? '⚠️' : '🔍';
+            const formattedMessage = `${timestamp} ${prefix} ${message}\n`;
+            consoleOutput.innerHTML += formattedMessage;
+            consoleOutput.scrollTop = consoleOutput.scrollHeight;
+            console.log(formattedMessage.trim());
+        }
+
+        function clearConsole() {
+            consoleOutput.innerHTML = 'Console cleared...\n';
+        }
+
+        async function runPaddleTest() {
+            log('🧪 Starting eSearch-OCR test...');
+
+            try {
+                // Step 1: Load ONNX Runtime
+                log('Loading ONNX Runtime Web...');
+                if (!window.ort) {
+                    await new Promise((resolve, reject) => {
+                        const script = document.createElement('script');
+                        script.src = 'https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js';
+                        script.onload = () => {
+                            log('✅ ONNX Runtime loaded', 'success');
+                            resolve();
+                        };
+                        script.onerror = () => {
+                            log('❌ ONNX Runtime failed to load', 'error');
+                            reject(new Error('ONNX Runtime load failed'));
+                        };
+                        document.head.appendChild(script);
+                    });
+                }
+
+                // Step 2: Load OpenCV.js
+                log('Loading OpenCV.js (this may take 10-20 seconds)...');
+                if (!window.cv) {
+                    await new Promise((resolve, reject) => {
+                        const script = document.createElement('script');
+                        script.src = 'https://docs.opencv.org/4.8.0/opencv.js';
+                        script.async = true;
+
+                        const timeout = setTimeout(() => {
+                            log('⚠️ OpenCV.js taking longer than expected...', 'warn');
+                        }, 5000);
+
+                        script.onload = () => {
+                            clearTimeout(timeout);
+                            // OpenCV needs time to initialize
+                            setTimeout(() => {
+                                if (window.cv && window.cv.Mat) {
+                                    log('✅ OpenCV.js loaded and initialized', 'success');
+                                    resolve();
+                                } else {
+                                    log('❌ OpenCV.js loaded but not initialized', 'error');
+                                    reject(new Error('OpenCV initialization failed'));
+                                }
+                            }, 3000);
+                        };
+                        script.onerror = () => {
+                            clearTimeout(timeout);
+                            log('❌ OpenCV.js failed to load', 'error');
+                            reject(new Error('OpenCV load failed'));
+                        };
+                        document.head.appendChild(script);
+                    });
+                }
+
+                // Step 3: Load eSearch-OCR
+                log('Loading eSearch-OCR module...');
+                const esearchModule = await import('https://cdn.jsdelivr.net/npm/esearch-ocr@5.1.5/dist/esearch-ocr.js');
+                log(`✅ eSearch-OCR loaded, exports: ${Object.keys(esearchModule).join(', ')}`, 'success');
+
+                // Step 4: Test initialization
+                if (esearchModule.init && typeof esearchModule.init === 'function') {
+                    log('Initializing PaddleOCR...');
+
+                    // Load dictionary
+                    const assetsPath = "https://cdn.jsdelivr.net/npm/paddleocr-browser/dist/";
+                    log(`Loading dictionary from ${assetsPath}ppocr_keys_v1.txt...`);
+
+                    const dictResponse = await fetch(assetsPath + "ppocr_keys_v1.txt");
+                    if (dictResponse.ok) {
+                        const dic = await dictResponse.text();
+                        log(`✅ Dictionary loaded: ${dic.split('\\n').length} characters`, 'success');
+
+                        // Initialize with models
+                        log('Initializing OCR models (this may take time)...');
+                        try {
+                            await esearchModule.init({
+                                detPath: assetsPath + "ppocr_det.onnx",
+                                recPath: assetsPath + "ppocr_rec.onnx",
+                                dic: dic,
+                                ort: window.ort,
+                                node: false,
+                                cv: window.cv
+                            });
+
+                            log('✅ PaddleOCR initialized successfully!', 'success');
+
+                            // Step 5: Test OCR functionality
+                            log('Testing OCR with simple image...');
+
+                            // Create a simple test image with text
+                            const canvas = document.createElement('canvas');
+                            const ctx = canvas.getContext('2d');
+                            canvas.width = 300;
+                            canvas.height = 100;
+
+                            // White background
+                            ctx.fillStyle = 'white';
+                            ctx.fillRect(0, 0, 300, 100);
+
+                            // Black text
+                            ctx.fillStyle = 'black';
+                            ctx.font = '20px Arial';
+                            ctx.fillText('TEST OCR', 100, 50);
+
+                            const testImageData = canvas.toDataURL();
+
+                            const result = await esearchModule.ocr(testImageData);
+                            log(`✅ OCR completed! Result: ${JSON.stringify(result, null, 2)}`, 'success');
+
+                        } catch (initError) {
+                            log(`❌ PaddleOCR initialization failed: ${initError.message}`, 'error');
+                        }
+                    } else {
+                        log(`❌ Failed to load dictionary: ${dictResponse.status}`, 'error');
+                    }
+                } else {
+                    log('❌ eSearch-OCR module missing init function', 'error');
+                }
+
+            } catch (error) {
+                log(`❌ Test failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function testPaddleBrowserPackage() {
+            log('📦 Testing paddleocr-browser package...');
+
+            try {
+                const paddleModule = await import('https://cdn.jsdelivr.net/npm/paddleocr-browser@1.0.3/index.js');
+                log(`✅ paddleocr-browser loaded, exports: ${Object.keys(paddleModule).join(', ')}`, 'success');
+
+                if (paddleModule.default) {
+                    const defaultExport = paddleModule.default;
+                    log(`Module structure: ${typeof defaultExport}`, 'success');
+                    if (typeof defaultExport === 'object') {
+                        log(`Available methods: ${Object.keys(defaultExport).join(', ')}`, 'success');
+                    }
+                }
+
+            } catch (error) {
+                log(`❌ paddleocr-browser test failed: ${error.message}`, 'error');
+            }
+        }
+    </script>
+</body>
+</html>

@@ -252,14 +252,80 @@ function setupSettingsEventListeners() {
         }
     });
 
-    // Release camera button
-    document.getElementById('release-camera').addEventListener('click', () => {
+    // Release camera button - Enhanced reset functionality
+    document.getElementById('release-camera').addEventListener('click', async () => {
+        console.log('🛑 Releasing camera resources and resetting app...');
+
+        // Cleanup camera resources
         cleanupCamera();
+
+        // Clear application state
+        AppState.stream = null;
+        AppState.mediaStreamTrack = null;
+        AppState.isMonitoring = false;
+        AppState.cameraRequestInProgress = false;
+
+        // Clear any cached OCR data
+        if (AppState.lastProcessedText) {
+            AppState.lastProcessedText = '';
+        }
+
         // Reset UI to setup screen
         document.getElementById('main-app').classList.add('hidden');
         document.getElementById('setup-screen').classList.remove('hidden');
-        document.getElementById('settings-modal').classList.add('hidden');
-        updateStatus('Camera released', 'bg-yellow-400');
+
+        // Close settings modal if open
+        const settingsModal = document.getElementById('settings-modal');
+        if (settingsModal) {
+            settingsModal.classList.add('hidden');
+        }
+
+        // Reset the setup screen to original state
+        const setupCard = document.querySelector('#setup-screen .glass');
+        if (setupCard) {
+            setupCard.innerHTML = `
+                <div class="w-20 h-20 bg-primary-600/20 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <svg class="w-10 h-10 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                    </svg>
+                </div>
+
+                <h2 class="text-2xl font-semibold mb-4">Welcome to CaptnReverse</h2>
+                <p class="text-dark-300 mb-6">
+                    This app uses your camera to read text aloud using advanced OCR technology.
+                    We'll need camera permission to get started.
+                </p>
+
+                <button id="request-camera" class="btn-primary w-full text-lg py-4 mb-4 rounded-xl font-medium">
+                    🚀 Enable Camera Access
+                </button>
+
+                <button onclick="location.reload()" class="w-full bg-dark-600 hover:bg-dark-500 text-white py-3 px-6 rounded-xl transition-colors text-sm mb-4">
+                    🔄 Reset Permissions
+                </button>
+
+                <div class="text-sm text-dark-400 space-y-1">
+                    <p>✅ No downloads required - runs entirely in your browser</p>
+                    <p>🔒 Your data never leaves your device</p>
+                    <p>🚀 Uses cutting-edge Web APIs for optimal performance</p>
+                </div>
+            `;
+
+            // Re-attach camera request event listener
+            const newRequestCameraBtn = setupCard.querySelector('#request-camera');
+            if (newRequestCameraBtn) {
+                newRequestCameraBtn.addEventListener('click', requestCamera);
+            }
+        }
+
+        // Clear video element
+        const video = document.getElementById('camera-feed');
+        if (video) {
+            video.srcObject = null;
+        }
+
+        updateStatus('Camera resources released - app reset', 'bg-green-400');
+        console.log('✅ Camera resources released and app reset successfully');
     });
 
     // Auto-calibration button

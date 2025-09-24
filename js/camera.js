@@ -6,15 +6,15 @@
 import { AppState } from './config.js';
 import { updateStatus } from './ui.js';
 
-// Check if the browser supports camera access
-export function checkSecureContext() {
+// Check if the browser supports camera access and auto-init if permissions granted
+export async function checkSecureContext() {
     console.log('🔒 Checking secure context...', {
         isSecureContext: window.isSecureContext,
         protocol: window.location.protocol,
         hostname: window.location.hostname,
         userAgent: navigator.userAgent.substring(0, 100)
     });
-    
+
     if (!window.isSecureContext) {
         console.warn('⚠️ Not in secure context - camera may not work');
         const setupCard = document.querySelector('#setup-screen .glass');
@@ -39,7 +39,7 @@ export function checkSecureContext() {
         }
     } else {
         console.log('✅ Secure context confirmed - camera should work');
-        
+
         // Additional permission checks
         if (!navigator.mediaDevices) {
             console.error('❌ navigator.mediaDevices not available');
@@ -47,6 +47,51 @@ export function checkSecureContext() {
             console.error('❌ getUserMedia not available');
         } else {
             console.log('✅ getUserMedia API available');
+
+            // Check if camera permissions are already granted and auto-initialize
+            await checkAndAutoInitCamera();
+        }
+    }
+}
+
+// Check if camera permissions are already granted and automatically initialize
+export async function checkAndAutoInitCamera() {
+    if (navigator.permissions) {
+        try {
+            const permission = await navigator.permissions.query({ name: 'camera' });
+            console.log('📋 Initial camera permission status:', permission.state);
+
+            if (permission.state === 'granted') {
+                console.log('🚀 Camera permissions already granted, auto-initializing...');
+                updateStatus('Auto-initializing camera...', 'bg-blue-400 animate-pulse');
+
+                // Show "Skip to Camera" option in the setup screen
+                const setupCard = document.querySelector('#setup-screen .glass');
+                if (setupCard) {
+                    // Modify the existing setup card to show auto-init option
+                    const existingContent = setupCard.innerHTML;
+                    const requestCameraBtn = setupCard.querySelector('#request-camera');
+
+                    if (requestCameraBtn) {
+                        requestCameraBtn.innerHTML = '🚀 Use Camera (Auto-Detected)';
+                        requestCameraBtn.classList.add('animate-pulse');
+
+                        // Add skip to camera button
+                        const skipButton = document.createElement('button');
+                        skipButton.className = 'w-full bg-green-600 hover:bg-green-700 text-white py-3 px-6 rounded-xl transition-colors text-sm mb-4 font-medium';
+                        skipButton.innerHTML = '⚡ Skip Setup - Go Directly to Camera';
+                        skipButton.addEventListener('click', async () => {
+                            await requestCamera();
+                        });
+
+                        requestCameraBtn.insertAdjacentElement('afterend', skipButton);
+
+                        console.log('✅ Added auto-init options to setup screen');
+                    }
+                }
+            }
+        } catch (permError) {
+            console.log('⚠️ Could not query camera permission for auto-init:', permError.message);
         }
     }
 }
@@ -63,12 +108,12 @@ export async function requestCamera() {
         AppState.cameraRequestInProgress = true;
         console.log('📸 Requesting camera permission...');
         updateStatus('Requesting camera...', 'bg-yellow-400 animate-pulse');
-        
+
         // Check if getUserMedia is available
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
             throw new Error('getUserMedia not supported in this browser');
         }
-        
+
         // Cleanup any existing stream first
         if (AppState.stream) {
             console.log('🧹 Cleaning up existing camera stream...');
@@ -76,12 +121,23 @@ export async function requestCamera() {
             AppState.stream = null;
             AppState.mediaStreamTrack = null;
         }
-        
-        // Check permission first (if supported)
+
+        // Check permission first (if supported) and handle granted permissions
         if (navigator.permissions) {
             try {
                 const permission = await navigator.permissions.query({name: 'camera'});
                 console.log('📋 Camera permission status:', permission.state);
+
+                if (permission.state === 'granted') {
+                    console.log('✅ Camera permission already granted, proceeding directly...');
+                    updateStatus('Permission already granted...', 'bg-green-400');
+                } else if (permission.state === 'denied') {
+                    console.log('❌ Camera permission denied by user');
+                    AppState.cameraRequestInProgress = false;
+                    updateStatus('Camera permission denied', 'bg-red-400');
+                    showCameraPermissionDeniedUI();
+                    return;
+                }
             } catch (permError) {
                 console.log('⚠️ Could not query camera permission:', permError.message);
             }
@@ -483,4 +539,33 @@ export function cleanupCamera() {
     });
 
     console.log('✅ Camera resources and hotkey system cleaned up');
+}
+
+// Show camera permission denied UI
+function showCameraPermissionDeniedUI() {
+    const setupCard = document.querySelector('#setup-screen .glass');
+    if (setupCard) {
+        setupCard.innerHTML = `
+            <div class="w-20 h-20 bg-red-600/20 rounded-full flex items-center justify-center mx-auto mb-6">
+                <svg class="w-10 h-10 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                </svg>
+            </div>
+            <h2 class="text-2xl font-semibold mb-4 text-red-300">Camera Permission Denied</h2>
+            <p class="text-dark-300 mb-6">Camera access was previously denied. To use CaptnReverse, please:</p>
+            <div class="text-left text-sm text-dark-300 mb-6 space-y-2">
+                <p>• Click the camera icon in your address bar</p>
+                <p>• Select "Always allow" for camera access</p>
+                <p>• Or go to browser Settings → Privacy & Security → Camera</p>
+                <p>• Refresh this page after granting permission</p>
+            </div>
+            <button onclick="location.reload()" class="btn-primary w-full text-lg py-4 mb-4">
+                🔄 Refresh Page
+            </button>
+            <div class="text-xs text-dark-400 mt-4">
+                <p>🔒 Your privacy is protected - all processing stays local</p>
+                <p>📱 Camera is required for text recognition</p>
+            </div>
+        `;
+    }
 }
