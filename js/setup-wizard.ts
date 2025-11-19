@@ -5,11 +5,24 @@
 
 import { AppState, CONFIG } from './config.js';
 import { updateStatus } from './ui.js';
-import { runAutoCalibration } from './ocr.js';
+import { runAutoCalibration, initOCR, isOCRReady } from './ocr.js';
 import { processFrame } from './ocr.js';
 
+// Wizard state interface
+interface WizardState {
+    step: number;
+    totalSteps: number;
+    results: {
+        cameraTest?: { success: boolean; stream?: MediaStream; error?: string };
+        textType?: string;
+        optimization?: { success: boolean; error?: string };
+    };
+    currentTest: string | null;
+    userFeedback: string[];
+}
+
 // Setup wizard state
-let wizardState = {
+let wizardState: WizardState = {
     step: 0,
     totalSteps: 5,
     results: {},
@@ -18,7 +31,7 @@ let wizardState = {
 };
 
 // Initialize and show setup wizard
-export async function startSetupWizard() {
+export async function startSetupWizard(): Promise<void> {
     console.log('🧙‍♂️ Starting OCR Setup Wizard...');
 
     // Reset wizard state
@@ -35,7 +48,7 @@ export async function startSetupWizard() {
 }
 
 // Show wizard modal
-function showWizardModal() {
+function showWizardModal(): void {
     // Remove existing wizard if any
     const existingWizard = document.getElementById('setup-wizard-modal');
     if (existingWizard) {
@@ -104,22 +117,26 @@ function showWizardModal() {
 }
 
 // Navigate to next wizard step
-export async function nextWizardStep() {
+export async function nextWizardStep(): Promise<void> {
     wizardState.step++;
 
     // Update progress
     const progressPercent = Math.round((wizardState.step / wizardState.totalSteps) * 100);
-    document.getElementById('wizard-current-step').textContent = wizardState.step;
-    document.getElementById('wizard-progress-percent').textContent = `${progressPercent}%`;
-    document.getElementById('wizard-progress-bar').style.width = `${progressPercent}%`;
+    const currentStepEl = document.getElementById('wizard-current-step');
+    const progressPercentEl = document.getElementById('wizard-progress-percent');
+    const progressBar = document.getElementById('wizard-progress-bar');
+
+    if (currentStepEl) currentStepEl.textContent = String(wizardState.step);
+    if (progressPercentEl) progressPercentEl.textContent = `${progressPercent}%`;
+    if (progressBar) progressBar.style.width = `${progressPercent}%`;
 
     // Update navigation buttons
-    const prevBtn = document.getElementById('wizard-prev-btn');
-    const nextBtn = document.getElementById('wizard-next-btn');
+    const prevBtn = document.getElementById('wizard-prev-btn') as HTMLButtonElement | null;
+    const nextBtn = document.getElementById('wizard-next-btn') as HTMLButtonElement | null;
 
-    prevBtn.disabled = wizardState.step <= 1;
+    if (prevBtn) prevBtn.disabled = wizardState.step <= 1;
 
-    if (wizardState.step >= wizardState.totalSteps) {
+    if (nextBtn && wizardState.step >= wizardState.totalSteps) {
         nextBtn.textContent = 'Complete Setup';
         nextBtn.onclick = completeSetupWizard;
     }
@@ -129,7 +146,7 @@ export async function nextWizardStep() {
 }
 
 // Navigate to previous wizard step
-export function previousWizardStep() {
+export function previousWizardStep(): void {
     if (wizardState.step > 1) {
         wizardState.step--;
         nextWizardStep();
@@ -137,10 +154,11 @@ export function previousWizardStep() {
 }
 
 // Load content for current wizard step
-async function loadWizardStep(step) {
+async function loadWizardStep(step: number): Promise<void> {
     const contentDiv = document.getElementById('wizard-step-content');
+    if (!contentDiv) return;
 
-    switch(step) {
+    switch (step) {
         case 1:
             contentDiv.innerHTML = getWelcomeStepContent();
             break;
@@ -162,7 +180,7 @@ async function loadWizardStep(step) {
 }
 
 // Step 1: Welcome and introduction
-function getWelcomeStepContent() {
+function getWelcomeStepContent(): string {
     return `
         <div class="text-center space-y-6">
             <div class="w-24 h-24 bg-primary-600/20 rounded-full flex items-center justify-center mx-auto">
@@ -221,7 +239,7 @@ function getWelcomeStepContent() {
 }
 
 // Step 2: Camera test
-function getCameraTestStepContent() {
+function getCameraTestStepContent(): string {
     return `
         <div class="space-y-6">
             <div class="text-center">
@@ -255,7 +273,7 @@ function getCameraTestStepContent() {
 }
 
 // Initialize camera test
-async function initializeCameraTest() {
+async function initializeCameraTest(): Promise<void> {
     try {
         const video = document.createElement('video');
         video.autoplay = true;
@@ -267,19 +285,23 @@ async function initializeCameraTest() {
         video.srcObject = stream;
 
         const testContainer = document.getElementById('wizard-camera-test');
-        testContainer.innerHTML = '';
-        testContainer.appendChild(video);
+        if (testContainer) {
+            testContainer.innerHTML = '';
+            testContainer.appendChild(video);
+        }
 
         // Update status
         const statusDiv = document.getElementById('wizard-camera-status');
-        statusDiv.innerHTML = `
-            <div class="inline-flex items-center gap-2 px-4 py-2 bg-green-500/20 text-green-300 rounded-lg">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                </svg>
-                Camera working perfectly!
-            </div>
-        `;
+        if (statusDiv) {
+            statusDiv.innerHTML = `
+                <div class="inline-flex items-center gap-2 px-4 py-2 bg-green-500/20 text-green-300 rounded-lg">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                    Camera working perfectly!
+                </div>
+            `;
+        }
 
         wizardState.results.cameraTest = { success: true, stream };
 
@@ -287,21 +309,23 @@ async function initializeCameraTest() {
         console.error('Camera test failed:', error);
 
         const statusDiv = document.getElementById('wizard-camera-status');
-        statusDiv.innerHTML = `
-            <div class="inline-flex items-center gap-2 px-4 py-2 bg-red-500/20 text-red-300 rounded-lg">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                </svg>
-                Camera access failed: ${error.message}
-            </div>
-        `;
+        if (statusDiv) {
+            statusDiv.innerHTML = `
+                <div class="inline-flex items-center gap-2 px-4 py-2 bg-red-500/20 text-red-300 rounded-lg">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                    Camera access failed: ${(error as Error).message}
+                </div>
+            `;
+        }
 
-        wizardState.results.cameraTest = { success: false, error: error.message };
+        wizardState.results.cameraTest = { success: false, error: (error as Error).message };
     }
 }
 
 // Step 3: Text type selection
-function getTextTypeStepContent() {
+function getTextTypeStepContent(): string {
     return `
         <div class="space-y-6">
             <div class="text-center">
@@ -371,36 +395,11 @@ function getTextTypeStepContent() {
                 </label>
             </div>
         </div>
-
-        <script>
-            // Handle text type selection
-            document.querySelectorAll('.wizard-text-type-option').forEach(option => {
-                option.addEventListener('click', function() {
-                    // Remove previous selection
-                    document.querySelectorAll('.wizard-text-type-option').forEach(opt => {
-                        opt.classList.remove('border-primary-500');
-                        opt.classList.add('border-transparent');
-                    });
-
-                    // Add selection to current option
-                    this.classList.remove('border-transparent');
-                    this.classList.add('border-primary-500');
-
-                    // Check the radio button
-                    this.querySelector('input[type="radio"]').checked = true;
-
-                    // Store selection
-                    if (window.wizardState) {
-                        window.wizardState.results.textType = this.querySelector('input[type="radio"]').value;
-                    }
-                });
-            });
-        </script>
     `;
 }
 
 // Step 4: Optimization tests
-function getOptimizationStepContent() {
+function getOptimizationStepContent(): string {
     return `
         <div class="space-y-6">
             <div class="text-center">
@@ -435,28 +434,60 @@ function getOptimizationStepContent() {
 }
 
 // Run optimization tests
-async function runOptimizationTests() {
+async function runOptimizationTests(): Promise<void> {
     const statusDiv = document.getElementById('optimization-status');
     const progressBar = document.getElementById('optimization-progress-bar');
     const progressPercent = document.getElementById('optimization-percent');
     const resultsDiv = document.getElementById('optimization-results');
 
     try {
-        statusDiv.innerHTML = `
-            <div class="inline-flex items-center gap-2 px-4 py-2 bg-blue-500/20 text-blue-300 rounded-lg">
-                <svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-                </svg>
-                Running auto-calibration...
-            </div>
-        `;
+        // FIXED: First ensure OCR is initialized
+        if (!isOCRReady()) {
+            if (statusDiv) {
+                statusDiv.innerHTML = `
+                    <div class="inline-flex items-center gap-2 px-4 py-2 bg-yellow-500/20 text-yellow-300 rounded-lg">
+                        <svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                        </svg>
+                        Initializing OCR system...
+                    </div>
+                `;
+            }
+
+            console.log('🤖 OCR not initialized, initializing now...');
+            await initOCR();
+            console.log('✅ OCR initialization complete');
+        }
+
+        // Check if camera stream is available from the wizard test
+        if (!AppState.stream && wizardState.results.cameraTest?.stream) {
+            // Use the stream from camera test
+            AppState.stream = wizardState.results.cameraTest.stream;
+
+            // Also set up the video element
+            const cameraFeed = document.getElementById('camera-feed') as HTMLVideoElement | null;
+            if (cameraFeed) {
+                cameraFeed.srcObject = wizardState.results.cameraTest.stream;
+            }
+        }
+
+        if (statusDiv) {
+            statusDiv.innerHTML = `
+                <div class="inline-flex items-center gap-2 px-4 py-2 bg-blue-500/20 text-blue-300 rounded-lg">
+                    <svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                    </svg>
+                    Running auto-calibration...
+                </div>
+            `;
+        }
 
         // Simulate progress during auto-calibration
         let progress = 0;
         const progressInterval = setInterval(() => {
             progress += 10;
-            progressBar.style.width = `${progress}%`;
-            progressPercent.textContent = `${progress}%`;
+            if (progressBar) progressBar.style.width = `${progress}%`;
+            if (progressPercent) progressPercent.textContent = `${progress}%`;
 
             if (progress >= 100) {
                 clearInterval(progressInterval);
@@ -467,60 +498,66 @@ async function runOptimizationTests() {
         await runAutoCalibration();
 
         clearInterval(progressInterval);
-        progressBar.style.width = '100%';
-        progressPercent.textContent = '100%';
+        if (progressBar) progressBar.style.width = '100%';
+        if (progressPercent) progressPercent.textContent = '100%';
 
-        statusDiv.innerHTML = `
-            <div class="inline-flex items-center gap-2 px-4 py-2 bg-green-500/20 text-green-300 rounded-lg">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                </svg>
-                Optimization completed successfully!
-            </div>
-        `;
+        if (statusDiv) {
+            statusDiv.innerHTML = `
+                <div class="inline-flex items-center gap-2 px-4 py-2 bg-green-500/20 text-green-300 rounded-lg">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                    Optimization completed successfully!
+                </div>
+            `;
+        }
 
-        resultsDiv.innerHTML = `
-            <div class="glass rounded-xl p-4">
-                <h4 class="font-medium text-white mb-3">Optimization Results</h4>
-                <div class="space-y-2 text-sm">
-                    <div class="flex justify-between">
-                        <span class="text-dark-300">Configurations tested:</span>
-                        <span class="text-white">9</span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="text-dark-300">Best configuration:</span>
-                        <span class="text-green-400">Auto-selected</span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="text-dark-300">Optimization status:</span>
-                        <span class="text-green-400">✅ Complete</span>
+        if (resultsDiv) {
+            resultsDiv.innerHTML = `
+                <div class="glass rounded-xl p-4">
+                    <h4 class="font-medium text-white mb-3">Optimization Results</h4>
+                    <div class="space-y-2 text-sm">
+                        <div class="flex justify-between">
+                            <span class="text-dark-300">Configurations tested:</span>
+                            <span class="text-white">9</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-dark-300">Best configuration:</span>
+                            <span class="text-green-400">Auto-selected</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-dark-300">Optimization status:</span>
+                            <span class="text-green-400">✅ Complete</span>
+                        </div>
                     </div>
                 </div>
-            </div>
-        `;
+            `;
+        }
 
         wizardState.results.optimization = { success: true };
 
     } catch (error) {
         console.error('Optimization failed:', error);
 
-        statusDiv.innerHTML = `
-            <div class="inline-flex items-center gap-2 px-4 py-2 bg-red-500/20 text-red-300 rounded-lg">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                </svg>
-                Optimization failed: ${error.message}
-            </div>
-        `;
+        if (statusDiv) {
+            statusDiv.innerHTML = `
+                <div class="inline-flex items-center gap-2 px-4 py-2 bg-red-500/20 text-red-300 rounded-lg">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                    Optimization failed: ${(error as Error).message}
+                </div>
+            `;
+        }
 
-        wizardState.results.optimization = { success: false, error: error.message };
+        wizardState.results.optimization = { success: false, error: (error as Error).message };
     }
 }
 
 // Step 5: Completion
-function getCompletionStepContent() {
-    const cameraSuccess = wizardState.results.cameraTest?.success;
-    const optimizationSuccess = wizardState.results.optimization?.success;
+function getCompletionStepContent(): string {
+    const cameraSuccess = wizardState.results.cameraTest?.success ?? false;
+    const optimizationSuccess = wizardState.results.optimization?.success ?? false;
 
     return `
         <div class="text-center space-y-6">
@@ -571,7 +608,7 @@ function getCompletionStepContent() {
 }
 
 // Complete setup wizard
-export function completeSetupWizard() {
+export function completeSetupWizard(): void {
     // Save wizard results
     localStorage.setItem('setupWizardResults', JSON.stringify({
         timestamp: Date.now(),
@@ -589,7 +626,7 @@ export function completeSetupWizard() {
 }
 
 // Close setup wizard
-export function closeSetupWizard() {
+export function closeSetupWizard(): void {
     const wizard = document.getElementById('setup-wizard-modal');
     if (wizard) {
         wizard.remove();
@@ -597,8 +634,33 @@ export function closeSetupWizard() {
 }
 
 // Make functions globally accessible
-window.nextWizardStep = nextWizardStep;
-window.previousWizardStep = previousWizardStep;
-window.completeSetupWizard = completeSetupWizard;
-window.closeSetupWizard = closeSetupWizard;
-window.wizardState = wizardState;
+(window as any).nextWizardStep = nextWizardStep;
+(window as any).previousWizardStep = previousWizardStep;
+(window as any).completeSetupWizard = completeSetupWizard;
+(window as any).closeSetupWizard = closeSetupWizard;
+(window as any).wizardState = wizardState;
+
+// Initialize text type selection handling
+function initTextTypeSelection(): void {
+    // This is called after the step content is loaded
+    document.querySelectorAll('.wizard-text-type-option').forEach(option => {
+        option.addEventListener('click', function(this: HTMLElement) {
+            // Remove previous selection
+            document.querySelectorAll('.wizard-text-type-option').forEach(opt => {
+                opt.classList.remove('border-primary-500');
+                opt.classList.add('border-transparent');
+            });
+
+            // Add selection to current option
+            this.classList.remove('border-transparent');
+            this.classList.add('border-primary-500');
+
+            // Check the radio button
+            const radio = this.querySelector('input[type="radio"]') as HTMLInputElement | null;
+            if (radio) {
+                radio.checked = true;
+                wizardState.results.textType = radio.value;
+            }
+        });
+    });
+}

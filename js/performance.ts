@@ -5,9 +5,82 @@
 
 import { AppState } from './config.js';
 import { updateStatus } from './ui.js';
+import { PerformanceMetrics, PerformanceReport } from './types.js';
+
+// Declare Tesseract as a global (loaded via CDN)
+declare const Tesseract: {
+    createWorker: (lang: string) => Promise<{
+        recognize: (image: HTMLCanvasElement) => Promise<{
+            data: {
+                text: string;
+                confidence: number;
+            };
+        }>;
+        terminate: () => Promise<void>;
+    }>;
+};
+
+// Extend Performance interface for non-standard memory API (Chrome only)
+interface PerformanceMemory {
+    usedJSHeapSize: number;
+    totalJSHeapSize: number;
+    jsHeapSizeLimit: number;
+}
+
+interface PerformanceWithMemory extends Performance {
+    memory?: PerformanceMemory;
+}
+
+// Performance data storage interface
+interface PerformanceData {
+    ocrProcessingTimes: number[];
+    preprocessingTimes: number[];
+    memoryUsage: number[];
+    accuracyScores: number[];
+    totalProcessingTime: number;
+    processedFrames: number;
+    successfulRecognitions: number;
+    averageConfidence: number;
+    startTime: number;
+}
+
+// Performance configuration interface
+interface PerformanceConfig {
+    maxDataPoints: number;
+    memoryCheckInterval: number;
+    performanceReportInterval: number;
+}
+
+// Benchmark result interface
+interface BenchmarkIterationResult {
+    iteration: number;
+    processingTime: number;
+    confidence: number;
+    textLength: number;
+    text: string;
+}
+
+// Benchmark summary interface
+interface BenchmarkResult {
+    iterations: number;
+    averageTime: string;
+    averageConfidence: string;
+    minTime: string;
+    maxTime: string;
+    results: BenchmarkIterationResult[];
+}
+
+// Exported performance data interface
+interface ExportedPerformanceData {
+    timestamp: number;
+    config: PerformanceConfig;
+    data: PerformanceData;
+    metrics: PerformanceMetrics;
+    report: PerformanceReport;
+}
 
 // Performance metrics storage
-const performanceData = {
+const performanceData: PerformanceData = {
     ocrProcessingTimes: [],
     preprocessingTimes: [],
     memoryUsage: [],
@@ -20,18 +93,18 @@ const performanceData = {
 };
 
 // Performance monitoring configuration
-const PERFORMANCE_CONFIG = {
+const PERFORMANCE_CONFIG: PerformanceConfig = {
     maxDataPoints: 100, // Keep last 100 measurements
     memoryCheckInterval: 5000, // Check memory every 5 seconds
     performanceReportInterval: 30000 // Generate report every 30 seconds
 };
 
-let performanceInterval = null;
-let memoryInterval = null;
+let performanceInterval: ReturnType<typeof setInterval> | null = null;
+let memoryInterval: ReturnType<typeof setInterval> | null = null;
 
 // Initialize performance monitoring
-export function initPerformanceMonitoring() {
-    console.log('📊 Initializing performance monitoring...');
+export function initPerformanceMonitoring(): void {
+    console.log('Initializing performance monitoring...');
 
     // Reset performance data
     performanceData.startTime = Date.now();
@@ -44,11 +117,16 @@ export function initPerformanceMonitoring() {
     // Start periodic performance reporting
     startPerformanceReporting();
 
-    console.log('✅ Performance monitoring initialized');
+    console.log('Performance monitoring initialized');
 }
 
 // Record OCR processing performance
-export function recordOCRPerformance(processingTime, preprocessingTime, confidence, success) {
+export function recordOCRPerformance(
+    processingTime: number,
+    preprocessingTime: number | null | undefined,
+    confidence: number | null | undefined,
+    success: boolean
+): void {
     // Record timing data
     addDataPoint(performanceData.ocrProcessingTimes, processingTime);
     if (preprocessingTime) {
@@ -61,7 +139,9 @@ export function recordOCRPerformance(processingTime, preprocessingTime, confiden
 
     if (success) {
         performanceData.successfulRecognitions++;
-        addDataPoint(performanceData.accuracyScores, confidence);
+        if (confidence != null) {
+            addDataPoint(performanceData.accuracyScores, confidence);
+        }
 
         // Update average confidence
         const validScores = performanceData.accuracyScores.filter(score => score > 0);
@@ -70,11 +150,12 @@ export function recordOCRPerformance(processingTime, preprocessingTime, confiden
             : 0;
     }
 
-    console.log(`⚡ Performance: ${processingTime}ms OCR, ${confidence?.toFixed(1) || 'N/A'}% confidence`);
+    const confidenceDisplay = confidence != null ? confidence.toFixed(1) : 'N/A';
+    console.log(`Performance: ${processingTime}ms OCR, ${confidenceDisplay}% confidence`);
 }
 
 // Add data point with size limit
-function addDataPoint(array, value) {
+function addDataPoint(array: number[], value: number): void {
     array.push(value);
     if (array.length > PERFORMANCE_CONFIG.maxDataPoints) {
         array.shift(); // Remove oldest data point
@@ -82,23 +163,31 @@ function addDataPoint(array, value) {
 }
 
 // Start memory usage monitoring
-function startMemoryMonitoring() {
+function startMemoryMonitoring(): void {
     if (memoryInterval) clearInterval(memoryInterval);
 
     memoryInterval = setInterval(() => {
-        if ('memory' in performance) {
-            const memoryInfo = performance.memory;
+        const perf = performance as PerformanceWithMemory;
+        if (perf.memory) {
+            const memoryInfo = perf.memory;
             const memoryUsageMB = memoryInfo.usedJSHeapSize / 1024 / 1024;
 
             addDataPoint(performanceData.memoryUsage, memoryUsageMB);
 
             // Check for memory leaks (significant increase in memory usage)
             if (performanceData.memoryUsage.length > 10) {
-                const recent = performanceData.memoryUsage.slice(-5).reduce((a, b) => a + b, 0) / 5;
-                const older = performanceData.memoryUsage.slice(-15, -10).reduce((a, b) => a + b, 0) / 5;
+                const recentSlice = performanceData.memoryUsage.slice(-5);
+                const olderSlice = performanceData.memoryUsage.slice(-15, -10);
 
-                if (recent > older * 1.5) { // 50% increase
-                    console.warn('⚠️ Potential memory leak detected!');
+                const recent = recentSlice.length > 0
+                    ? recentSlice.reduce((a, b) => a + b, 0) / recentSlice.length
+                    : 0;
+                const older = olderSlice.length > 0
+                    ? olderSlice.reduce((a, b) => a + b, 0) / olderSlice.length
+                    : 0;
+
+                if (older > 0 && recent > older * 1.5) { // 50% increase
+                    console.warn('Potential memory leak detected!');
                     console.warn(`Recent average: ${recent.toFixed(1)}MB, Previous: ${older.toFixed(1)}MB`);
                 }
             }
@@ -107,7 +196,7 @@ function startMemoryMonitoring() {
 }
 
 // Start periodic performance reporting
-function startPerformanceReporting() {
+function startPerformanceReporting(): void {
     if (performanceInterval) clearInterval(performanceInterval);
 
     performanceInterval = setInterval(() => {
@@ -116,11 +205,11 @@ function startPerformanceReporting() {
 }
 
 // Generate comprehensive performance report
-export function generatePerformanceReport() {
+export function generatePerformanceReport(): PerformanceReport {
     const uptime = Date.now() - performanceData.startTime;
     const uptimeMinutes = uptime / 60000;
 
-    const report = {
+    const report: PerformanceReport = {
         uptime: `${uptimeMinutes.toFixed(1)} minutes`,
         processedFrames: performanceData.processedFrames,
         successfulRecognitions: performanceData.successfulRecognitions,
@@ -145,7 +234,7 @@ export function generatePerformanceReport() {
         performance: getPerformanceLevel()
     };
 
-    console.log('📊 Performance Report:', report);
+    console.log('Performance Report:', report);
 
     // Update status bar with key metrics
     const statusText = `${report.successRate} success, ${report.averageOCRTime} avg, ${report.currentMemoryUsage}`;
@@ -162,19 +251,19 @@ export function generatePerformanceReport() {
 }
 
 // Calculate average of array values
-function calculateAverage(array) {
+function calculateAverage(array: number[]): number {
     if (array.length === 0) return 0;
     return array.reduce((sum, value) => sum + value, 0) / array.length;
 }
 
 // Get latest memory usage
-function getLatestMemoryUsage() {
+function getLatestMemoryUsage(): number {
     if (performanceData.memoryUsage.length === 0) return 0;
     return performanceData.memoryUsage[performanceData.memoryUsage.length - 1];
 }
 
 // Determine overall performance level
-function getPerformanceLevel() {
+function getPerformanceLevel(): 'Excellent' | 'Good' | 'Fair' | 'Poor' {
     const avgTime = calculateAverage(performanceData.ocrProcessingTimes);
     const avgConfidence = performanceData.averageConfidence;
     const memoryUsage = getLatestMemoryUsage();
@@ -191,7 +280,7 @@ function getPerformanceLevel() {
 }
 
 // Get status class for performance level
-function getPerformanceStatusClass() {
+function getPerformanceStatusClass(): string {
     const level = getPerformanceLevel();
     switch (level) {
         case 'Excellent': return 'bg-green-400';
@@ -203,7 +292,7 @@ function getPerformanceStatusClass() {
 }
 
 // Get real-time performance metrics
-export function getPerformanceMetrics() {
+export function getPerformanceMetrics(): PerformanceMetrics {
     return {
         averageOCRTime: calculateAverage(performanceData.ocrProcessingTimes),
         averagePreprocessingTime: calculateAverage(performanceData.preprocessingTimes),
@@ -218,7 +307,7 @@ export function getPerformanceMetrics() {
 }
 
 // Export performance data for debugging
-export function exportPerformanceData() {
+export function exportPerformanceData(): ExportedPerformanceData {
     return {
         timestamp: Date.now(),
         config: PERFORMANCE_CONFIG,
@@ -229,8 +318,8 @@ export function exportPerformanceData() {
 }
 
 // Reset performance monitoring
-export function resetPerformanceMonitoring() {
-    console.log('🔄 Resetting performance monitoring...');
+export function resetPerformanceMonitoring(): void {
+    console.log('Resetting performance monitoring...');
 
     // Clear data arrays
     performanceData.ocrProcessingTimes.length = 0;
@@ -245,12 +334,12 @@ export function resetPerformanceMonitoring() {
     performanceData.averageConfidence = 0;
     performanceData.startTime = Date.now();
 
-    console.log('✅ Performance monitoring reset');
+    console.log('Performance monitoring reset');
 }
 
 // Stop performance monitoring
-export function stopPerformanceMonitoring() {
-    console.log('🛑 Stopping performance monitoring...');
+export function stopPerformanceMonitoring(): void {
+    console.log('Stopping performance monitoring...');
 
     if (performanceInterval) {
         clearInterval(performanceInterval);
@@ -262,22 +351,25 @@ export function stopPerformanceMonitoring() {
         memoryInterval = null;
     }
 
-    console.log('✅ Performance monitoring stopped');
+    console.log('Performance monitoring stopped');
 }
 
 // Benchmark OCR processing with test image
-export async function benchmarkOCRPerformance(testImagePath, iterations = 5) {
-    console.log(`🏁 Starting OCR performance benchmark with ${iterations} iterations...`);
+export async function benchmarkOCRPerformance(
+    testImagePath: string,
+    iterations: number = 5
+): Promise<BenchmarkResult> {
+    console.log(`Starting OCR performance benchmark with ${iterations} iterations...`);
 
-    const results = [];
+    const results: BenchmarkIterationResult[] = [];
 
     try {
         const img = new Image();
         img.crossOrigin = 'anonymous';
 
-        const imageLoadPromise = new Promise((resolve, reject) => {
-            img.onload = resolve;
-            img.onerror = reject;
+        const imageLoadPromise = new Promise<void>((resolve, reject) => {
+            img.onload = () => resolve();
+            img.onerror = () => reject(new Error('Failed to load test image'));
         });
 
         img.src = testImagePath;
@@ -286,6 +378,9 @@ export async function benchmarkOCRPerformance(testImagePath, iterations = 5) {
         // Create canvas for testing
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
+        if (!ctx) {
+            throw new Error('Failed to get canvas context');
+        }
         canvas.width = img.width;
         canvas.height = img.height;
         ctx.drawImage(img, 0, 0);
@@ -318,7 +413,7 @@ export async function benchmarkOCRPerformance(testImagePath, iterations = 5) {
         const minTime = Math.min(...results.map(r => r.processingTime));
         const maxTime = Math.max(...results.map(r => r.processingTime));
 
-        const benchmark = {
+        const benchmark: BenchmarkResult = {
             iterations,
             averageTime: avgTime.toFixed(0) + 'ms',
             averageConfidence: avgConfidence.toFixed(1) + '%',
@@ -327,7 +422,7 @@ export async function benchmarkOCRPerformance(testImagePath, iterations = 5) {
             results
         };
 
-        console.log('🏆 Benchmark Results:', benchmark);
+        console.log('Benchmark Results:', benchmark);
 
         // Store benchmark results
         localStorage.setItem('ocrBenchmark', JSON.stringify({
@@ -339,7 +434,7 @@ export async function benchmarkOCRPerformance(testImagePath, iterations = 5) {
         return benchmark;
 
     } catch (error) {
-        console.error('❌ Benchmark failed:', error);
+        console.error('Benchmark failed:', error);
         throw error;
     }
 }

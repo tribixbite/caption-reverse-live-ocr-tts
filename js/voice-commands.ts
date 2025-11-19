@@ -5,9 +5,98 @@
 
 import { AppState } from './config.js';
 import { updateStatus } from './ui.js';
+import { VoiceCommand, PerformanceReport } from './types.js';
+
+// Declare SpeechRecognition types for browsers that support it
+interface SpeechRecognitionEvent extends Event {
+    results: SpeechRecognitionResultList;
+    resultIndex: number;
+}
+
+interface SpeechRecognitionResultList {
+    length: number;
+    item(index: number): SpeechRecognitionResult;
+    [index: number]: SpeechRecognitionResult;
+}
+
+interface SpeechRecognitionResult {
+    length: number;
+    item(index: number): SpeechRecognitionAlternative;
+    [index: number]: SpeechRecognitionAlternative;
+    isFinal: boolean;
+}
+
+interface SpeechRecognitionAlternative {
+    transcript: string;
+    confidence: number;
+}
+
+interface SpeechRecognitionErrorEvent extends Event {
+    error: string;
+    message?: string;
+}
+
+interface SpeechRecognition extends EventTarget {
+    continuous: boolean;
+    interimResults: boolean;
+    lang: string;
+    maxAlternatives: number;
+    onstart: ((this: SpeechRecognition, ev: Event) => void) | null;
+    onresult: ((this: SpeechRecognition, ev: SpeechRecognitionEvent) => void) | null;
+    onerror: ((this: SpeechRecognition, ev: SpeechRecognitionErrorEvent) => void) | null;
+    onend: ((this: SpeechRecognition, ev: Event) => void) | null;
+    start(): void;
+    stop(): void;
+    abort(): void;
+}
+
+interface SpeechRecognitionConstructor {
+    new(): SpeechRecognition;
+}
+
+// Extend Window interface for Speech Recognition
+declare global {
+    interface Window {
+        SpeechRecognition?: SpeechRecognitionConstructor;
+        webkitSpeechRecognition?: SpeechRecognitionConstructor;
+    }
+}
+
+// Command history entry interface
+interface CommandHistoryEntry {
+    text: string;
+    timestamp: number;
+}
+
+// Voice state interface
+interface VoiceState {
+    recognition: SpeechRecognition | null;
+    isListening: boolean;
+    isEnabled: boolean;
+    confidence: number;
+    lastCommand: string;
+    commandHistory: CommandHistoryEntry[];
+    listeningTimeout: ReturnType<typeof setTimeout> | null;
+}
+
+// Voice command statistics interface
+interface VoiceCommandStats {
+    enabled: boolean;
+    isListening: boolean;
+    commandsExecuted: number;
+    lastCommand: string;
+    confidence: string;
+    availableCommands: number;
+}
+
+// Notification type
+type NotificationType = 'info' | 'success' | 'warning' | 'error';
+
+// Voice UI status type
+type VoiceUIStatus = 'disabled' | 'ready' | 'listening' | 'processing' | 'error';
 
 // Voice command configuration
-const VOICE_COMMANDS = {
+const VOICE_COMMANDS: Record<string, VoiceCommand> = {
     // OCR Functions
     'read text': { action: 'readNow', description: 'Read text from current view' },
     'read now': { action: 'readNow', description: 'Read text immediately' },
@@ -64,7 +153,7 @@ const VOICE_COMMANDS = {
 };
 
 // Voice recognition state
-let voiceState = {
+let voiceState: VoiceState = {
     recognition: null,
     isListening: false,
     isEnabled: false,
@@ -75,19 +164,23 @@ let voiceState = {
 };
 
 // Initialize voice command system
-export function initVoiceCommands() {
-    console.log('🎤 Initializing Voice Command System...');
+export function initVoiceCommands(): boolean {
+    console.log('Initializing Voice Command System...');
 
     // Check for Web Speech API support
     if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-        console.warn('⚠️ Web Speech API not supported in this browser');
+        console.warn('Web Speech API not supported in this browser');
         showVoiceNotification('Voice commands not supported in this browser', 'warning');
         return false;
     }
 
     // Initialize speech recognition
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    voiceState.recognition = new SpeechRecognition();
+    const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognitionClass) {
+        return false;
+    }
+
+    voiceState.recognition = new SpeechRecognitionClass();
 
     // Configure recognition settings
     voiceState.recognition.continuous = false; // Stop after each command
@@ -101,16 +194,18 @@ export function initVoiceCommands() {
     // Create voice command UI
     createVoiceCommandUI();
 
-    console.log('✅ Voice Command System initialized');
-    console.log(`📢 Available commands: ${Object.keys(VOICE_COMMANDS).length}`);
+    console.log('Voice Command System initialized');
+    console.log(`Available commands: ${Object.keys(VOICE_COMMANDS).length}`);
 
     return true;
 }
 
 // Setup speech recognition event listeners
-function setupVoiceRecognitionListeners() {
-    voiceState.recognition.onstart = () => {
-        console.log('🎤 Voice recognition started - listening for commands...');
+function setupVoiceRecognitionListeners(): void {
+    if (!voiceState.recognition) return;
+
+    voiceState.recognition.onstart = (): void => {
+        console.log('Voice recognition started - listening for commands...');
         voiceState.isListening = true;
         updateVoiceUI('listening');
         showVoiceNotification('Listening for voice commands...', 'info');
@@ -121,25 +216,27 @@ function setupVoiceRecognitionListeners() {
         }, 10000);
     };
 
-    voiceState.recognition.onresult = (event) => {
-        clearTimeout(voiceState.listeningTimeout);
+    voiceState.recognition.onresult = (event: SpeechRecognitionEvent): void => {
+        if (voiceState.listeningTimeout) {
+            clearTimeout(voiceState.listeningTimeout);
+        }
 
         const result = event.results[0];
         const command = result[0].transcript.toLowerCase().trim();
         const confidence = result[0].confidence || 0;
 
-        console.log(`🎤 Voice command received: "${command}" (confidence: ${Math.round(confidence * 100)}%)`);
+        console.log(`Voice command received: "${command}" (confidence: ${Math.round(confidence * 100)}%)`);
 
         if (confidence >= voiceState.confidence) {
             executeVoiceCommand(command);
         } else {
-            console.log(`🎤 Command confidence too low: ${Math.round(confidence * 100)}% < ${Math.round(voiceState.confidence * 100)}%`);
+            console.log(`Command confidence too low: ${Math.round(confidence * 100)}% < ${Math.round(voiceState.confidence * 100)}%`);
             showVoiceNotification(`Command unclear (${Math.round(confidence * 100)}%) - try again`, 'warning');
         }
     };
 
-    voiceState.recognition.onerror = (event) => {
-        console.error('🎤 Voice recognition error:', event.error);
+    voiceState.recognition.onerror = (event: SpeechRecognitionErrorEvent): void => {
+        console.error('Voice recognition error:', event.error);
         voiceState.isListening = false;
         updateVoiceUI('error');
 
@@ -162,16 +259,18 @@ function setupVoiceRecognitionListeners() {
         showVoiceNotification(errorMessage, 'error');
     };
 
-    voiceState.recognition.onend = () => {
-        console.log('🎤 Voice recognition ended');
+    voiceState.recognition.onend = (): void => {
+        console.log('Voice recognition ended');
         voiceState.isListening = false;
         updateVoiceUI('ready');
-        clearTimeout(voiceState.listeningTimeout);
+        if (voiceState.listeningTimeout) {
+            clearTimeout(voiceState.listeningTimeout);
+        }
     };
 }
 
 // Execute voice command
-async function executeVoiceCommand(commandText) {
+async function executeVoiceCommand(commandText: string): Promise<void> {
     voiceState.lastCommand = commandText;
     voiceState.commandHistory.unshift({ text: commandText, timestamp: Date.now() });
 
@@ -184,7 +283,7 @@ async function executeVoiceCommand(commandText) {
     const matchedCommand = findBestCommandMatch(commandText);
 
     if (matchedCommand) {
-        console.log(`🎮 Executing voice command: ${matchedCommand.action}`);
+        console.log(`Executing voice command: ${matchedCommand.action}`);
         showVoiceNotification(`Executing: ${matchedCommand.description}`, 'success');
 
         try {
@@ -194,20 +293,20 @@ async function executeVoiceCommand(commandText) {
             showVoiceNotification('Command execution failed', 'error');
         }
     } else {
-        console.log(`🎤 No matching command found for: "${commandText}"`);
+        console.log(`No matching command found for: "${commandText}"`);
         showVoiceNotification(`Unknown command: "${commandText}"`, 'warning');
 
         // Suggest similar commands
         const suggestions = findSimilarCommands(commandText);
         if (suggestions.length > 0) {
-            console.log('💡 Similar commands:', suggestions);
+            console.log('Similar commands:', suggestions);
             showVoiceNotification(`Did you mean: ${suggestions[0]}?`, 'info');
         }
     }
 }
 
 // Find best matching command
-function findBestCommandMatch(commandText) {
+function findBestCommandMatch(commandText: string): VoiceCommand | null {
     const normalizedCommand = commandText.toLowerCase().trim();
 
     // Exact match first
@@ -216,7 +315,7 @@ function findBestCommandMatch(commandText) {
     }
 
     // Partial match with highest similarity
-    let bestMatch = null;
+    let bestMatch: VoiceCommand | null = null;
     let bestScore = 0;
 
     for (const [command, config] of Object.entries(VOICE_COMMANDS)) {
@@ -231,7 +330,7 @@ function findBestCommandMatch(commandText) {
 }
 
 // Calculate text similarity
-function calculateSimilarity(text1, text2) {
+function calculateSimilarity(text1: string, text2: string): number {
     // Simple word-based similarity
     const words1 = text1.split(' ');
     const words2 = text2.split(' ');
@@ -241,7 +340,7 @@ function calculateSimilarity(text1, text2) {
 }
 
 // Find similar commands for suggestions
-function findSimilarCommands(commandText, limit = 3) {
+function findSimilarCommands(commandText: string, limit: number = 3): string[] {
     const similarities = Object.keys(VOICE_COMMANDS).map(command => ({
         command,
         score: calculateSimilarity(commandText.toLowerCase(), command)
@@ -255,28 +354,31 @@ function findSimilarCommands(commandText, limit = 3) {
 }
 
 // Execute command action
-async function executeCommandAction(action) {
+async function executeCommandAction(action: string): Promise<void> {
     switch (action) {
-        case 'readNow':
+        case 'readNow': {
             const { readNow } = await import('./ocr.js');
             await readNow();
             break;
+        }
 
         case 'startMonitoring':
-        case 'toggleMonitoring':
+        case 'toggleMonitoring': {
             const { toggleMonitoring } = await import('./ui.js');
             toggleMonitoring();
             break;
+        }
 
         case 'stopMonitoring':
-        case 'pauseMonitoring':
+        case 'pauseMonitoring': {
             if (AppState.isMonitoring) {
                 const { toggleMonitoring } = await import('./ui.js');
                 toggleMonitoring();
             }
             break;
+        }
 
-        case 'repeatLastText':
+        case 'repeatLastText': {
             const { speak } = await import('./speech.js');
             if (AppState.lastText) {
                 speak(AppState.lastText);
@@ -284,99 +386,115 @@ async function executeCommandAction(action) {
                 speak('No text has been recognized yet');
             }
             break;
+        }
 
-        case 'stopSpeech':
+        case 'stopSpeech': {
             const { stopSpeech } = await import('./speech.js');
             stopSpeech();
             break;
+        }
 
-        case 'enableAutoRead':
+        case 'enableAutoRead': {
             AppState.settings.autoRead = true;
             saveVoiceSettings();
+            const { speak } = await import('./speech.js');
             speak('Auto-read enabled');
             break;
+        }
 
-        case 'disableAutoRead':
+        case 'disableAutoRead': {
             AppState.settings.autoRead = false;
             saveVoiceSettings();
+            const { speak } = await import('./speech.js');
             speak('Auto-read disabled');
             break;
+        }
 
-        case 'toggleAutoRead':
+        case 'toggleAutoRead': {
             AppState.settings.autoRead = !AppState.settings.autoRead;
             saveVoiceSettings();
+            const { speak } = await import('./speech.js');
             speak(AppState.settings.autoRead ? 'Auto-read enabled' : 'Auto-read disabled');
             break;
+        }
 
-        case 'autoCalibrate':
+        case 'autoCalibrate': {
             const { runAutoCalibration } = await import('./ocr.js');
             await runAutoCalibration();
             break;
+        }
 
-        case 'showHistory':
+        case 'showHistory': {
             const { toggleHistoryPanel } = await import('./history.js');
             toggleHistoryPanel();
             break;
+        }
 
-        case 'showPerformance':
+        case 'showPerformance': {
             const { generatePerformanceReport } = await import('./performance.js');
-            const report = generatePerformanceReport();
+            const report: PerformanceReport = generatePerformanceReport();
+            const { speak } = await import('./speech.js');
             speak(`Performance report: ${report.successRate} success rate, ${report.averageOCRTime} average processing time`);
             break;
+        }
 
-        case 'openSettings':
+        case 'openSettings': {
             const { openSettings } = await import('./settings.js');
             openSettings();
             break;
+        }
 
-        case 'closeSettings':
+        case 'closeSettings': {
             const { closeSettings } = await import('./settings.js');
             closeSettings();
             break;
+        }
 
         case 'showHelp':
         case 'showCommands':
             showVoiceCommandHelp();
             break;
 
-        case 'openSecondaryMonitor':
+        case 'openSecondaryMonitor': {
             const { openOnSecondaryMonitor } = await import('./multimonitor.js');
             await openOnSecondaryMonitor();
             break;
+        }
 
         case 'enableGamingMode':
             enableGamingOptimizations();
             break;
 
-        default:
+        default: {
             console.warn(`Unknown voice command action: ${action}`);
+            const { speak } = await import('./speech.js');
             speak('Unknown command');
+        }
     }
 }
 
 // Save voice command settings
-function saveVoiceSettings() {
+function saveVoiceSettings(): void {
     try {
-        const { saveSettings } = require('./settings.js');
-        saveSettings();
-    } catch (error) {
         // Fallback to direct localStorage
         localStorage.setItem('voiceCommandSettings', JSON.stringify({
             autoRead: AppState.settings.autoRead,
             enabled: voiceState.isEnabled,
             confidence: voiceState.confidence
         }));
+    } catch (error) {
+        console.warn('Could not save voice settings:', error);
     }
 }
 
 // Create voice command UI
-function createVoiceCommandUI() {
+function createVoiceCommandUI(): void {
     const voicePanel = document.createElement('div');
     voicePanel.id = 'voice-command-panel';
     voicePanel.className = 'glass rounded-xl p-4 mt-4';
 
     voicePanel.innerHTML = `
-        <h4 class="text-md font-medium mb-3 text-gaming-purple">🎤 Voice Commands</h4>
+        <h4 class="text-md font-medium mb-3 text-gaming-purple">Voice Commands</h4>
 
         <div class="space-y-3">
             <!-- Voice Control Toggle -->
@@ -390,10 +508,10 @@ function createVoiceCommandUI() {
             <!-- Microphone Control -->
             <div class="flex gap-2">
                 <button id="start-listening" class="flex-1 bg-gaming-blue hover:bg-blue-700 text-white py-2 px-3 rounded-lg text-sm font-medium transition-colors disabled:opacity-50" disabled>
-                    🎤 Listen for Commands
+                    Listen for Commands
                 </button>
                 <button id="stop-listening" class="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 px-3 rounded-lg text-sm font-medium transition-colors hidden">
-                    🛑 Stop Listening
+                    Stop Listening
                 </button>
             </div>
 
@@ -439,72 +557,95 @@ function createVoiceCommandUI() {
 }
 
 // Setup voice UI event listeners
-function setupVoiceUIListeners() {
+function setupVoiceUIListeners(): void {
     // Voice toggle
-    document.getElementById('voice-toggle').addEventListener('click', () => {
-        toggleVoiceCommands();
-    });
+    const voiceToggle = document.getElementById('voice-toggle');
+    if (voiceToggle) {
+        voiceToggle.addEventListener('click', () => {
+            toggleVoiceCommands();
+        });
+    }
 
     // Start listening button
-    document.getElementById('start-listening').addEventListener('click', () => {
-        startVoiceListening();
-    });
+    const startListeningBtn = document.getElementById('start-listening');
+    if (startListeningBtn) {
+        startListeningBtn.addEventListener('click', () => {
+            startVoiceListening();
+        });
+    }
 
     // Stop listening button
-    document.getElementById('stop-listening').addEventListener('click', () => {
-        stopVoiceListening();
-    });
+    const stopListeningBtn = document.getElementById('stop-listening');
+    if (stopListeningBtn) {
+        stopListeningBtn.addEventListener('click', () => {
+            stopVoiceListening();
+        });
+    }
 
     // Confidence slider
-    document.getElementById('voice-confidence').addEventListener('input', (e) => {
-        voiceState.confidence = parseInt(e.target.value) / 100;
-        document.getElementById('voice-confidence-value').textContent = e.target.value;
+    const confidenceSlider = document.getElementById('voice-confidence') as HTMLInputElement | null;
+    if (confidenceSlider) {
+        confidenceSlider.addEventListener('input', (e: Event) => {
+            const target = e.target as HTMLInputElement;
+            voiceState.confidence = parseInt(target.value) / 100;
+            const confidenceValue = document.getElementById('voice-confidence-value');
+            if (confidenceValue) {
+                confidenceValue.textContent = target.value;
+            }
 
-        console.log(`🎤 Voice confidence threshold set to ${Math.round(voiceState.confidence * 100)}%`);
-        localStorage.setItem('voiceConfidence', voiceState.confidence);
-    });
+            console.log(`Voice confidence threshold set to ${Math.round(voiceState.confidence * 100)}%`);
+            localStorage.setItem('voiceConfidence', String(voiceState.confidence));
+        });
+    }
 }
 
 // Toggle voice commands on/off
-function toggleVoiceCommands() {
+function toggleVoiceCommands(): void {
     voiceState.isEnabled = !voiceState.isEnabled;
 
     const toggle = document.getElementById('voice-toggle');
-    const startBtn = document.getElementById('start-listening');
+    const startBtn = document.getElementById('start-listening') as HTMLButtonElement | null;
+
+    if (!toggle || !startBtn) return;
+
+    const toggleSpan = toggle.querySelector('span');
+    if (!toggleSpan) return;
 
     if (voiceState.isEnabled) {
         toggle.classList.add('bg-gaming-purple');
         toggle.classList.remove('bg-dark-600');
-        toggle.querySelector('span').classList.add('translate-x-5');
+        toggleSpan.classList.add('translate-x-5');
         startBtn.disabled = false;
 
         showVoiceNotification('Voice commands enabled', 'success');
-        console.log('🎤 Voice commands enabled');
+        console.log('Voice commands enabled');
     } else {
         toggle.classList.remove('bg-gaming-purple');
         toggle.classList.add('bg-dark-600');
-        toggle.querySelector('span').classList.remove('translate-x-5');
+        toggleSpan.classList.remove('translate-x-5');
         startBtn.disabled = true;
 
         stopVoiceListening();
         showVoiceNotification('Voice commands disabled', 'info');
-        console.log('🎤 Voice commands disabled');
+        console.log('Voice commands disabled');
     }
 
     updateVoiceUI(voiceState.isEnabled ? 'ready' : 'disabled');
-    localStorage.setItem('voiceCommandsEnabled', voiceState.isEnabled);
+    localStorage.setItem('voiceCommandsEnabled', String(voiceState.isEnabled));
 }
 
 // Start voice listening
-function startVoiceListening() {
+function startVoiceListening(): void {
     if (!voiceState.isEnabled || !voiceState.recognition) return;
 
     try {
         voiceState.recognition.start();
 
         // Update UI
-        document.getElementById('start-listening').classList.add('hidden');
-        document.getElementById('stop-listening').classList.remove('hidden');
+        const startBtn = document.getElementById('start-listening');
+        const stopBtn = document.getElementById('stop-listening');
+        if (startBtn) startBtn.classList.add('hidden');
+        if (stopBtn) stopBtn.classList.remove('hidden');
 
     } catch (error) {
         console.error('Failed to start voice recognition:', error);
@@ -513,24 +654,28 @@ function startVoiceListening() {
 }
 
 // Stop voice listening
-function stopVoiceListening() {
+function stopVoiceListening(): void {
     if (voiceState.recognition && voiceState.isListening) {
         voiceState.recognition.stop();
     }
 
-    clearTimeout(voiceState.listeningTimeout);
+    if (voiceState.listeningTimeout) {
+        clearTimeout(voiceState.listeningTimeout);
+    }
 
     // Update UI
-    document.getElementById('start-listening').classList.remove('hidden');
-    document.getElementById('stop-listening').classList.add('hidden');
+    const startBtn = document.getElementById('start-listening');
+    const stopBtn = document.getElementById('stop-listening');
+    if (startBtn) startBtn.classList.remove('hidden');
+    if (stopBtn) stopBtn.classList.add('hidden');
 }
 
 // Update voice UI status
-function updateVoiceUI(status) {
+function updateVoiceUI(status: VoiceUIStatus): void {
     const statusText = document.getElementById('voice-status-text');
     if (!statusText) return;
 
-    const statusMessages = {
+    const statusMessages: Record<VoiceUIStatus, string> = {
         disabled: 'Disabled',
         ready: 'Ready - Click to listen',
         listening: 'Listening for commands...',
@@ -538,7 +683,7 @@ function updateVoiceUI(status) {
         error: 'Error occurred'
     };
 
-    const statusColors = {
+    const statusColors: Record<VoiceUIStatus, string> = {
         disabled: 'text-dark-400',
         ready: 'text-gaming-cyan',
         listening: 'text-gaming-green animate-pulse',
@@ -557,7 +702,7 @@ function updateVoiceUI(status) {
 }
 
 // Show voice command help
-function showVoiceCommandHelp() {
+function showVoiceCommandHelp(): void {
     const helpOverlay = document.createElement('div');
     helpOverlay.className = 'fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50';
 
@@ -572,7 +717,7 @@ function showVoiceCommandHelp() {
     helpOverlay.innerHTML = `
         <div class="gaming-panel max-w-4xl w-full mx-4 p-8 rounded-2xl max-h-[80vh] overflow-y-auto">
             <h2 class="text-2xl font-bold text-gaming-purple mb-6 text-center">
-                🎤 Voice Commands Reference
+                Voice Commands Reference
             </h2>
             <div class="grid md:grid-cols-2 gap-8">
                 <div>
@@ -582,12 +727,12 @@ function showVoiceCommandHelp() {
                 <div>
                     <h3 class="text-lg font-semibold text-gaming-green mb-4">Usage Tips</h3>
                     <div class="space-y-3 text-sm text-dark-300">
-                        <p>• <span class="text-gaming-cyan">Speak clearly</span> and wait for response</p>
-                        <p>• <span class="text-gaming-blue">Use exact phrases</span> from the command list</p>
-                        <p>• <span class="text-gaming-green">Enable microphone</span> permissions when prompted</p>
-                        <p>• <span class="text-gaming-yellow">Adjust confidence</span> if commands aren't recognized</p>
-                        <p>• <span class="text-gaming-purple">Combine with hotkeys</span> for maximum efficiency</p>
-                        <p>• <span class="text-gaming-red">Say "help"</span> to show this panel anytime</p>
+                        <p>* <span class="text-gaming-cyan">Speak clearly</span> and wait for response</p>
+                        <p>* <span class="text-gaming-blue">Use exact phrases</span> from the command list</p>
+                        <p>* <span class="text-gaming-green">Enable microphone</span> permissions when prompted</p>
+                        <p>* <span class="text-gaming-yellow">Adjust confidence</span> if commands aren't recognized</p>
+                        <p>* <span class="text-gaming-purple">Combine with hotkeys</span> for maximum efficiency</p>
+                        <p>* <span class="text-gaming-red">Say "help"</span> to show this panel anytime</p>
                     </div>
                 </div>
             </div>
@@ -603,13 +748,15 @@ function showVoiceCommandHelp() {
 
     // Auto-close after 30 seconds
     setTimeout(() => {
-        helpOverlay.remove();
+        if (helpOverlay.parentNode) {
+            helpOverlay.remove();
+        }
     }, 30000);
 }
 
 // Show voice notifications
-function showVoiceNotification(message, type = 'info') {
-    const colors = {
+function showVoiceNotification(message: string, type: NotificationType = 'info'): void {
+    const colors: Record<NotificationType, string> = {
         info: 'bg-gaming-blue',
         success: 'bg-gaming-green',
         warning: 'bg-gaming-yellow text-black',
@@ -620,7 +767,7 @@ function showVoiceNotification(message, type = 'info') {
     notification.className = `fixed bottom-4 left-4 ${colors[type]} rounded-lg p-3 z-40 gaming-glow`;
     notification.innerHTML = `
         <div class="flex items-center gap-2">
-            <span class="text-lg">🎤</span>
+            <span class="text-lg">Mic</span>
             <span class="font-medium">${message}</span>
         </div>
     `;
@@ -628,13 +775,15 @@ function showVoiceNotification(message, type = 'info') {
     document.body.appendChild(notification);
 
     setTimeout(() => {
-        notification.remove();
+        if (notification.parentNode) {
+            notification.remove();
+        }
     }, 3000);
 }
 
 // Enable gaming optimizations
-function enableGamingOptimizations() {
-    console.log('🎮 Enabling gaming optimizations...');
+function enableGamingOptimizations(): void {
+    console.log('Enabling gaming optimizations...');
 
     // Set optimal gaming settings
     AppState.settings.processingInterval = 1000; // Faster processing for gaming
@@ -648,7 +797,7 @@ function enableGamingOptimizations() {
 }
 
 // Get voice command statistics
-export function getVoiceCommandStats() {
+export function getVoiceCommandStats(): VoiceCommandStats {
     return {
         enabled: voiceState.isEnabled,
         isListening: voiceState.isListening,
@@ -660,7 +809,7 @@ export function getVoiceCommandStats() {
 }
 
 // Cleanup voice command system
-export function cleanupVoiceCommands() {
+export function cleanupVoiceCommands(): void {
     stopVoiceListening();
 
     if (voiceState.recognition) {
@@ -670,14 +819,15 @@ export function cleanupVoiceCommands() {
     const voicePanel = document.getElementById('voice-command-panel');
     if (voicePanel) voicePanel.remove();
 
-    console.log('🎤 Voice command system cleaned up');
+    console.log('Voice command system cleaned up');
 }
 
 // Load voice preferences from storage
-function loadVoicePreferences() {
+function loadVoicePreferences(): void {
     try {
         const enabled = localStorage.getItem('voiceCommandsEnabled') === 'true';
-        const confidence = parseFloat(localStorage.getItem('voiceConfidence')) || 0.7;
+        const storedConfidence = localStorage.getItem('voiceConfidence');
+        const confidence = storedConfidence ? parseFloat(storedConfidence) : 0.7;
 
         if (enabled) {
             setTimeout(() => toggleVoiceCommands(), 1000); // Enable after UI loads
@@ -685,10 +835,13 @@ function loadVoicePreferences() {
 
         voiceState.confidence = confidence;
 
-        const confidenceSlider = document.getElementById('voice-confidence');
+        const confidenceSlider = document.getElementById('voice-confidence') as HTMLInputElement | null;
+        const confidenceValue = document.getElementById('voice-confidence-value');
         if (confidenceSlider) {
-            confidenceSlider.value = Math.round(confidence * 100);
-            document.getElementById('voice-confidence-value').textContent = Math.round(confidence * 100);
+            confidenceSlider.value = String(Math.round(confidence * 100));
+            if (confidenceValue) {
+                confidenceValue.textContent = String(Math.round(confidence * 100));
+            }
         }
 
     } catch (error) {
@@ -697,10 +850,8 @@ function loadVoicePreferences() {
 }
 
 // Load voice preferences (called after voice commands are initialized)
-export function loadVoicePreferencesDelayed() {
+export function loadVoicePreferencesDelayed(): void {
     setTimeout(() => {
         loadVoicePreferences();
     }, 1000);
 }
-
-// Functions exported individually above

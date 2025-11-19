@@ -6,9 +6,76 @@
 import { AppState } from './config.js';
 import { getPerformanceMetrics } from './performance.js';
 import { getHistoryStatistics } from './history.js';
+import type { AppState as AppStateType, PerformanceMetrics } from './types.js';
+
+// Extend Window interface for global functions and APIs
+declare global {
+    interface Window {
+        enableDiscordRPC: () => void;
+        electronAPI?: {
+            platform: string;
+            setDiscordActivity: (activity: DiscordActivity) => Promise<void>;
+            clearDiscordActivity?: () => void;
+        };
+    }
+
+    // Discord SDK global (may not be present)
+    var DiscordSDK: {
+        Commands: {
+            SET_ACTIVITY: (params: {
+                pid: number;
+                activity: DiscordActivity;
+            }) => Promise<void>;
+        };
+    } | undefined;
+}
+
+// Discord activity interface
+interface DiscordActivity {
+    details: string;
+    state: string;
+    startTimestamp: number;
+    largeImageKey: string;
+    largeImageText: string;
+    smallImageKey: string | null;
+    smallImageText: string | null;
+    instance: boolean;
+    buttons?: Array<{
+        label: string;
+        url: string;
+    }>;
+    partyId?: string;
+    partySize?: number;
+    partyMax?: number;
+}
+
+// Discord RPC state interface
+interface DiscordState {
+    enabled: boolean;
+    lastUpdate: number;
+    updateInterval: number;
+    activityTimer: ReturnType<typeof setInterval> | null;
+    startTimestamp: number;
+}
+
+// Discord RPC status interface
+interface DiscordRPCStatus {
+    enabled: boolean;
+    lastUpdate: number;
+    updateInterval: number;
+    platform: string;
+    hasSDK: boolean;
+}
+
+// History statistics interface (for imported function)
+interface HistoryStatistics {
+    currentSessionEntries: number;
+    totalEntries?: number;
+    averageConfidence?: number;
+}
 
 // Discord RPC state
-let discordState = {
+let discordState: DiscordState = {
     enabled: false,
     lastUpdate: 0,
     updateInterval: 15000, // Update every 15 seconds
@@ -20,7 +87,7 @@ let discordState = {
 const DISCORD_CLIENT_ID = '1234567890123456789'; // Placeholder - would need real Discord app
 
 // Initialize Discord Rich Presence
-export function initDiscordRPC() {
+export function initDiscordRPC(): void {
     console.log('🎮 Initializing Discord Rich Presence...');
 
     // Check if we're in Electron app with Discord RPC support
@@ -36,7 +103,7 @@ export function initDiscordRPC() {
 }
 
 // Initialize web-based Discord SDK (limited functionality)
-async function initWebDiscordSDK() {
+async function initWebDiscordSDK(): Promise<void> {
     try {
         // Check if Discord is running and supports web SDK
         if (typeof DiscordSDK !== 'undefined') {
@@ -54,7 +121,7 @@ async function initWebDiscordSDK() {
 }
 
 // Start Discord activity updates
-function startDiscordActivity() {
+function startDiscordActivity(): void {
     if (!discordState.enabled) return;
 
     // Update immediately
@@ -69,30 +136,31 @@ function startDiscordActivity() {
 }
 
 // Update Discord activity status
-async function updateDiscordActivity() {
+async function updateDiscordActivity(): Promise<void> {
     if (!discordState.enabled) return;
 
     try {
-        const performanceMetrics = getPerformanceMetrics();
-        const historyStats = getHistoryStatistics();
+        const performanceMetrics = getPerformanceMetrics() as PerformanceMetrics;
+        const historyStats = getHistoryStatistics() as HistoryStatistics;
 
         // Determine current activity
         let state = 'Ready for gaming';
         let details = 'Gaming OCR Companion';
         let largeImageKey = 'captn-reverse-logo';
         let largeImageText = 'CaptnReverse Gaming Companion';
-        let smallImageKey = null;
-        let smallImageText = null;
+        let smallImageKey: string | null = null;
+        let smallImageText: string | null = null;
 
         // Update based on current activity
-        if (AppState.isMonitoring) {
+        if ((AppState as AppStateType).isMonitoring) {
             state = 'Monitoring game text';
             details = `${historyStats.currentSessionEntries} texts recognized`;
             smallImageKey = 'monitoring-active';
             smallImageText = 'Monitoring Active';
-        } else if (AppState.lastText) {
+        } else if ((AppState as AppStateType).lastText) {
             state = 'Last text recognized';
-            details = AppState.lastText.substring(0, 50) + (AppState.lastText.length > 50 ? '...' : '');
+            const lastText = (AppState as AppStateType).lastText;
+            details = lastText.substring(0, 50) + (lastText.length > 50 ? '...' : '');
         }
 
         // Performance-based status
@@ -105,7 +173,7 @@ async function updateDiscordActivity() {
             smallImageText = 'Performance Issues';
         }
 
-        const activity = {
+        const activity: DiscordActivity = {
             details: details,
             state: state,
             startTimestamp: discordState.startTimestamp,
@@ -141,7 +209,7 @@ async function updateDiscordActivity() {
 }
 
 // Set Discord activity (platform-specific implementation)
-async function setDiscordActivity(activity) {
+async function setDiscordActivity(activity: DiscordActivity): Promise<void> {
     if (window.electronAPI) {
         // Electron implementation
         try {
@@ -166,7 +234,7 @@ async function setDiscordActivity(activity) {
 }
 
 // Show Discord integration information to user
-function showDiscordIntegrationInfo() {
+function showDiscordIntegrationInfo(): void {
     const notification = document.createElement('div');
     notification.className = 'fixed bottom-4 left-4 gaming-panel p-4 rounded-xl z-40 max-w-sm';
     notification.innerHTML = `
@@ -206,7 +274,7 @@ function showDiscordIntegrationInfo() {
 }
 
 // Enable Discord RPC
-function enableDiscordRPC() {
+function enableDiscordRPC(): void {
     console.log('🎮 Enabling Discord Rich Presence...');
 
     discordState.enabled = true;
@@ -238,7 +306,7 @@ function enableDiscordRPC() {
 }
 
 // Update Discord with OCR events
-export function updateDiscordWithOCR(text, confidence) {
+export function updateDiscordWithOCR(text: string, confidence: number): void {
     if (!discordState.enabled) return;
 
     // Immediate update for significant OCR events
@@ -249,7 +317,7 @@ export function updateDiscordWithOCR(text, confidence) {
 }
 
 // Get Discord RPC status
-export function getDiscordRPCStatus() {
+export function getDiscordRPCStatus(): DiscordRPCStatus {
     return {
         enabled: discordState.enabled,
         lastUpdate: discordState.lastUpdate,
@@ -260,7 +328,7 @@ export function getDiscordRPCStatus() {
 }
 
 // Disable Discord RPC
-export function disableDiscordRPC() {
+export function disableDiscordRPC(): void {
     discordState.enabled = false;
 
     if (discordState.activityTimer) {
@@ -273,7 +341,7 @@ export function disableDiscordRPC() {
 }
 
 // Load Discord preferences
-function loadDiscordPreferences() {
+function loadDiscordPreferences(): void {
     const enabled = localStorage.getItem('discordRPCEnabled') === 'true';
     if (enabled) {
         // Delay enabling to allow app to fully initialize
@@ -284,7 +352,7 @@ function loadDiscordPreferences() {
 }
 
 // Cleanup Discord RPC
-export function cleanupDiscordRPC() {
+export function cleanupDiscordRPC(): void {
     disableDiscordRPC();
 
     // Clear Discord activity

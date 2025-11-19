@@ -4,14 +4,49 @@
  */
 
 import { AppState, CONFIG } from './config.js';
+import type { AppState as AppStateType, UserSettings } from './types.js';
+
+// Type definitions for debug module
+type ConsoleMethod = 'log' | 'warn' | 'error' | 'info';
+
+interface DebugLog {
+    type: ConsoleMethod;
+    timestamp: string;
+    message: string;
+}
+
+interface OriginalConsole {
+    log: typeof console.log;
+    warn: typeof console.warn;
+    error: typeof console.error;
+    info: typeof console.info;
+}
+
+interface DebugConsoleState {
+    closed: boolean;
+}
+
+interface ExportData {
+    timestamp: string;
+    url: string;
+    userAgent: string;
+    logs: DebugLog[];
+    settings: UserSettings;
+    appState: {
+        isMonitoring: boolean;
+        currentOCREngine: 'tesseract' | 'paddle';
+        paddleOCRLoaded: boolean;
+        voicesLoaded: boolean;
+    };
+}
 
 // Debug console state
-let debugConsole = null;
-let debugLogs = [];
-let originalConsole = {};
+let debugConsole: DebugConsoleState | null = null;
+let debugLogs: DebugLog[] = [];
+let originalConsole: Partial<OriginalConsole> = {};
 
 // Initialize debug logging with console capture
-export function initializeDebugLogging() {
+export function initializeDebugLogging(): void {
     // Store original console methods
     originalConsole = {
         log: console.log,
@@ -19,34 +54,38 @@ export function initializeDebugLogging() {
         error: console.error,
         info: console.info
     };
-    
+
     // Override console methods to capture logs
-    ['log', 'warn', 'error', 'info'].forEach(method => {
-        console[method] = function(...args) {
+    const methods: ConsoleMethod[] = ['log', 'warn', 'error', 'info'];
+    methods.forEach((method: ConsoleMethod) => {
+        console[method] = function(...args: unknown[]): void {
             // Call original method first
-            originalConsole[method].apply(console, args);
-            
+            const original = originalConsole[method];
+            if (original) {
+                original.apply(console, args as [unknown, ...unknown[]]);
+            }
+
             // Capture for debug console
             debugLogs.push({
                 type: method,
                 timestamp: new Date().toISOString(),
-                message: args.map(arg => 
+                message: args.map(arg =>
                     typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
                 ).join(' ')
             });
-            
+
             if (debugLogs.length > CONFIG.DEBUG_LOG_LIMIT) {
                 debugLogs.shift(); // Keep last 200 logs
             }
             updateDebugDisplay(); // Update if debug console is open
         };
     });
-    
+
     console.log('🔍 Debug logging initialized - all console output will be captured');
 }
 
 // Toggle debug console visibility
-export function toggleDebugConsole() {
+export function toggleDebugConsole(): void {
     if (debugConsole && !debugConsole.closed) {
         const existingConsole = document.getElementById('debug-console');
         if (existingConsole) {
@@ -55,16 +94,16 @@ export function toggleDebugConsole() {
         debugConsole = null;
         return;
     }
-    
+
     createDebugConsole();
 }
 
 // Create debug console UI
-export function createDebugConsole() {
+export function createDebugConsole(): void {
     // Remove any existing debug console
     const existing = document.getElementById('debug-console');
     if (existing) existing.remove();
-    
+
     // Create floating debug console
     const consoleDiv = document.createElement('div');
     consoleDiv.id = 'debug-console';
@@ -85,7 +124,7 @@ export function createDebugConsole() {
         font-family: 'JetBrains Mono', monospace;
         backdrop-filter: blur(12px);
     `;
-    
+
     const header = document.createElement('div');
     header.style.cssText = `
         padding: 12px 16px;
@@ -101,7 +140,7 @@ export function createDebugConsole() {
         <span>🔍 CaptnReverse Debug Console (${debugLogs.length} logs)</span>
         <button id="close-debug" style="background: none; border: none; color: white; font-size: 18px; cursor: pointer;">✖️</button>
     `;
-    
+
     const content = document.createElement('div');
     content.style.cssText = `
         flex: 1;
@@ -113,7 +152,7 @@ export function createDebugConsole() {
         line-height: 1.4;
     `;
     content.classList.add('debug-console-content');
-    
+
     const controls = document.createElement('div');
     controls.style.cssText = `
         padding: 12px 16px;
@@ -128,91 +167,104 @@ export function createDebugConsole() {
         <button id="export-debug" style="padding: 6px 12px; background: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 11px;">Export</button>
         <button id="test-settings" style="padding: 6px 12px; background: #f59e0b; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 11px;">Test Settings</button>
     `;
-    
+
     consoleDiv.appendChild(header);
     consoleDiv.appendChild(content);
     consoleDiv.appendChild(controls);
     document.body.appendChild(consoleDiv);
-    
+
     // Add event listeners
-    document.getElementById('close-debug').addEventListener('click', () => {
-        consoleDiv.remove();
-        debugConsole = null;
-    });
-    
-    document.getElementById('clear-debug').addEventListener('click', () => {
-        debugLogs = [];
-        updateDebugDisplay();
-    });
-    
-    document.getElementById('export-debug').addEventListener('click', () => {
-        const data = JSON.stringify({
-            timestamp: new Date().toISOString(),
-            url: window.location.href,
-            userAgent: navigator.userAgent,
-            logs: debugLogs,
-            settings: AppState.settings,
-            appState: {
-                isMonitoring: AppState.isMonitoring,
-                currentOCREngine: AppState.currentOCREngine,
-                paddleOCRLoaded: AppState.paddleOCRLoaded,
-                voicesLoaded: AppState.voicesLoaded
-            }
-        }, null, 2);
-        
-        const blob = new Blob([data], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `captn-debug-${Date.now()}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
-    });
-    
-    document.getElementById('test-settings').addEventListener('click', () => {
-        testSettingsButton();
-    });
-    
+    const closeBtn = document.getElementById('close-debug');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', () => {
+            consoleDiv.remove();
+            debugConsole = null;
+        });
+    }
+
+    const clearBtn = document.getElementById('clear-debug');
+    if (clearBtn) {
+        clearBtn.addEventListener('click', () => {
+            debugLogs = [];
+            updateDebugDisplay();
+        });
+    }
+
+    const exportBtn = document.getElementById('export-debug');
+    if (exportBtn) {
+        exportBtn.addEventListener('click', () => {
+            const data: ExportData = {
+                timestamp: new Date().toISOString(),
+                url: window.location.href,
+                userAgent: navigator.userAgent,
+                logs: debugLogs,
+                settings: AppState.settings,
+                appState: {
+                    isMonitoring: AppState.isMonitoring,
+                    currentOCREngine: AppState.currentOCREngine as 'tesseract' | 'paddle',
+                    paddleOCRLoaded: AppState.paddleOCRLoaded,
+                    voicesLoaded: AppState.voicesLoaded
+                }
+            };
+
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `captn-debug-${Date.now()}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        });
+    }
+
+    const testBtn = document.getElementById('test-settings');
+    if (testBtn) {
+        testBtn.addEventListener('click', () => {
+            testSettingsButton();
+        });
+    }
+
     debugConsole = { closed: false };
-    
+
     // Initial display of existing logs
     updateDebugDisplay();
 }
 
 // Update debug console display
-export function updateDebugDisplay() {
-    const content = document.querySelector('#debug-console > div:nth-child(2)');
+export function updateDebugDisplay(): void {
+    const content = document.querySelector('#debug-console > div:nth-child(2)') as HTMLElement | null;
     if (!content) return; // Debug console not open
-    
+
     // Security: Use createElement instead of innerHTML to prevent XSS
     content.innerHTML = ''; // Clear existing content
-    
-    debugLogs.forEach(log => {
+
+    debugLogs.forEach((log: DebugLog) => {
         const logEntry = document.createElement('div');
         logEntry.style.cssText = `
-            margin-bottom: 4px; 
-            padding: 4px; 
+            margin-bottom: 4px;
+            padding: 4px;
             background: ${
                 log.type === 'error' ? 'rgba(239, 68, 68, 0.1)' :
                 log.type === 'warn' ? 'rgba(245, 158, 11, 0.1)' :
                 log.type === 'info' ? 'rgba(59, 130, 246, 0.1)' :
                 'rgba(16, 185, 129, 0.1)'
-            }; 
+            };
             border-left: 3px solid ${
                 log.type === 'error' ? '#ef4444' :
                 log.type === 'warn' ? '#f59e0b' :
                 log.type === 'info' ? '#3b82f6' :
                 '#10b981'
-            }; 
+            };
             border-radius: 4px;
         `;
-        
+
         // Create timestamp span
         const timestampSpan = document.createElement('span');
         timestampSpan.style.cssText = 'color: #64748b; font-size: 10px;';
-        timestampSpan.textContent = `[${log.timestamp.split('T')[1].split('.')[0]}]`;
-        
-        // Create type span  
+        const timePart = log.timestamp.split('T')[1];
+        timestampSpan.textContent = `[${timePart ? timePart.split('.')[0] : ''}]`;
+
+        // Create type span
         const typeSpan = document.createElement('span');
         typeSpan.style.cssText = `
             color: ${
@@ -220,29 +272,29 @@ export function updateDebugDisplay() {
                 log.type === 'warn' ? '#f59e0b' :
                 log.type === 'info' ? '#3b82f6' :
                 '#10b981'
-            }; 
-            font-weight: bold; 
+            };
+            font-weight: bold;
             margin: 0 8px;
         `;
         typeSpan.textContent = log.type.toUpperCase();
-        
+
         // Create message span
         const messageSpan = document.createElement('span');
         messageSpan.style.cssText = 'color: #e2e8f0;';
         messageSpan.textContent = log.message; // Safe: textContent auto-escapes
-        
+
         // Assemble log entry
         logEntry.appendChild(timestampSpan);
         logEntry.appendChild(typeSpan);
         logEntry.appendChild(messageSpan);
         content.appendChild(logEntry);
     });
-    
+
     content.scrollTop = content.scrollHeight;
 }
 
 // Render debug canvas showing OCR input
-export function renderDebugCanvas(canvas) {
+export function renderDebugCanvas(canvas: HTMLCanvasElement): void {
     // Remove any existing debug elements
     const existingCanvas = document.getElementById('debug-canvas');
     const existingLabel = document.getElementById('debug-label');
@@ -250,22 +302,27 @@ export function renderDebugCanvas(canvas) {
     if (existingCanvas) existingCanvas.remove();
     if (existingLabel) existingLabel.remove();
     if (existingText) existingText.remove();
-    
+
     // Create debug display - this should show ONLY the cropped area
     const debugCanvas = document.createElement('canvas');
     const debugCtx = debugCanvas.getContext('2d');
-    
+
+    if (!debugCtx) {
+        console.error('Failed to get 2D context for debug canvas');
+        return;
+    }
+
     // Copy the processed canvas exactly as it will be sent to OCR
     debugCanvas.width = canvas.width;
     debugCanvas.height = canvas.height;
     debugCtx.drawImage(canvas, 0, 0);
-    
+
     debugCanvas.id = 'debug-canvas';
     debugCanvas.className = 'debug-canvas';
     debugCanvas.style.position = 'fixed';
     debugCanvas.style.top = '80px';
     debugCanvas.style.right = '10px';
-    
+
     // Dynamic sizing based on user preference
     if (AppState.settings.debugViewSizing === 'autoWidth') {
         // Auto height mode: Fixed width, height adjusts to preserve aspect ratio
@@ -277,8 +334,9 @@ export function renderDebugCanvas(canvas) {
         const aspectRatio = canvas.width / canvas.height;
         const maxWidth = 200;
         const maxHeight = 150;
-        
-        let displayWidth, displayHeight;
+
+        let displayWidth: number;
+        let displayHeight: number;
         if (aspectRatio > maxWidth / maxHeight) {
             // Width-limited
             displayWidth = maxWidth;
@@ -288,7 +346,7 @@ export function renderDebugCanvas(canvas) {
             displayHeight = maxHeight;
             displayWidth = maxHeight * aspectRatio;
         }
-        
+
         debugCanvas.style.width = `${displayWidth}px`;
         debugCanvas.style.height = `${displayHeight}px`;
     }
@@ -297,9 +355,9 @@ export function renderDebugCanvas(canvas) {
     debugCanvas.style.zIndex = '9999';
     debugCanvas.style.background = 'white';
     debugCanvas.style.imageRendering = 'pixelated'; // Show crisp pixels
-    
+
     document.body.appendChild(debugCanvas);
-    
+
     // Add label
     const label = document.createElement('div');
     label.id = 'debug-label';
@@ -313,7 +371,7 @@ export function renderDebugCanvas(canvas) {
     label.style.zIndex = '9999';
     label.style.textShadow = '0 0 4px black';
     document.body.appendChild(label);
-    
+
     // Add text display area for debug
     const textDisplay = document.createElement('div');
     textDisplay.id = 'debug-text';
@@ -330,30 +388,30 @@ export function renderDebugCanvas(canvas) {
     textDisplay.style.zIndex = '9999';
     textDisplay.textContent = 'Waiting for OCR result...';
     document.body.appendChild(textDisplay);
-    
+
     console.log(`🔍 Debug canvas: ${canvas.width}×${canvas.height}px - this exact image goes to OCR`);
 }
 
 // Update debug text display (XSS-safe)
-export function updateDebugText(text, confidence) {
+export function updateDebugText(text: string, confidence: number): void {
     const debugText = document.getElementById('debug-text');
     if (debugText) {
         // Security: Use safe DOM manipulation instead of innerHTML
         debugText.innerHTML = ''; // Clear existing content
-        
+
         const titleStrong = document.createElement('strong');
         titleStrong.textContent = 'OCR Result:';
-        
+
         const lineBreak1 = document.createElement('br');
-        
+
         const textSpan = document.createElement('span');
         textSpan.textContent = `"${text}"`; // Safe: textContent auto-escapes
-        
+
         const lineBreak2 = document.createElement('br');
-        
+
         const confidenceSmall = document.createElement('small');
         confidenceSmall.textContent = `Confidence: ${Math.round(confidence)}%`;
-        
+
         debugText.appendChild(titleStrong);
         debugText.appendChild(lineBreak1);
         debugText.appendChild(textSpan);
@@ -363,23 +421,23 @@ export function updateDebugText(text, confidence) {
 }
 
 // Test settings button functionality
-export function testSettingsButton() {
+export function testSettingsButton(): void {
     console.log('🧪 Testing settings button functionality...');
-    const settingsBtn = document.getElementById('settings-btn');
-    const settingsModal = document.getElementById('settings-modal');
-    
+    const settingsBtn = document.getElementById('settings-btn') as HTMLButtonElement | null;
+    const settingsModal = document.getElementById('settings-modal') as HTMLElement | null;
+
     console.log('Settings button element:', settingsBtn);
     console.log('Settings modal element:', settingsModal);
-    
+
     if (settingsBtn) {
         console.log('✅ Settings button found');
         console.log('Button styles:', getComputedStyle(settingsBtn).display);
         console.log('Button visibility:', settingsBtn.offsetParent !== null);
-        
+
         // Try triggering click programmatically
         console.log('🖱️ Triggering click event...');
         settingsBtn.click();
-        
+
         setTimeout(() => {
             const isVisible = settingsModal && !settingsModal.classList.contains('hidden');
             console.log('Modal visible after click:', isVisible);
@@ -387,7 +445,7 @@ export function testSettingsButton() {
     } else {
         console.error('❌ Settings button not found');
     }
-    
+
     if (settingsModal) {
         console.log('✅ Settings modal found');
         console.log('Modal classes:', settingsModal.className);

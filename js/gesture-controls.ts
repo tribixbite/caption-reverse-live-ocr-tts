@@ -3,24 +3,43 @@
  * Optimized for Steam Deck, ROG Ally, Legion Go, and mobile devices
  */
 
-class GestureControls {
-    constructor() {
-        this.touchStartX = 0;
-        this.touchStartY = 0;
-        this.touchStartTime = 0;
-        this.isDoubleTapDetection = false;
-        this.lastTapTime = 0;
-        this.gestureThreshold = 50; // Minimum distance for swipe
-        this.tapTimeout = 300; // Maximum time for tap
-        this.doubleTapTimeout = 500; // Maximum time between taps
-        this.longPressTimeout = 800; // Time for long press
-        this.longPressTimer = null;
-        this.isLongPress = false;
+// Extend Window interface for global functions
+declare global {
+    interface Window {
+        setCrop: (x: number, y: number, width: number, height: number) => void;
+    }
+}
 
+// Gesture settings interface
+interface GestureSettings {
+    threshold?: number;
+    tapTimeout?: number;
+    doubleTapTimeout?: number;
+    longPressTimeout?: number;
+}
+
+class GestureControls {
+    private touchStartX: number = 0;
+    private touchStartY: number = 0;
+    private touchStartTime: number = 0;
+    private isDoubleTapDetection: boolean = false;
+    private lastTapTime: number = 0;
+    private gestureThreshold: number = 50; // Minimum distance for swipe
+    private tapTimeout: number = 300; // Maximum time for tap
+    private doubleTapTimeout: number = 500; // Maximum time between taps
+    private longPressTimeout: number = 800; // Time for long press
+    private longPressTimer: ReturnType<typeof setTimeout> | null = null;
+    private isLongPress: boolean = false;
+    private initialPinchDistance: number | undefined;
+    private initialRotation: number | undefined;
+    private cropStartX: number | undefined;
+    private cropStartY: number | undefined;
+
+    constructor() {
         this.init();
     }
 
-    init() {
+    private init(): void {
         // Only enable on touch devices
         if (!('ontouchstart' in window)) {
             console.log('📱 Gesture controls: Not a touch device, skipping');
@@ -31,7 +50,7 @@ class GestureControls {
         console.log('🎮 Gesture controls initialized for gaming handhelds');
     }
 
-    setupGestureListeners() {
+    private setupGestureListeners(): void {
         // Main content area for gestures
         const mainContent = document.querySelector('main');
         if (!mainContent) return;
@@ -42,7 +61,7 @@ class GestureControls {
         mainContent.addEventListener('touchend', this.handleTouchEnd.bind(this), { passive: false });
 
         // Camera video for crop area gestures
-        const video = document.getElementById('camera-feed');
+        const video = document.getElementById('camera-feed') as HTMLVideoElement | null;
         if (video) {
             video.addEventListener('touchstart', this.handleVideoTouchStart.bind(this), { passive: false });
             video.addEventListener('touchmove', this.handleVideoTouchMove.bind(this), { passive: false });
@@ -53,7 +72,7 @@ class GestureControls {
         this.loadGestureSettings();
     }
 
-    handleTouchStart(event) {
+    private handleTouchStart(event: TouchEvent): void {
         if (event.touches.length === 1) {
             const touch = event.touches[0];
             this.touchStartX = touch.clientX;
@@ -72,7 +91,7 @@ class GestureControls {
         }
     }
 
-    handleTouchMove(event) {
+    private handleTouchMove(event: TouchEvent): void {
         // Cancel long press if finger moves too much
         if (this.longPressTimer) {
             const touch = event.touches[0];
@@ -90,7 +109,7 @@ class GestureControls {
         }
     }
 
-    handleTouchEnd(event) {
+    private handleTouchEnd(event: TouchEvent): void {
         if (this.longPressTimer) {
             clearTimeout(this.longPressTimer);
             this.longPressTimer = null;
@@ -118,7 +137,7 @@ class GestureControls {
         }
     }
 
-    handleTap(touch) {
+    private handleTap(touch: Touch): void {
         const now = Date.now();
 
         if (now - this.lastTapTime < this.doubleTapTimeout) {
@@ -138,7 +157,7 @@ class GestureControls {
         this.lastTapTime = now;
     }
 
-    handleSingleTap(touch) {
+    private handleSingleTap(touch: Touch): void {
         // Single tap: Show/hide UI elements or activate focused element
         console.log('🎮 Single tap detected');
 
@@ -150,19 +169,19 @@ class GestureControls {
         }
 
         // Focus/activate element under touch
-        const element = document.elementFromPoint(touch.clientX, touch.clientY);
+        const element = document.elementFromPoint(touch.clientX, touch.clientY) as HTMLElement | null;
         if (element && element.click) {
             element.click();
         }
     }
 
-    handleDoubleTap(touch) {
+    private handleDoubleTap(touch: Touch): void {
         console.log('🎮 Double tap detected');
         this.isDoubleTapDetection = true;
 
         // Double tap: Toggle monitoring or read now
-        const readNowBtn = document.getElementById('read-now-btn');
-        const monitorToggle = document.getElementById('monitor-toggle');
+        const readNowBtn = document.getElementById('read-now-btn') as HTMLButtonElement | null;
+        const monitorToggle = document.getElementById('monitor-toggle') as HTMLButtonElement | null;
 
         if (readNowBtn && readNowBtn.offsetParent) {
             readNowBtn.click();
@@ -171,11 +190,11 @@ class GestureControls {
         }
     }
 
-    handleLongPress(touch) {
+    private handleLongPress(touch: Touch): void {
         console.log('🎮 Long press detected');
 
         // Long press: Open settings or context menu
-        const settingsBtn = document.getElementById('settings-btn');
+        const settingsBtn = document.getElementById('settings-btn') as HTMLButtonElement | null;
         if (settingsBtn) {
             settingsBtn.click();
         }
@@ -186,7 +205,7 @@ class GestureControls {
         }
     }
 
-    handleSwipe(deltaX, deltaY, deltaTime) {
+    private handleSwipe(deltaX: number, deltaY: number, deltaTime: number): void {
         const absX = Math.abs(deltaX);
         const absY = Math.abs(deltaY);
         const isHorizontal = absX > absY;
@@ -213,7 +232,7 @@ class GestureControls {
         }
     }
 
-    handleSwipeLeft() {
+    private handleSwipeLeft(): void {
         console.log('🎮 Swipe left: Switch to previous setting or close panel');
 
         // Close settings if open
@@ -227,13 +246,13 @@ class GestureControls {
         this.adjustCameraSetting('zoom', -0.2);
     }
 
-    handleSwipeRight() {
+    private handleSwipeRight(): void {
         console.log('🎮 Swipe right: Open settings or next setting');
 
         // Open settings if closed
         const settingsModal = document.getElementById('settings-modal');
         if (settingsModal && settingsModal.classList.contains('hidden')) {
-            const settingsBtn = document.getElementById('settings-btn');
+            const settingsBtn = document.getElementById('settings-btn') as HTMLButtonElement | null;
             if (settingsBtn) settingsBtn.click();
             return;
         }
@@ -242,17 +261,17 @@ class GestureControls {
         this.adjustCameraSetting('zoom', 0.2);
     }
 
-    handleSwipeUp() {
+    private handleSwipeUp(): void {
         console.log('🎮 Swipe up: Increase setting or zoom in');
         this.adjustCameraSetting('focus', 50);
     }
 
-    handleSwipeDown() {
+    private handleSwipeDown(): void {
         console.log('🎮 Swipe down: Decrease setting or zoom out');
         this.adjustCameraSetting('focus', -50);
     }
 
-    handleTwoFingerStart(event) {
+    private handleTwoFingerStart(event: TouchEvent): void {
         // Two finger gestures for advanced controls
         const touch1 = event.touches[0];
         const touch2 = event.touches[1];
@@ -261,7 +280,7 @@ class GestureControls {
         this.initialRotation = this.getAngle(touch1, touch2);
     }
 
-    handleTwoFingerMove(event) {
+    private handleTwoFingerMove(event: TouchEvent): void {
         if (event.touches.length === 2) {
             const touch1 = event.touches[0];
             const touch2 = event.touches[1];
@@ -284,10 +303,11 @@ class GestureControls {
     }
 
     // Video-specific touch handlers for crop area
-    handleVideoTouchStart(event) {
+    private handleVideoTouchStart(event: TouchEvent): void {
         if (event.touches.length === 1) {
             const touch = event.touches[0];
-            const rect = event.target.getBoundingClientRect();
+            const target = event.target as HTMLElement;
+            const rect = target.getBoundingClientRect();
             const x = (touch.clientX - rect.left) / rect.width;
             const y = (touch.clientY - rect.top) / rect.height;
 
@@ -296,15 +316,16 @@ class GestureControls {
         }
     }
 
-    handleVideoTouchMove(event) {
+    private handleVideoTouchMove(event: TouchEvent): void {
         // Visual feedback for crop area selection
         event.preventDefault();
     }
 
-    handleVideoTouchEnd(event) {
+    private handleVideoTouchEnd(event: TouchEvent): void {
         if (this.cropStartX !== undefined && this.cropStartY !== undefined) {
             const touch = event.changedTouches[0];
-            const rect = event.target.getBoundingClientRect();
+            const target = event.target as HTMLElement;
+            const rect = target.getBoundingClientRect();
             const x = (touch.clientX - rect.left) / rect.width;
             const y = (touch.clientY - rect.top) / rect.height;
 
@@ -325,44 +346,45 @@ class GestureControls {
     }
 
     // Utility functions
-    getDistance(touch1, touch2) {
+    private getDistance(touch1: Touch, touch2: Touch): number {
         const dx = touch1.clientX - touch2.clientX;
         const dy = touch1.clientY - touch2.clientY;
         return Math.sqrt(dx * dx + dy * dy);
     }
 
-    getAngle(touch1, touch2) {
+    private getAngle(touch1: Touch, touch2: Touch): number {
         return Math.atan2(touch2.clientY - touch1.clientY, touch2.clientX - touch1.clientX);
     }
 
-    adjustCameraSetting(setting, delta) {
+    private adjustCameraSetting(setting: 'zoom' | 'focus', delta: number): void {
         if (setting === 'zoom') {
-            const zoomControl = document.getElementById('camera-zoom');
+            const zoomControl = document.getElementById('camera-zoom') as HTMLInputElement | null;
             if (zoomControl) {
                 const currentValue = parseFloat(zoomControl.value);
                 const newValue = Math.max(1, Math.min(5, currentValue + delta));
-                zoomControl.value = newValue;
+                zoomControl.value = String(newValue);
                 zoomControl.dispatchEvent(new Event('input'));
             }
         } else if (setting === 'focus') {
-            const focusControl = document.getElementById('camera-focus');
+            const focusControl = document.getElementById('camera-focus') as HTMLInputElement | null;
             if (focusControl) {
                 const currentValue = parseFloat(focusControl.value);
                 const newValue = Math.max(0, Math.min(1000, currentValue + delta));
-                focusControl.value = newValue;
+                focusControl.value = String(newValue);
                 focusControl.dispatchEvent(new Event('input'));
             }
         }
     }
 
-    closeSettings() {
-        const closeBtn = document.getElementById('close-settings');
+    private closeSettings(): void {
+        const closeBtn = document.getElementById('close-settings') as HTMLButtonElement | null;
         if (closeBtn) closeBtn.click();
     }
 
-    loadGestureSettings() {
+    private loadGestureSettings(): void {
         // Load gesture preferences from localStorage
-        const settings = JSON.parse(localStorage.getItem('captnreverse-gestures') || '{}');
+        const settingsStr = localStorage.getItem('captnreverse-gestures');
+        const settings: GestureSettings = settingsStr ? JSON.parse(settingsStr) : {};
 
         this.gestureThreshold = settings.threshold || 50;
         this.tapTimeout = settings.tapTimeout || 300;
@@ -370,8 +392,8 @@ class GestureControls {
         this.longPressTimeout = settings.longPressTimeout || 800;
     }
 
-    saveGestureSettings() {
-        const settings = {
+    public saveGestureSettings(): void {
+        const settings: GestureSettings = {
             threshold: this.gestureThreshold,
             tapTimeout: this.tapTimeout,
             doubleTapTimeout: this.doubleTapTimeout,
@@ -383,9 +405,9 @@ class GestureControls {
 }
 
 // Initialize gesture controls when module loads
-let gestureControls = null;
+let gestureControls: GestureControls | null = null;
 
-function initGestureControls() {
+function initGestureControls(): GestureControls {
     if (!gestureControls) {
         gestureControls = new GestureControls();
     }

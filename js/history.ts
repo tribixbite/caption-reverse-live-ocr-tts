@@ -5,9 +5,86 @@
 
 import { AppState } from './config.js';
 import { speak } from './speech.js';
+import type { HistoryEntry, GamingSession, CropArea } from './types.js';
+
+// Extend Window interface for global functions
+declare global {
+    interface Window {
+        toggleHistoryPanel: typeof toggleHistoryPanel;
+        selectHistoryEntry: typeof selectHistoryEntry;
+    }
+}
+
+// History configuration interface
+interface HistoryConfig {
+    maxEntries: number;
+    autoSave: boolean;
+    searchMinLength: number;
+    sessionTimeout: number;
+    exportFormats: string[];
+}
+
+// History state interface
+interface HistoryState {
+    entries: HistoryEntry[];
+    currentSession: GamingSession | null;
+    searchResults: HistoryEntry[];
+    isSearchActive: boolean;
+    lastSearch: string;
+}
+
+// Search options interface
+interface SearchOptions {
+    caseSensitive?: boolean;
+    exactMatch?: boolean;
+    minConfidence?: number;
+    sessionId?: string | null;
+    dateRange?: {
+        start?: Date;
+        end?: Date;
+    } | null;
+}
+
+// Entry metadata interface
+interface EntryMetadata {
+    ocrEngine?: 'tesseract' | 'paddle';
+    processingTime?: number;
+    cropArea?: CropArea;
+    preprocessingTime?: number;
+    [key: string]: unknown;
+}
+
+// Saved history data interface
+interface SavedHistoryData {
+    version?: string;
+    lastSaved?: number;
+    currentSession?: GamingSession | null;
+    entries?: HistoryEntry[];
+}
+
+// History statistics interface
+interface HistoryStatistics {
+    totalEntries: number;
+    currentSessionEntries: number;
+    averageConfidence: string;
+    sessionDuration: string;
+    topOCREngine: string;
+    searchActive: boolean;
+    lastSearch: string;
+}
+
+// Session statistics interface
+interface SessionStats {
+    sessionName: string;
+    duration: string;
+    entriesCount: number;
+    averageConfidence: string;
+    entriesPerMinute: string;
+    topText: string;
+}
 
 // History configuration
-const HISTORY_CONFIG = {
+const HISTORY_CONFIG: HistoryConfig = {
     maxEntries: 500, // Maximum history entries to keep
     autoSave: true,
     searchMinLength: 2,
@@ -16,7 +93,7 @@ const HISTORY_CONFIG = {
 };
 
 // History state management
-let historyState = {
+let historyState: HistoryState = {
     entries: [],
     currentSession: null,
     searchResults: [],
@@ -25,7 +102,7 @@ let historyState = {
 };
 
 // Initialize history system
-export function initHistorySystem() {
+export function initHistorySystem(): void {
     console.log('📚 Initializing OCR History System...');
 
     // Load existing history
@@ -47,24 +124,29 @@ export function initHistorySystem() {
 }
 
 // Add new OCR result to history
-export function addToHistory(text, confidence, timestamp = Date.now(), metadata = {}) {
-    if (!text || text.trim().length === 0) return;
+export function addToHistory(
+    text: string,
+    confidence: number,
+    timestamp: number = Date.now(),
+    metadata: EntryMetadata = {}
+): HistoryEntry | undefined {
+    if (!text || text.trim().length === 0) return undefined;
 
-    const entry = {
+    const entry: HistoryEntry = {
         id: generateEntryId(),
         text: text.trim(),
         confidence: Math.round(confidence),
         timestamp,
-        sessionId: historyState.currentSession?.id,
+        sessionId: historyState.currentSession?.id || '',
         metadata: {
-            ocrEngine: AppState.currentOCREngine || 'tesseract',
+            ocrEngine: metadata.ocrEngine || (AppState.currentOCREngine as 'tesseract' | 'paddle') || 'tesseract',
             processingTime: metadata.processingTime || 0,
             cropArea: metadata.cropArea || { ...AppState.currentCrop },
             settings: {
                 sensitivity: AppState.settings.sensitivity,
                 imageThreshold: AppState.settings.imageThreshold
             },
-            ...metadata
+            preprocessingTime: metadata.preprocessingTime
         }
     };
 
@@ -96,7 +178,7 @@ export function addToHistory(text, confidence, timestamp = Date.now(), metadata 
 }
 
 // Search through history
-export function searchHistory(query, options = {}) {
+export function searchHistory(query: string, options: SearchOptions = {}): HistoryEntry[] {
     if (!query || query.length < HISTORY_CONFIG.searchMinLength) {
         historyState.searchResults = [];
         historyState.isSearchActive = false;
@@ -147,7 +229,7 @@ export function searchHistory(query, options = {}) {
 }
 
 // Start new gaming session
-function startNewSession() {
+function startNewSession(): void {
     historyState.currentSession = {
         id: generateSessionId(),
         startTime: Date.now(),
@@ -161,17 +243,17 @@ function startNewSession() {
 }
 
 // Generate unique entry ID
-function generateEntryId() {
+function generateEntryId(): string {
     return `ocr_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
 
 // Generate unique session ID
-function generateSessionId() {
+function generateSessionId(): string {
     return `session_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
 }
 
 // Create history UI panel
-function createHistoryPanel() {
+function createHistoryPanel(): void {
     const historyPanel = document.createElement('div');
     historyPanel.id = 'history-panel';
     historyPanel.className = 'fixed top-20 left-4 bottom-4 w-80 gaming-panel rounded-2xl p-4 hidden z-30 overflow-hidden';
@@ -218,44 +300,61 @@ function createHistoryPanel() {
 }
 
 // Setup history panel event listeners
-function setupHistoryEventListeners() {
+function setupHistoryEventListeners(): void {
     // Search functionality
-    const searchInput = document.getElementById('history-search');
-    searchInput.addEventListener('input', (e) => {
-        const query = e.target.value;
-        if (query.length >= HISTORY_CONFIG.searchMinLength) {
-            searchHistory(query);
-        } else {
-            clearSearch();
-        }
-    });
+    const searchInput = document.getElementById('history-search') as HTMLInputElement | null;
+    if (searchInput) {
+        searchInput.addEventListener('input', (e: Event) => {
+            const target = e.target as HTMLInputElement;
+            const query = target.value;
+            if (query.length >= HISTORY_CONFIG.searchMinLength) {
+                searchHistory(query);
+            } else {
+                clearSearch();
+            }
+        });
+    }
 
     // Clear search
-    document.getElementById('clear-search').addEventListener('click', () => {
-        clearSearch();
-        searchInput.value = '';
-    });
+    const clearSearchBtn = document.getElementById('clear-search');
+    if (clearSearchBtn) {
+        clearSearchBtn.addEventListener('click', () => {
+            clearSearch();
+            if (searchInput) {
+                searchInput.value = '';
+            }
+        });
+    }
 
     // Export history
-    document.getElementById('export-history').addEventListener('click', () => {
-        exportHistory('txt');
-    });
+    const exportBtn = document.getElementById('export-history');
+    if (exportBtn) {
+        exportBtn.addEventListener('click', () => {
+            exportHistory('txt');
+        });
+    }
 
     // Clear all history
-    document.getElementById('clear-history').addEventListener('click', () => {
-        if (confirm('Clear all OCR history? This cannot be undone.')) {
-            clearAllHistory();
-        }
-    });
+    const clearHistoryBtn = document.getElementById('clear-history');
+    if (clearHistoryBtn) {
+        clearHistoryBtn.addEventListener('click', () => {
+            if (confirm('Clear all OCR history? This cannot be undone.')) {
+                clearAllHistory();
+            }
+        });
+    }
 
     // Session statistics
-    document.getElementById('session-stats').addEventListener('click', () => {
-        showSessionStatistics();
-    });
+    const sessionStatsBtn = document.getElementById('session-stats');
+    if (sessionStatsBtn) {
+        sessionStatsBtn.addEventListener('click', () => {
+            showSessionStatistics();
+        });
+    }
 }
 
 // Update history UI display
-function updateHistoryUI() {
+function updateHistoryUI(): void {
     const historyList = document.getElementById('history-list');
     const searchCount = document.getElementById('search-count');
 
@@ -291,7 +390,7 @@ function updateHistoryUI() {
 }
 
 // Select and speak history entry
-function selectHistoryEntry(entryId) {
+function selectHistoryEntry(entryId: string): void {
     const entry = historyState.entries.find(e => e.id === entryId);
     if (entry) {
         speak(entry.text);
@@ -309,7 +408,7 @@ function selectHistoryEntry(entryId) {
 }
 
 // Clear search results
-function clearSearch() {
+function clearSearch(): void {
     historyState.searchResults = [];
     historyState.isSearchActive = false;
     historyState.lastSearch = '';
@@ -317,7 +416,7 @@ function clearSearch() {
 }
 
 // Clear all history
-function clearAllHistory() {
+function clearAllHistory(): void {
     historyState.entries = [];
     historyState.searchResults = [];
     historyState.isSearchActive = false;
@@ -327,7 +426,7 @@ function clearAllHistory() {
 }
 
 // Export history in various formats
-export function exportHistory(format = 'txt') {
+export function exportHistory(format: 'txt' | 'json' | 'csv' = 'txt'): void {
     const entriesToExport = historyState.isSearchActive
         ? historyState.searchResults
         : historyState.entries;
@@ -379,10 +478,10 @@ export function exportHistory(format = 'txt') {
 }
 
 // Show session statistics
-function showSessionStatistics() {
+function showSessionStatistics(): void {
     if (!historyState.currentSession) return;
 
-    const sessionEntries = historyState.entries.filter(e => e.sessionId === historyState.currentSession.id);
+    const sessionEntries = historyState.entries.filter(e => e.sessionId === historyState.currentSession!.id);
     const avgConfidence = sessionEntries.length > 0
         ? sessionEntries.reduce((sum, e) => sum + e.confidence, 0) / sessionEntries.length
         : 0;
@@ -390,7 +489,7 @@ function showSessionStatistics() {
     const sessionDuration = Date.now() - historyState.currentSession.startTime;
     const durationMinutes = sessionDuration / 60000;
 
-    const stats = {
+    const stats: SessionStats = {
         sessionName: historyState.currentSession.name,
         duration: `${durationMinutes.toFixed(1)} minutes`,
         entriesCount: sessionEntries.length,
@@ -444,8 +543,10 @@ function showSessionStatistics() {
 }
 
 // Toggle history panel visibility
-export function toggleHistoryPanel() {
+export function toggleHistoryPanel(): void {
     const panel = document.getElementById('history-panel');
+    if (!panel) return;
+
     const isVisible = !panel.classList.contains('hidden');
 
     if (isVisible) {
@@ -459,11 +560,11 @@ export function toggleHistoryPanel() {
 }
 
 // Load history from localStorage
-function loadHistoryFromStorage() {
+function loadHistoryFromStorage(): void {
     try {
         const saved = localStorage.getItem('ocrHistory');
         if (saved) {
-            const data = JSON.parse(saved);
+            const data: SavedHistoryData = JSON.parse(saved);
             historyState.entries = data.entries || [];
 
             // Clean up old entries (older than 7 days)
@@ -479,9 +580,9 @@ function loadHistoryFromStorage() {
 }
 
 // Save history to localStorage
-function saveHistoryToStorage() {
+function saveHistoryToStorage(): void {
     try {
-        const dataToSave = {
+        const dataToSave: SavedHistoryData = {
             version: '1.0',
             lastSaved: Date.now(),
             currentSession: historyState.currentSession,
@@ -495,7 +596,7 @@ function saveHistoryToStorage() {
 }
 
 // Get history statistics
-export function getHistoryStatistics() {
+export function getHistoryStatistics(): HistoryStatistics {
     const total = historyState.entries.length;
     const currentSessionEntries = historyState.entries.filter(e =>
         e.sessionId === historyState.currentSession?.id
@@ -505,10 +606,10 @@ export function getHistoryStatistics() {
         ? historyState.entries.reduce((sum, e) => sum + e.confidence, 0) / total
         : 0;
 
-    const topEngines = historyState.entries.reduce((acc, entry) => {
+    const topEngines: Record<string, number> = historyState.entries.reduce((acc, entry) => {
         acc[entry.metadata.ocrEngine] = (acc[entry.metadata.ocrEngine] || 0) + 1;
         return acc;
-    }, {});
+    }, {} as Record<string, number>);
 
     return {
         totalEntries: total,
@@ -526,7 +627,7 @@ export function getHistoryStatistics() {
 }
 
 // Cleanup history system
-export function cleanupHistorySystem() {
+export function cleanupHistorySystem(): void {
     // Save final state
     saveHistoryToStorage();
 

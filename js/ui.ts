@@ -5,31 +5,58 @@
 
 import { AppState, CONFIG } from './config.js';
 import { saveSettings } from './settings.js';
+import type { CropArea } from './types.js';
+
+// Extend Window interface for monitoringInterval
+declare global {
+    interface Window {
+        monitoringInterval: number | null;
+    }
+}
 
 // Crop overlay animation management
-let cropOverlayAnimationId = null;
-let isDraggingCrop = false;
+let cropOverlayAnimationId: number | null = null;
+let isDraggingCrop: boolean = false;
 
 // Update status indicator
-export function updateStatus(text, dotClass) {
-    document.getElementById('status-text').textContent = text;
-    const dot = document.getElementById('status-dot');
-    dot.className = `w-2 h-2 rounded-full ${dotClass}`;
+export function updateStatus(text: string, dotClass: string): void {
+    const statusText = document.getElementById('status-text') as HTMLElement | null;
+    const dot = document.getElementById('status-dot') as HTMLElement | null;
+
+    if (statusText) {
+        statusText.textContent = text;
+    }
+    if (dot) {
+        dot.className = `w-2 h-2 rounded-full ${dotClass}`;
+    }
 }
 
 // Display detected text in UI with user feedback system
-export function displayText(text, confidence, processingTime) {
-    document.getElementById('detected-text').textContent = text;
-    document.getElementById('confidence-score').textContent = Math.round(confidence);
-    document.getElementById('processing-time').textContent = processingTime;
-    document.getElementById('text-display').classList.remove('hidden');
+export function displayText(text: string, confidence: number, processingTime: number): void {
+    const detectedText = document.getElementById('detected-text') as HTMLElement | null;
+    const confidenceScore = document.getElementById('confidence-score') as HTMLElement | null;
+    const processingTimeEl = document.getElementById('processing-time') as HTMLElement | null;
+    const textDisplay = document.getElementById('text-display') as HTMLElement | null;
+
+    if (detectedText) {
+        detectedText.textContent = text;
+    }
+    if (confidenceScore) {
+        confidenceScore.textContent = Math.round(confidence).toString();
+    }
+    if (processingTimeEl) {
+        processingTimeEl.textContent = processingTime.toString();
+    }
+    if (textDisplay) {
+        textDisplay.classList.remove('hidden');
+    }
 
     // Add user feedback system for accuracy improvement
     showUserFeedbackPrompt(text, confidence);
 }
 
 // Show user feedback prompt to improve OCR accuracy
-function showUserFeedbackPrompt(text, confidence) {
+function showUserFeedbackPrompt(text: string, confidence: number): void {
     // Only show feedback for low-confidence results or periodically for high-confidence
     const shouldShowFeedback = confidence < 70 || (Math.random() < 0.1 && confidence < 90);
 
@@ -70,11 +97,11 @@ function showUserFeedbackPrompt(text, confidence) {
             <div class="flex gap-2">
                 <button onclick="handleUserFeedback(true, '${text.replace(/'/g, "\\'")}', ${confidence})"
                         class="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 px-3 rounded-lg text-sm font-medium transition-colors">
-                    ✅ Correct
+                    Correct
                 </button>
                 <button onclick="handleUserFeedback(false, '${text.replace(/'/g, "\\'")}', ${confidence})"
                         class="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 px-3 rounded-lg text-sm font-medium transition-colors">
-                    ❌ Incorrect
+                    Incorrect
                 </button>
             </div>
 
@@ -95,43 +122,50 @@ function showUserFeedbackPrompt(text, confidence) {
 }
 
 // Start crop overlay rendering
-export function startCropOverlay() {
-    const video = document.getElementById('camera-feed');
-    const canvas = document.getElementById('crop-overlay');
-    const ctx = canvas.getContext('2d');
-    
-    function drawOverlay() {
+export function startCropOverlay(): void {
+    const video = document.getElementById('camera-feed') as HTMLVideoElement | null;
+    const canvas = document.getElementById('crop-overlay') as HTMLCanvasElement | null;
+
+    if (!video || !canvas) return;
+
+    const ctx = canvas.getContext('2d') as CanvasRenderingContext2D | null;
+
+    if (!ctx) return;
+
+    function drawOverlay(): void {
+        if (!video || !canvas || !ctx) return;
+
         if (video.videoWidth === 0 || video.videoHeight === 0) {
             // Only continue animation if we're waiting for video to load
             cropOverlayAnimationId = requestAnimationFrame(drawOverlay);
             return;
         }
-        
+
         // Set canvas size to match video
         const rect = video.getBoundingClientRect();
         canvas.width = rect.width;
         canvas.height = rect.height;
-        
+
         // Clear canvas
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        
+
         // Draw semi-transparent overlay
         ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-        
+
         // Clear crop area
         const x = AppState.currentCrop.x * canvas.width;
         const y = AppState.currentCrop.y * canvas.height;
         const width = AppState.currentCrop.width * canvas.width;
         const height = AppState.currentCrop.height * canvas.height;
-        
+
         ctx.clearRect(x, y, width, height);
-        
+
         // Draw crop border
         ctx.strokeStyle = '#0ea5e9';
         ctx.lineWidth = 3;
         ctx.strokeRect(x, y, width, height);
-        
+
         // Draw corner handles
         const handleSize = CONFIG.CROP_HANDLE_SIZE;
         ctx.fillStyle = '#0ea5e9';
@@ -139,7 +173,7 @@ export function startCropOverlay() {
         ctx.fillRect(x + width - handleSize/2, y - handleSize/2, handleSize, handleSize);
         ctx.fillRect(x - handleSize/2, y + height - handleSize/2, handleSize, handleSize);
         ctx.fillRect(x + width - handleSize/2, y + height - handleSize/2, handleSize, handleSize);
-        
+
         // Only continue animation loop while dragging or video not ready
         if (isDraggingCrop || video.videoWidth === 0 || video.videoHeight === 0) {
             cropOverlayAnimationId = requestAnimationFrame(drawOverlay);
@@ -147,38 +181,43 @@ export function startCropOverlay() {
             cropOverlayAnimationId = null; // Stop the loop when not needed
         }
     }
-    
+
     // Start initial draw
     drawOverlay();
 }
 
 // Force a single redraw without starting continuous loop
-export function redrawCropOverlay() {
+export function redrawCropOverlay(): void {
     if (!cropOverlayAnimationId && !isDraggingCrop) {
-        const video = document.getElementById('camera-feed');
-        const canvas = document.getElementById('crop-overlay');
-        const ctx = canvas.getContext('2d');
-        
+        const video = document.getElementById('camera-feed') as HTMLVideoElement | null;
+        const canvas = document.getElementById('crop-overlay') as HTMLCanvasElement | null;
+
+        if (!video || !canvas) return;
+
+        const ctx = canvas.getContext('2d') as CanvasRenderingContext2D | null;
+
+        if (!ctx) return;
+
         if (video.videoWidth > 0 && video.videoHeight > 0) {
             // Directly redraw without animation loop
             const rect = video.getBoundingClientRect();
             canvas.width = rect.width;
             canvas.height = rect.height;
-            
+
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
+
             const x = AppState.currentCrop.x * canvas.width;
             const y = AppState.currentCrop.y * canvas.height;
             const width = AppState.currentCrop.width * canvas.width;
             const height = AppState.currentCrop.height * canvas.height;
-            
+
             ctx.clearRect(x, y, width, height);
             ctx.strokeStyle = '#0ea5e9';
             ctx.lineWidth = 3;
             ctx.strokeRect(x, y, width, height);
-            
+
             const handleSize = CONFIG.CROP_HANDLE_SIZE;
             ctx.fillStyle = '#0ea5e9';
             ctx.fillRect(x - handleSize/2, y - handleSize/2, handleSize, handleSize);
@@ -190,30 +229,37 @@ export function redrawCropOverlay() {
 }
 
 // Set up crop selection interface
-export function setupCropSelector() {
-    const container = document.getElementById('camera-container');
-    let startX = 0, startY = 0;
+export function setupCropSelector(): void {
+    const container = document.getElementById('camera-container') as HTMLElement | null;
 
-    container.addEventListener('mousedown', (e) => {
+    if (!container) return;
+
+    let startX: number = 0;
+    let startY: number = 0;
+
+    container.addEventListener('mousedown', (e: MouseEvent) => {
         e.preventDefault();
         const rect = container.getBoundingClientRect();
         startX = (e.clientX - rect.left) / rect.width;
         startY = (e.clientY - rect.top) / rect.height;
         isDraggingCrop = true; // Use global dragging state
-        
+
         // Start animation loop during dragging
         if (!cropOverlayAnimationId) {
             startCropOverlay();
         }
-        
+
         // Hide instructions when user starts interacting
-        document.getElementById('crop-instructions').style.opacity = '0';
+        const instructions = document.getElementById('crop-instructions') as HTMLElement | null;
+        if (instructions) {
+            instructions.style.opacity = '0';
+        }
     });
 
-    container.addEventListener('mousemove', (e) => {
+    container.addEventListener('mousemove', (e: MouseEvent) => {
         if (!isDraggingCrop) return;
         e.preventDefault();
-        
+
         const rect = container.getBoundingClientRect();
         const endX = (e.clientX - rect.left) / rect.width;
         const endY = (e.clientY - rect.top) / rect.height;
@@ -241,25 +287,28 @@ export function setupCropSelector() {
     });
 
     // Touch support for mobile
-    container.addEventListener('touchstart', (e) => {
+    container.addEventListener('touchstart', (e: TouchEvent) => {
         e.preventDefault();
         const touch = e.touches[0];
         const rect = container.getBoundingClientRect();
         startX = (touch.clientX - rect.left) / rect.width;
         startY = (touch.clientY - rect.top) / rect.height;
         isDraggingCrop = true; // Use global dragging state
-        
+
         // Start animation loop during dragging
         if (!cropOverlayAnimationId) {
             startCropOverlay();
         }
-        document.getElementById('crop-instructions').style.opacity = '0';
+        const instructions = document.getElementById('crop-instructions') as HTMLElement | null;
+        if (instructions) {
+            instructions.style.opacity = '0';
+        }
     });
 
-    container.addEventListener('touchmove', (e) => {
+    container.addEventListener('touchmove', (e: TouchEvent) => {
         if (!isDraggingCrop) return;
         e.preventDefault();
-        
+
         const touch = e.touches[0];
         const rect = container.getBoundingClientRect();
         const endX = (touch.clientX - rect.left) / rect.width;
@@ -285,7 +334,7 @@ export function setupCropSelector() {
     const savedCrop = localStorage.getItem('captn-reverse-crop');
     if (savedCrop) {
         try {
-            AppState.currentCrop = JSON.parse(savedCrop);
+            AppState.currentCrop = JSON.parse(savedCrop) as CropArea;
         } catch (e) {
             setCrop(0.25, 0.25, 0.5, 0.5);
         }
@@ -295,28 +344,33 @@ export function setupCropSelector() {
 }
 
 // Set crop area programmatically
-export function setCrop(x, y, width, height) {
+export function setCrop(x: number, y: number, width: number, height: number): void {
     AppState.currentCrop = { x, y, width, height };
     // Hide instructions once user selects a crop area
-    document.getElementById('crop-instructions').style.opacity = '0';
+    const instructions = document.getElementById('crop-instructions') as HTMLElement | null;
+    if (instructions) {
+        instructions.style.opacity = '0';
+    }
     localStorage.setItem('captn-reverse-crop', JSON.stringify(AppState.currentCrop));
     // Trigger redraw with new crop area
     redrawCropOverlay();
 }
 
 // Toggle monitoring mode
-export function toggleMonitoring() {
+export function toggleMonitoring(): void {
     AppState.isMonitoring = !AppState.isMonitoring;
-    const btn = document.getElementById('monitor-toggle');
-    
+    const btn = document.getElementById('monitor-toggle') as HTMLElement | null;
+
+    if (!btn) return;
+
     if (AppState.isMonitoring) {
-        btn.textContent = '⏸️ Pause Monitoring';
+        btn.textContent = 'Pause Monitoring';
         btn.classList.remove('bg-green-600', 'hover:bg-green-700');
         btn.classList.add('bg-red-600', 'hover:bg-red-700');
         updateStatus('Monitoring active', 'bg-green-400 animate-pulse');
         startMonitoring();
     } else {
-        btn.textContent = '▶️ Start Monitoring';
+        btn.textContent = 'Start Monitoring';
         btn.classList.remove('bg-red-600', 'hover:bg-red-700');
         btn.classList.add('bg-green-600', 'hover:bg-green-700');
         updateStatus('Monitoring paused', 'bg-yellow-400');
@@ -325,17 +379,17 @@ export function toggleMonitoring() {
 }
 
 // Start monitoring with interval
-export function startMonitoring() {
+export function startMonitoring(): void {
     if (!AppState.stream || !AppState.ocrWorker) return;
-    
-    window.monitoringInterval = setInterval(async () => {
+
+    window.monitoringInterval = window.setInterval(async () => {
         const { processFrame } = await import('./ocr.js');
         await processFrame();
     }, AppState.settings.processingInterval); // Use configurable interval
 }
 
 // Stop monitoring
-export function stopMonitoring() {
+export function stopMonitoring(): void {
     if (window.monitoringInterval) {
         clearInterval(window.monitoringInterval);
         window.monitoringInterval = null;
@@ -343,6 +397,6 @@ export function stopMonitoring() {
 }
 
 // Update crop display (legacy compatibility)
-export function updateCropDisplay() {
+export function updateCropDisplay(): void {
     redrawCropOverlay();
 }

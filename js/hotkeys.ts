@@ -9,9 +9,41 @@ import { speak, stopSpeech } from './speech.js';
 import { toggleMonitoring } from './ui.js';
 import { generatePerformanceReport } from './performance.js';
 import { openSettings, closeSettings } from './settings.js';
+import type { HotkeyConfig, PerformanceReport } from './types.js';
+
+// Extend Window interface for global function
+declare global {
+    interface Window {
+        toggleHotkeyHelp: () => void;
+    }
+}
+
+// Hotkey configuration map type
+type HotkeyConfigMap = Record<string, HotkeyConfig>;
+
+// Notification type
+type NotificationType = 'info' | 'success' | 'warning' | 'error';
+
+// Hotkey state interface
+interface HotkeyState {
+    enabled: boolean;
+    lastText: string;
+    isMonitoringPaused: boolean;
+    helpVisible: boolean;
+    sessionPaused: boolean;
+}
+
+// Session data interface for saving
+interface SessionData {
+    timestamp: number;
+    settings: typeof AppState.settings;
+    lastText: string;
+    performance: PerformanceReport;
+    crop: typeof AppState.currentCrop;
+}
 
 // Hotkey configuration with gaming-optimized defaults
-const HOTKEY_CONFIG = {
+const HOTKEY_CONFIG: HotkeyConfigMap = {
     // Primary OCR Functions (F1-F4)
     F1: { action: 'readNow', description: 'Read Text Now', enabled: true },
     F2: { action: 'toggleMonitoring', description: 'Toggle Continuous Monitoring', enabled: true },
@@ -44,7 +76,7 @@ const HOTKEY_CONFIG = {
 };
 
 // State management
-let hotkeyState = {
+let hotkeyState: HotkeyState = {
     enabled: true,
     lastText: '',
     isMonitoringPaused: false,
@@ -53,8 +85,8 @@ let hotkeyState = {
 };
 
 // Initialize hotkey system
-export function initHotkeySystem() {
-    console.log('🎮 Initializing Gaming Hotkey System...');
+export function initHotkeySystem(): void {
+    console.log('Initializing Gaming Hotkey System...');
 
     // Add global event listeners
     document.addEventListener('keydown', handleGlobalKeydown);
@@ -66,19 +98,19 @@ export function initHotkeySystem() {
     // Load user hotkey preferences
     loadHotkeyPreferences();
 
-    console.log('✅ Gaming Hotkey System initialized');
-    console.log('📋 Available hotkeys:', Object.keys(HOTKEY_CONFIG));
+    console.log('Gaming Hotkey System initialized');
+    console.log('Available hotkeys:', Object.keys(HOTKEY_CONFIG));
 
     // Show initial hotkey notification
     showHotkeyNotification('Gaming Hotkeys Enabled! Press F12 for help');
 }
 
 // Handle global keydown events
-function handleGlobalKeydown(event) {
+function handleGlobalKeydown(event: KeyboardEvent): void {
     if (!hotkeyState.enabled) return;
 
     // Don't interfere with typing in input fields (except when gaming)
-    const activeElement = document.activeElement;
+    const activeElement = document.activeElement as HTMLElement | null;
     const isInputField = activeElement && (
         activeElement.tagName === 'INPUT' ||
         activeElement.tagName === 'TEXTAREA' ||
@@ -86,7 +118,7 @@ function handleGlobalKeydown(event) {
     );
 
     // Allow hotkeys in input fields only for critical gaming functions
-    const criticalKeys = ['F1', 'F2', 'F5', 'F6', 'F12'];
+    const criticalKeys: string[] = ['F1', 'F2', 'F5', 'F6', 'F12'];
     const keyString = getKeyString(event);
 
     if (isInputField && !criticalKeys.includes(keyString)) {
@@ -98,7 +130,7 @@ function handleGlobalKeydown(event) {
         event.preventDefault();
         event.stopPropagation();
 
-        console.log(`🎮 Hotkey triggered: ${keyString} - ${hotkeyConfig.description}`);
+        console.log(`Hotkey triggered: ${keyString} - ${hotkeyConfig.description}`);
         executeHotkeyAction(hotkeyConfig.action, keyString);
 
         // Visual feedback for hotkey activation
@@ -107,14 +139,14 @@ function handleGlobalKeydown(event) {
 }
 
 // Handle global keyup events (for key combinations that need release detection)
-function handleGlobalKeyup(event) {
+function handleGlobalKeyup(_event: KeyboardEvent): void {
     // Currently no keyup-specific actions, but ready for future features
     // like push-to-talk functionality
 }
 
 // Get standardized key string from event
-function getKeyString(event) {
-    const modifiers = [];
+function getKeyString(event: KeyboardEvent): string {
+    const modifiers: string[] = [];
     if (event.ctrlKey) modifiers.push('Ctrl');
     if (event.altKey) modifiers.push('Alt');
     if (event.shiftKey) modifiers.push('Shift');
@@ -135,7 +167,7 @@ function getKeyString(event) {
 }
 
 // Execute hotkey action
-async function executeHotkeyAction(action, keyString) {
+async function executeHotkeyAction(action: string, keyString: string): Promise<void> {
     try {
         switch (action) {
             case 'readNow':
@@ -213,14 +245,14 @@ async function executeHotkeyAction(action, keyString) {
 }
 
 // Hotkey action implementations
-function clearOCRHistory() {
+function clearOCRHistory(): void {
     // Implementation will be added with history system
     hotkeyState.lastText = '';
     showHotkeyNotification('OCR History Cleared');
-    console.log('🗑️ OCR history cleared via hotkey');
+    console.log('OCR history cleared via hotkey');
 }
 
-function speakLastRecognizedText() {
+function speakLastRecognizedText(): void {
     if (hotkeyState.lastText) {
         speak(hotkeyState.lastText);
         showHotkeyNotification(`Speaking: "${hotkeyState.lastText.substring(0, 30)}..."`);
@@ -230,7 +262,7 @@ function speakLastRecognizedText() {
     }
 }
 
-function toggleAutoRead() {
+function toggleAutoRead(): void {
     AppState.settings.autoRead = !AppState.settings.autoRead;
     // Import dynamically to avoid circular dependencies
     import('./settings.js').then(({ saveSettings }) => {
@@ -239,10 +271,10 @@ function toggleAutoRead() {
 
     const status = AppState.settings.autoRead ? 'Enabled' : 'Disabled';
     showHotkeyNotification(`Auto-Read ${status}`);
-    console.log(`🔊 Auto-read ${status.toLowerCase()} via hotkey`);
+    console.log(`Auto-read ${status.toLowerCase()} via hotkey`);
 }
 
-async function quickOCRWithoutAudio() {
+async function quickOCRWithoutAudio(): Promise<void> {
     const originalAutoRead = AppState.settings.autoRead;
     AppState.settings.autoRead = false; // Temporarily disable audio
 
@@ -254,7 +286,7 @@ async function quickOCRWithoutAudio() {
     }
 }
 
-function pauseAllOCRActivity() {
+function pauseAllOCRActivity(): void {
     hotkeyState.sessionPaused = !hotkeyState.sessionPaused;
 
     if (hotkeyState.sessionPaused) {
@@ -264,14 +296,14 @@ function pauseAllOCRActivity() {
         }
         stopSpeech();
         showHotkeyNotification('All OCR Activity Paused', 'warning');
-        console.log('⏸️ OCR activity paused via hotkey');
+        console.log('OCR activity paused via hotkey');
     } else {
         showHotkeyNotification('OCR Activity Resumed', 'success');
-        console.log('▶️ OCR activity resumed via hotkey');
+        console.log('OCR activity resumed via hotkey');
     }
 }
 
-function switchOCREngine() {
+function switchOCREngine(): void {
     const newEngine = AppState.currentOCREngine === 'tesseract' ? 'paddle' : 'tesseract';
 
     // Import dynamically to avoid circular dependencies
@@ -281,8 +313,8 @@ function switchOCREngine() {
     });
 }
 
-function saveCurrentSession() {
-    const sessionData = {
+function saveCurrentSession(): void {
+    const sessionData: SessionData = {
         timestamp: Date.now(),
         settings: AppState.settings,
         lastText: hotkeyState.lastText,
@@ -292,11 +324,16 @@ function saveCurrentSession() {
 
     localStorage.setItem('ocrGameSession', JSON.stringify(sessionData));
     showHotkeyNotification('Gaming session saved!');
-    console.log('💾 Gaming session saved via hotkey');
+    console.log('Gaming session saved via hotkey');
 }
 
-function toggleSettingsPanel() {
+function toggleSettingsPanel(): void {
     const settingsModal = document.getElementById('settings-modal');
+    if (!settingsModal) {
+        console.warn('Settings modal not found');
+        return;
+    }
+
     const isVisible = !settingsModal.classList.contains('hidden');
 
     if (isVisible) {
@@ -308,11 +345,11 @@ function toggleSettingsPanel() {
     }
 }
 
-function toggleFullscreenMode() {
+function toggleFullscreenMode(): void {
     if (!document.fullscreenElement) {
         document.documentElement.requestFullscreen().then(() => {
             showHotkeyNotification('Fullscreen Mode Enabled');
-        }).catch(err => {
+        }).catch((_err: Error) => {
             showHotkeyNotification('Fullscreen not supported', 'error');
         });
     } else {
@@ -323,14 +360,14 @@ function toggleFullscreenMode() {
 }
 
 // Display performance report in gaming-friendly overlay
-function displayPerformanceReport(report) {
+function displayPerformanceReport(report: PerformanceReport): void {
     const overlay = document.createElement('div');
     overlay.className = 'fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50';
     overlay.id = 'performance-overlay';
 
     overlay.innerHTML = `
         <div class="gaming-panel max-w-2xl w-full mx-4 p-8 rounded-2xl">
-            <h2 class="text-2xl font-bold text-gaming-cyan mb-6 text-center">🎮 Performance Report</h2>
+            <h2 class="text-2xl font-bold text-gaming-cyan mb-6 text-center">Performance Report</h2>
             <div class="grid grid-cols-2 gap-6 text-sm">
                 <div class="space-y-2">
                     <div class="flex justify-between">
@@ -370,7 +407,7 @@ function displayPerformanceReport(report) {
                 </div>
             </div>
             <div class="mt-8 text-center">
-                <button onclick="document.getElementById('performance-overlay').remove()"
+                <button onclick="document.getElementById('performance-overlay')?.remove()"
                         class="btn-primary px-8 py-3 rounded-xl">
                     Close (F9)
                 </button>
@@ -385,7 +422,7 @@ function displayPerformanceReport(report) {
         overlay.remove();
     }, 10000);
 
-    overlay.addEventListener('click', (e) => {
+    overlay.addEventListener('click', (e: MouseEvent) => {
         if (e.target === overlay) {
             clearTimeout(closeTimer);
             overlay.remove();
@@ -394,13 +431,13 @@ function displayPerformanceReport(report) {
 }
 
 // Create hotkey help overlay
-function createHotkeyHelpOverlay() {
+function createHotkeyHelpOverlay(): void {
     const helpOverlay = document.createElement('div');
     helpOverlay.id = 'hotkey-help-overlay';
     helpOverlay.className = 'fixed inset-0 bg-black bg-opacity-80 hidden items-center justify-center z-50';
 
     const hotkeyList = Object.entries(HOTKEY_CONFIG)
-        .filter(([key, config]) => config.enabled)
+        .filter(([_key, config]) => config.enabled)
         .map(([key, config]) =>
             `<div class="flex justify-between items-center py-2 border-b border-dark-700">
                 <span class="font-mono text-gaming-cyan">${key}</span>
@@ -411,7 +448,7 @@ function createHotkeyHelpOverlay() {
     helpOverlay.innerHTML = `
         <div class="gaming-panel max-w-4xl w-full mx-4 p-8 rounded-2xl max-h-[80vh] overflow-y-auto">
             <h2 class="text-3xl font-bold text-gaming-cyan mb-6 text-center animate-glow">
-                🎮 Gaming Hotkeys Reference
+                Gaming Hotkeys Reference
             </h2>
             <div class="grid md:grid-cols-2 gap-8">
                 <div>
@@ -421,12 +458,12 @@ function createHotkeyHelpOverlay() {
                 <div>
                     <h3 class="text-xl font-semibold text-gaming-purple mb-4">Gaming Tips</h3>
                     <div class="space-y-3 text-sm text-dark-300">
-                        <p>• <span class="text-gaming-green">F1</span> - Quick OCR for instant text recognition</p>
-                        <p>• <span class="text-gaming-blue">F2</span> - Start/stop continuous monitoring</p>
-                        <p>• <span class="text-gaming-yellow">F5</span> - Repeat last recognized text</p>
-                        <p>• <span class="text-gaming-purple">Ctrl+F2</span> - Pause all activity during cutscenes</p>
-                        <p>• <span class="text-gaming-cyan">Alt combinations</span> - Alternative keys for accessibility</p>
-                        <p>• <span class="text-gaming-red">F12</span> - Show/hide this help panel</p>
+                        <p>* <span class="text-gaming-green">F1</span> - Quick OCR for instant text recognition</p>
+                        <p>* <span class="text-gaming-blue">F2</span> - Start/stop continuous monitoring</p>
+                        <p>* <span class="text-gaming-yellow">F5</span> - Repeat last recognized text</p>
+                        <p>* <span class="text-gaming-purple">Ctrl+F2</span> - Pause all activity during cutscenes</p>
+                        <p>* <span class="text-gaming-cyan">Alt combinations</span> - Alternative keys for accessibility</p>
+                        <p>* <span class="text-gaming-red">F12</span> - Show/hide this help panel</p>
                     </div>
                 </div>
             </div>
@@ -442,8 +479,13 @@ function createHotkeyHelpOverlay() {
 }
 
 // Toggle hotkey help visibility
-function toggleHotkeyHelp() {
+function toggleHotkeyHelp(): void {
     const helpOverlay = document.getElementById('hotkey-help-overlay');
+    if (!helpOverlay) {
+        console.warn('Hotkey help overlay not found');
+        return;
+    }
+
     hotkeyState.helpVisible = !hotkeyState.helpVisible;
 
     if (hotkeyState.helpVisible) {
@@ -458,7 +500,7 @@ function toggleHotkeyHelp() {
 }
 
 // Show visual feedback for hotkey activation
-function showHotkeyFeedback(keyString, description) {
+function showHotkeyFeedback(keyString: string, description: string): void {
     const feedback = document.createElement('div');
     feedback.className = 'fixed top-4 right-4 gaming-panel p-4 rounded-xl z-40 animate-float';
     feedback.innerHTML = `
@@ -479,8 +521,8 @@ function showHotkeyFeedback(keyString, description) {
 }
 
 // Show general hotkey notifications
-function showHotkeyNotification(message, type = 'info') {
-    const colors = {
+function showHotkeyNotification(message: string, type: NotificationType = 'info'): void {
+    const colors: Record<NotificationType, string> = {
         info: 'text-gaming-cyan',
         success: 'text-gaming-green',
         warning: 'text-gaming-yellow',
@@ -490,7 +532,7 @@ function showHotkeyNotification(message, type = 'info') {
     const notification = document.createElement('div');
     notification.className = 'fixed bottom-4 right-4 gaming-panel p-3 rounded-lg z-30';
     notification.innerHTML = `
-        <span class="${colors[type]} font-medium">🎮 ${message}</span>
+        <span class="${colors[type]} font-medium">${message}</span>
     `;
 
     document.body.appendChild(notification);
@@ -501,13 +543,13 @@ function showHotkeyNotification(message, type = 'info') {
 }
 
 // Load user hotkey preferences
-function loadHotkeyPreferences() {
+function loadHotkeyPreferences(): void {
     try {
         const saved = localStorage.getItem('hotkeyPreferences');
         if (saved) {
-            const preferences = JSON.parse(saved);
+            const preferences = JSON.parse(saved) as Partial<HotkeyConfigMap>;
             Object.assign(HOTKEY_CONFIG, preferences);
-            console.log('🎮 Loaded custom hotkey preferences');
+            console.log('Loaded custom hotkey preferences');
         }
     } catch (error) {
         console.warn('Could not load hotkey preferences:', error);
@@ -515,35 +557,35 @@ function loadHotkeyPreferences() {
 }
 
 // Save user hotkey preferences
-export function saveHotkeyPreferences() {
+export function saveHotkeyPreferences(): void {
     try {
         localStorage.setItem('hotkeyPreferences', JSON.stringify(HOTKEY_CONFIG));
-        console.log('🎮 Saved hotkey preferences');
+        console.log('Saved hotkey preferences');
     } catch (error) {
         console.warn('Could not save hotkey preferences:', error);
     }
 }
 
 // Update last recognized text (called from OCR module)
-export function updateLastRecognizedText(text) {
+export function updateLastRecognizedText(text: string): void {
     hotkeyState.lastText = text;
 }
 
 // Enable/disable hotkey system
-export function toggleHotkeySystem(enabled) {
+export function toggleHotkeySystem(enabled: boolean): void {
     hotkeyState.enabled = enabled;
     const status = enabled ? 'Enabled' : 'Disabled';
     showHotkeyNotification(`Gaming Hotkeys ${status}`);
-    console.log(`🎮 Hotkey system ${status.toLowerCase()}`);
+    console.log(`Hotkey system ${status.toLowerCase()}`);
 }
 
 // Get current hotkey configuration
-export function getHotkeyConfig() {
+export function getHotkeyConfig(): HotkeyConfigMap {
     return { ...HOTKEY_CONFIG };
 }
 
 // Cleanup hotkey system
-export function cleanupHotkeySystem() {
+export function cleanupHotkeySystem(): void {
     document.removeEventListener('keydown', handleGlobalKeydown);
     document.removeEventListener('keyup', handleGlobalKeyup);
 
@@ -554,7 +596,7 @@ export function cleanupHotkeySystem() {
     if (helpOverlay) helpOverlay.remove();
     if (performanceOverlay) performanceOverlay.remove();
 
-    console.log('🎮 Hotkey system cleaned up');
+    console.log('Hotkey system cleaned up');
 }
 
 // Make toggleHotkeyHelp globally accessible

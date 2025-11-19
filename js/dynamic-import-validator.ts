@@ -3,29 +3,114 @@
  * Tests actual CDN imports and library functionality
  */
 
+// Extend Window interface for global functions
+declare global {
+    interface Window {
+        testDynamicImports: () => Promise<ValidationResult[]>;
+        importValidator: DynamicImportValidator;
+        Tesseract?: TesseractStatic;
+        ort?: OnnxRuntimeStatic;
+        cv?: OpenCVStatic;
+        [key: string]: any;
+    }
+}
+
+// Tesseract.js types
+interface TesseractStatic {
+    createWorker: () => Promise<TesseractWorker>;
+}
+
+interface TesseractWorker {
+    loadLanguage: (lang: string) => Promise<void>;
+    initialize: (lang: string) => Promise<void>;
+    recognize: (image: string) => Promise<{ data: { text: string } }>;
+    terminate: () => Promise<void>;
+}
+
+// ONNX Runtime types
+interface OnnxRuntimeStatic {
+    [key: string]: any;
+}
+
+// OpenCV types
+interface OpenCVStatic {
+    [key: string]: any;
+}
+
+// PaddleOCR module types
+interface PaddleOCRModule {
+    init: (config: PaddleOCRConfig) => Promise<void>;
+    [key: string]: any;
+}
+
+interface PaddleOCRConfig {
+    detPath: string;
+    recPath: string;
+    dic: string;
+    ort: OnnxRuntimeStatic;
+    node: boolean;
+    cv: OpenCVStatic;
+}
+
+// Validation result interface
+interface ValidationResult {
+    name: string;
+    success: boolean;
+    result?: any;
+    error: string | null;
+    duration: number;
+    cached?: boolean;
+}
+
+// Test summary interface
+interface TestSummary {
+    passed: number;
+    failed: number;
+    totalDuration: number;
+    successRate: number;
+    workingLibraries: string[];
+    failedLibraries: string[];
+    results: ValidationResult[];
+}
+
+// Category results interface
+interface CategoryResults {
+    tesseract: ValidationResult[];
+    paddle: ValidationResult[];
+    functionality: ValidationResult[];
+}
+
 export class DynamicImportValidator {
+    private results: ValidationResult[] = [];
+    private timeouts: Map<string, ReturnType<typeof setTimeout>> = new Map();
+    private loadedLibraries: Map<string, any> = new Map();
+
     constructor() {
         this.results = [];
         this.timeouts = new Map();
         this.loadedLibraries = new Map();
     }
 
-    log(message) {
+    private log(message: string): void {
         console.log(`🔍 Import Validator: ${message}`);
     }
 
-    error(message) {
+    private error(message: string): void {
         console.error(`❌ Import Validator: ${message}`);
     }
 
-    success(message) {
+    private success(message: string): void {
         console.log(`✅ Import Validator: ${message}`);
     }
 
     /**
      * Test dynamic import with timeout and error handling
      */
-    async testDynamicImport(name, importFn, timeoutMs = 10000) {
+    async testDynamicImport(
+        name: string,
+        importFn: () => Promise<any>,
+        timeoutMs: number = 10000
+    ): Promise<ValidationResult> {
         this.log(`Testing dynamic import: ${name}`);
 
         return new Promise(async (resolve) => {
@@ -68,11 +153,12 @@ export class DynamicImportValidator {
             } catch (error) {
                 clearTimeout(timeoutId);
                 const duration = performance.now() - (performance.now() - timeoutMs);
-                this.error(`${name} - Import failed: ${error.message}`);
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                this.error(`${name} - Import failed: ${errorMessage}`);
                 resolve({
                     name,
                     success: false,
-                    error: error.message,
+                    error: errorMessage,
                     duration
                 });
             }
@@ -82,7 +168,12 @@ export class DynamicImportValidator {
     /**
      * Test script tag loading
      */
-    async testScriptLoad(name, url, globalVar, timeoutMs = 10000) {
+    async testScriptLoad(
+        name: string,
+        url: string,
+        globalVar: string,
+        timeoutMs: number = 10000
+    ): Promise<ValidationResult> {
         this.log(`Testing script load: ${name} from ${url}`);
 
         return new Promise((resolve) => {
@@ -163,8 +254,8 @@ export class DynamicImportValidator {
     /**
      * Test Tesseract.js imports
      */
-    async testTesseractImports() {
-        const tests = [];
+    async testTesseractImports(): Promise<ValidationResult[]> {
+        const tests: ValidationResult[] = [];
 
         // Test 1: CDN Script Tag
         tests.push(await this.testScriptLoad(
@@ -184,7 +275,7 @@ export class DynamicImportValidator {
 
         // Test 3: Worker Creation Test
         if (this.loadedLibraries.has('Tesseract.js CDN Script')) {
-            const tesseract = this.loadedLibraries.get('Tesseract.js CDN Script');
+            const tesseract = this.loadedLibraries.get('Tesseract.js CDN Script') as TesseractStatic;
             tests.push(await this.testDynamicImport(
                 'Tesseract Worker Creation',
                 async () => {
@@ -203,8 +294,8 @@ export class DynamicImportValidator {
     /**
      * Test PaddleOCR browser imports
      */
-    async testPaddleOCRImports() {
-        const tests = [];
+    async testPaddleOCRImports(): Promise<ValidationResult[]> {
+        const tests: ValidationResult[] = [];
 
         // Test 1: ONNX Runtime (required dependency)
         tests.push(await this.testScriptLoad(
@@ -243,7 +334,9 @@ export class DynamicImportValidator {
                         const module = await import('https://cdn.jsdelivr.net/npm/paddleocr-browser@1.0.3/index.js');
                         return module;
                     } catch (e2) {
-                        throw new Error(`Multiple import attempts failed: ${e1.message}, ${e2.message}`);
+                        const e1Message = e1 instanceof Error ? e1.message : String(e1);
+                        const e2Message = e2 instanceof Error ? e2.message : String(e2);
+                        throw new Error(`Multiple import attempts failed: ${e1Message}, ${e2Message}`);
                     }
                 }
             }
@@ -264,15 +357,15 @@ export class DynamicImportValidator {
     /**
      * Test functional OCR capabilities
      */
-    async testOCRFunctionality() {
-        const tests = [];
+    async testOCRFunctionality(): Promise<ValidationResult[]> {
+        const tests: ValidationResult[] = [];
 
         // Test Tesseract functionality
         if (this.loadedLibraries.has('Tesseract Worker Creation')) {
             tests.push(await this.testDynamicImport(
                 'Tesseract OCR Function Test',
                 async () => {
-                    const worker = this.loadedLibraries.get('Tesseract Worker Creation');
+                    const worker = this.loadedLibraries.get('Tesseract Worker Creation') as TesseractWorker;
 
                     // Test with a simple base64 image
                     const testImage = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
@@ -297,9 +390,9 @@ export class DynamicImportValidator {
             tests.push(await this.testDynamicImport(
                 'PaddleOCR Initialization Test',
                 async () => {
-                    const paddle = this.loadedLibraries.get('eSearch-OCR Module');
-                    const ort = this.loadedLibraries.get('ONNX Runtime Web');
-                    const cv = this.loadedLibraries.get('OpenCV.js');
+                    const paddle = this.loadedLibraries.get('eSearch-OCR Module') as PaddleOCRModule;
+                    const ort = this.loadedLibraries.get('ONNX Runtime Web') as OnnxRuntimeStatic;
+                    const cv = this.loadedLibraries.get('OpenCV.js') as OpenCVStatic;
 
                     // Test initialization
                     const assetsPath = "https://cdn.jsdelivr.net/npm/paddleocr-browser/dist/";
@@ -326,11 +419,11 @@ export class DynamicImportValidator {
     /**
      * Run all import validation tests
      */
-    async runAllTests() {
+    async runAllTests(): Promise<ValidationResult[]> {
         this.log('Starting comprehensive dynamic import validation');
         console.log('\n🚀 Dynamic Import Validation Suite\n');
 
-        const allTests = [];
+        const allTests: ValidationResult[] = [];
 
         // Test Tesseract.js imports
         console.log('📖 Testing Tesseract.js Imports...');
@@ -357,7 +450,7 @@ export class DynamicImportValidator {
     /**
      * Print comprehensive test results
      */
-    printResults() {
+    printResults(): TestSummary {
         console.log('\n📊 Dynamic Import Validation Results:');
         console.log('=' .repeat(60));
 
@@ -365,7 +458,7 @@ export class DynamicImportValidator {
         let failed = 0;
         let totalDuration = 0;
 
-        const categories = {
+        const categories: CategoryResults = {
             tesseract: [],
             paddle: [],
             functionality: []
@@ -394,7 +487,7 @@ export class DynamicImportValidator {
         });
 
         // Print by category
-        Object.entries(categories).forEach(([category, tests]) => {
+        (Object.entries(categories) as Array<[string, ValidationResult[]]>).forEach(([category, tests]) => {
             if (tests.length > 0) {
                 console.log(`\n${category.toUpperCase()} TESTS:`);
                 tests.forEach(result => {
@@ -447,14 +540,14 @@ export class DynamicImportValidator {
     /**
      * Get loaded library for use
      */
-    getLoadedLibrary(name) {
+    getLoadedLibrary(name: string): any {
         return this.loadedLibraries.get(name);
     }
 
     /**
      * Clean up loaded resources
      */
-    cleanup() {
+    cleanup(): void {
         this.timeouts.forEach(timeout => clearTimeout(timeout));
         this.timeouts.clear();
         this.loadedLibraries.clear();
@@ -463,7 +556,7 @@ export class DynamicImportValidator {
 }
 
 // Global function for easy testing
-window.testDynamicImports = async function() {
+window.testDynamicImports = async function(): Promise<ValidationResult[]> {
     const validator = new DynamicImportValidator();
     const results = await validator.runAllTests();
     window.importValidator = validator; // Store for further use

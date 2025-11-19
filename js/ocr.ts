@@ -6,15 +6,35 @@
 import { AppState, reusableCanvases, canvasContexts, CONFIG } from './config.js';
 import { updateStatus } from './ui.js';
 import { recordOCRPerformance } from './performance.js';
+import type { PreprocessingConfig, OCRResult } from './types.js';
+
+// Declare Tesseract as global (loaded via CDN)
+declare const Tesseract: {
+    createScheduler: () => Promise<Tesseract.Scheduler>;
+    createWorker: (lang: string, oem: number, options?: object) => Promise<Tesseract.Worker>;
+};
+
+declare namespace Tesseract {
+    interface Worker {
+        setParameters: (params: Record<string, string>) => Promise<void>;
+        terminate: () => Promise<void>;
+    }
+    interface Scheduler {
+        addWorker: (worker: Worker) => void;
+        addJob: (type: string, data: HTMLCanvasElement | ImageData) => Promise<OCRResult>;
+        terminate: () => Promise<void>;
+        workers: Worker[];
+    }
+}
 
 // Preprocessing worker for off-main-thread image processing
-let preprocessingWorker = null;
+let preprocessingWorker: Worker | null = null;
 let preprocessingJobCounter = 0;
 
 // Helper function to detect blank, noise, or meaningless OCR results
-export function isBlankOrNoise(text) {
+export function isBlankOrNoise(text: string | null | undefined): boolean {
     if (!text || typeof text !== 'string') return true;
-    
+
     // Common OCR noise patterns
     const noisePatterns = [
         /^[\s\-_|\\\/\.\,\;\:\!\?\'\"\`\~\@\#\$\%\^\&\*\(\)\[\]\{\}\<\>\=\+]+$/, // Only symbols/punctuation
@@ -26,14 +46,14 @@ export function isBlankOrNoise(text) {
         /^[,\s]+$/, // Only commas and spaces
         /^\s*$/, // Only whitespace
     ];
-    
+
     // Check against noise patterns
     for (const pattern of noisePatterns) {
         if (pattern.test(text)) {
             return true;
         }
     }
-    
+
     // Check for very repetitive patterns (like "|||" or "...")
     if (text.length > 1) {
         const firstChar = text.charAt(0);
@@ -41,32 +61,34 @@ export function isBlankOrNoise(text) {
             return true; // All characters are the same (ignoring spaces)
         }
     }
-    
+
     // Check for suspicious character ratios
     const alphanumericCount = (text.match(/[a-zA-Z0-9]/g) || []).length;
     const totalLength = text.length;
-    
+
     if (totalLength > 0 && (alphanumericCount / totalLength) < 0.3) {
         return true; // Less than 30% alphanumeric characters
     }
-    
+
     return false;
 }
 
 // Advanced image preprocessing pipeline optimized for challenging text scenarios
-async function advancedImagePreprocessing(inputCanvas) {
+async function advancedImagePreprocessing(inputCanvas: HTMLCanvasElement): Promise<HTMLCanvasElement> {
     console.log('🎨 Starting advanced image preprocessing...');
     const startTime = performance.now();
 
     // Create processing canvas
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Could not get canvas context');
+
     canvas.width = inputCanvas.width;
     canvas.height = inputCanvas.height;
 
     // Copy input image
     ctx.drawImage(inputCanvas, 0, 0);
-    let imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const data = imageData.data;
     const width = canvas.width;
     const height = canvas.height;
@@ -82,7 +104,7 @@ async function advancedImagePreprocessing(inputCanvas) {
     console.log('   1️⃣ Converting to grayscale with luminance weighting...');
     for (let i = 0; i < data.length; i += 4) {
         // Use luminance formula: 0.299*R + 0.587*G + 0.114*B
-        const gray = Math.round(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]);
+        const gray = Math.round(0.299 * data[i]! + 0.587 * data[i + 1]! + 0.114 * data[i + 2]!);
         data[i] = gray;
         data[i + 1] = gray;
         data[i + 2] = gray;
@@ -101,9 +123,9 @@ async function advancedImagePreprocessing(inputCanvas) {
     console.log('   3️⃣ Applying intelligent noise reduction...');
     const blurredData = gaussianBlur(data, width, height, imageStats.isDarkBackground ? 0.3 : 0.5);
     for (let i = 0; i < data.length; i += 4) {
-        data[i] = blurredData[i];
-        data[i + 1] = blurredData[i + 1];
-        data[i + 2] = blurredData[i + 2];
+        data[i] = blurredData[i]!;
+        data[i + 1] = blurredData[i + 1]!;
+        data[i + 2] = blurredData[i + 2]!;
     }
 
     // Step 5: Adaptive thresholding (Sauvola method with dynamic parameters)
@@ -126,7 +148,7 @@ async function advancedImagePreprocessing(inputCanvas) {
 }
 
 // Gaussian blur for noise reduction
-function gaussianBlur(data, width, height, radius) {
+function gaussianBlur(data: Uint8ClampedArray, width: number, height: number, radius: number): Uint8ClampedArray {
     const kernel = generateGaussianKernel(radius);
     const kernelSize = kernel.length;
     const halfKernel = Math.floor(kernelSize / 2);
@@ -141,11 +163,11 @@ function gaussianBlur(data, width, height, radius) {
                     const py = Math.min(height - 1, Math.max(0, y + ky));
                     const px = Math.min(width - 1, Math.max(0, x + kx));
                     const pixelIndex = (py * width + px) * 4;
-                    const weight = kernel[ky + halfKernel][kx + halfKernel];
+                    const weight = kernel[ky + halfKernel]![kx + halfKernel]!;
 
-                    r += data[pixelIndex] * weight;
-                    g += data[pixelIndex + 1] * weight;
-                    b += data[pixelIndex + 2] * weight;
+                    r += data[pixelIndex]! * weight;
+                    g += data[pixelIndex + 1]! * weight;
+                    b += data[pixelIndex + 2]! * weight;
                     weightSum += weight;
                 }
             }
@@ -154,7 +176,7 @@ function gaussianBlur(data, width, height, radius) {
             blurredData[index] = r / weightSum;
             blurredData[index + 1] = g / weightSum;
             blurredData[index + 2] = b / weightSum;
-            blurredData[index + 3] = data[index + 3];
+            blurredData[index + 3] = data[index + 3]!;
         }
     }
 
@@ -162,9 +184,9 @@ function gaussianBlur(data, width, height, radius) {
 }
 
 // Generate Gaussian kernel
-function generateGaussianKernel(radius) {
+function generateGaussianKernel(radius: number): number[][] {
     const size = Math.ceil(radius * 6) | 1; // Ensure odd size
-    const kernel = [];
+    const kernel: number[][] = [];
     const sigma = radius;
     const sigma2 = 2 * sigma * sigma;
     const center = Math.floor(size / 2);
@@ -174,7 +196,7 @@ function generateGaussianKernel(radius) {
         for (let x = 0; x < size; x++) {
             const dx = x - center;
             const dy = y - center;
-            kernel[y][x] = Math.exp(-(dx * dx + dy * dy) / sigma2) / (Math.PI * sigma2);
+            kernel[y]![x] = Math.exp(-(dx * dx + dy * dy) / sigma2) / (Math.PI * sigma2);
         }
     }
 
@@ -182,13 +204,13 @@ function generateGaussianKernel(radius) {
 }
 
 // Contrast enhancement using histogram stretching
-function enhanceContrast(data) {
+function enhanceContrast(data: Uint8ClampedArray): void {
     let min = 255, max = 0;
 
     // Find min and max values
     for (let i = 0; i < data.length; i += 4) {
-        min = Math.min(min, data[i]);
-        max = Math.max(max, data[i]);
+        min = Math.min(min, data[i]!);
+        max = Math.max(max, data[i]!);
     }
 
     // Avoid division by zero
@@ -198,7 +220,7 @@ function enhanceContrast(data) {
 
     // Stretch histogram
     for (let i = 0; i < data.length; i += 4) {
-        const stretched = Math.round(((data[i] - min) / range) * 255);
+        const stretched = Math.round(((data[i]! - min) / range) * 255);
         data[i] = stretched;
         data[i + 1] = stretched;
         data[i + 2] = stretched;
@@ -206,7 +228,7 @@ function enhanceContrast(data) {
 }
 
 // Sauvola adaptive thresholding
-function sauvolaThreshold(data, width, height, windowSize, k) {
+function sauvolaThreshold(data: Uint8ClampedArray, width: number, height: number, windowSize: number, k: number): void {
     const threshold = new Array(width * height);
     const halfWindow = Math.floor(windowSize / 2);
 
@@ -220,7 +242,7 @@ function sauvolaThreshold(data, width, height, windowSize, k) {
                     const py = Math.min(height - 1, Math.max(0, y + dy));
                     const px = Math.min(width - 1, Math.max(0, x + dx));
                     const pixelIndex = (py * width + px) * 4;
-                    const value = data[pixelIndex];
+                    const value = data[pixelIndex]!;
 
                     sum += value;
                     sumSq += value * value;
@@ -242,7 +264,7 @@ function sauvolaThreshold(data, width, height, windowSize, k) {
     for (let y = 0; y < height; y++) {
         for (let x = 0; x < width; x++) {
             const index = (y * width + x) * 4;
-            const value = data[index] > threshold[y * width + x] ? 255 : 0;
+            const value = data[index]! > threshold[y * width + x] ? 255 : 0;
             data[index] = value;
             data[index + 1] = value;
             data[index + 2] = value;
@@ -251,7 +273,7 @@ function sauvolaThreshold(data, width, height, windowSize, k) {
 }
 
 // Morphological operations to clean up binary text
-function morphologicalCleanup(data, width, height) {
+function morphologicalCleanup(data: Uint8ClampedArray, width: number, height: number): void {
     // Apply closing operation (dilation followed by erosion) to connect broken characters
     const structuringElement = [
         [1, 1, 1],
@@ -267,17 +289,17 @@ function morphologicalCleanup(data, width, height) {
 
     // Copy result back
     for (let i = 0; i < data.length; i += 4) {
-        data[i] = eroded[i];
-        data[i + 1] = eroded[i + 1];
-        data[i + 2] = eroded[i + 2];
+        data[i] = eroded[i]!;
+        data[i + 1] = eroded[i + 1]!;
+        data[i + 2] = eroded[i + 2]!;
     }
 }
 
 // Morphological dilation
-function dilate(data, width, height, kernel) {
+function dilate(data: Uint8ClampedArray, width: number, height: number, kernel: number[][]): Uint8ClampedArray {
     const result = new Uint8ClampedArray(data.length);
     const kh = kernel.length;
-    const kw = kernel[0].length;
+    const kw = kernel[0]!.length;
     const kcy = Math.floor(kh / 2);
     const kcx = Math.floor(kw / 2);
 
@@ -287,14 +309,14 @@ function dilate(data, width, height, kernel) {
 
             for (let ky = 0; ky < kh; ky++) {
                 for (let kx = 0; kx < kw; kx++) {
-                    if (kernel[ky][kx] === 0) continue;
+                    if (kernel[ky]![kx] === 0) continue;
 
                     const py = y + ky - kcy;
                     const px = x + kx - kcx;
 
                     if (py >= 0 && py < height && px >= 0 && px < width) {
                         const pixelIndex = (py * width + px) * 4;
-                        maxVal = Math.max(maxVal, data[pixelIndex]);
+                        maxVal = Math.max(maxVal, data[pixelIndex]!);
                     }
                 }
             }
@@ -303,7 +325,7 @@ function dilate(data, width, height, kernel) {
             result[index] = maxVal;
             result[index + 1] = maxVal;
             result[index + 2] = maxVal;
-            result[index + 3] = data[index + 3];
+            result[index + 3] = data[index + 3]!;
         }
     }
 
@@ -311,10 +333,10 @@ function dilate(data, width, height, kernel) {
 }
 
 // Morphological erosion
-function erode(data, width, height, kernel) {
+function erode(data: Uint8ClampedArray, width: number, height: number, kernel: number[][]): Uint8ClampedArray {
     const result = new Uint8ClampedArray(data.length);
     const kh = kernel.length;
-    const kw = kernel[0].length;
+    const kw = kernel[0]!.length;
     const kcy = Math.floor(kh / 2);
     const kcx = Math.floor(kw / 2);
 
@@ -324,14 +346,14 @@ function erode(data, width, height, kernel) {
 
             for (let ky = 0; ky < kh; ky++) {
                 for (let kx = 0; kx < kw; kx++) {
-                    if (kernel[ky][kx] === 0) continue;
+                    if (kernel[ky]![kx] === 0) continue;
 
                     const py = y + ky - kcy;
                     const px = x + kx - kcx;
 
                     if (py >= 0 && py < height && px >= 0 && px < width) {
                         const pixelIndex = (py * width + px) * 4;
-                        minVal = Math.min(minVal, data[pixelIndex]);
+                        minVal = Math.min(minVal, data[pixelIndex]!);
                     }
                 }
             }
@@ -340,7 +362,7 @@ function erode(data, width, height, kernel) {
             result[index] = minVal;
             result[index + 1] = minVal;
             result[index + 2] = minVal;
-            result[index + 3] = data[index + 3];
+            result[index + 3] = data[index + 3]!;
         }
     }
 
@@ -348,7 +370,7 @@ function erode(data, width, height, kernel) {
 }
 
 // Process image using Web Worker (eliminates UI jank)
-async function processImageInWorker(canvas, config = {}) {
+async function processImageInWorker(canvas: HTMLCanvasElement, config: PreprocessingConfig = {}): Promise<HTMLCanvasElement> {
     if (!preprocessingWorker) {
         console.warn('⚠️ Preprocessing worker not initialized, falling back to main thread');
         return await advancedImagePreprocessingFallback(canvas);
@@ -359,13 +381,17 @@ async function processImageInWorker(canvas, config = {}) {
 
         // Get image data from canvas
         const ctx = canvas.getContext('2d');
+        if (!ctx) {
+            reject(new Error('Could not get canvas context'));
+            return;
+        }
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
         // Store job promise
-        AppState.preprocessingJobs.set(jobId, { resolve, reject });
+        AppState.preprocessingJobs?.set(jobId, { resolve, reject });
 
         // Send to worker
-        preprocessingWorker.postMessage({
+        preprocessingWorker!.postMessage({
             type: 'preprocess',
             imageData: imageData,
             config: config,
@@ -374,15 +400,17 @@ async function processImageInWorker(canvas, config = {}) {
 
         // Timeout after 10 seconds
         setTimeout(() => {
-            if (AppState.preprocessingJobs.has(jobId)) {
+            if (AppState.preprocessingJobs?.has(jobId)) {
                 AppState.preprocessingJobs.delete(jobId);
                 reject(new Error('Preprocessing worker timeout'));
             }
         }, 10000);
-    }).then(result => {
+    }).then((result: any) => {
         // Create canvas from processed image data
         const processedCanvas = document.createElement('canvas');
         const processedCtx = processedCanvas.getContext('2d');
+        if (!processedCtx) throw new Error('Could not get canvas context');
+
         processedCanvas.width = result.imageData.width;
         processedCanvas.height = result.imageData.height;
         processedCtx.putImageData(result.imageData, 0, 0);
@@ -393,12 +421,14 @@ async function processImageInWorker(canvas, config = {}) {
 }
 
 // Fallback preprocessing for main thread (if worker fails)
-async function advancedImagePreprocessingFallback(inputCanvas) {
+async function advancedImagePreprocessingFallback(inputCanvas: HTMLCanvasElement): Promise<HTMLCanvasElement> {
     console.log('⚠️ Using main thread preprocessing fallback');
 
     // Use the original preprocessing function (simplified version)
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Could not get canvas context');
+
     canvas.width = inputCanvas.width;
     canvas.height = inputCanvas.height;
     ctx.drawImage(inputCanvas, 0, 0);
@@ -408,7 +438,7 @@ async function advancedImagePreprocessingFallback(inputCanvas) {
 
     // Basic grayscale conversion only (minimal processing to prevent jank)
     for (let i = 0; i < data.length; i += 4) {
-        const gray = Math.round(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]);
+        const gray = Math.round(0.299 * data[i]! + 0.587 * data[i + 1]! + 0.114 * data[i + 2]!);
         data[i] = gray;
         data[i + 1] = gray;
         data[i + 2] = gray;
@@ -419,7 +449,7 @@ async function advancedImagePreprocessingFallback(inputCanvas) {
 }
 
 // Initialize preprocessing Web Worker
-function initPreprocessingWorker() {
+function initPreprocessingWorker(): void {
     if (preprocessingWorker) {
         preprocessingWorker.terminate();
     }
@@ -434,7 +464,7 @@ function initPreprocessingWorker() {
         // Find and resolve the corresponding promise
         const job = AppState.preprocessingJobs?.get(jobId);
         if (job) {
-            AppState.preprocessingJobs.delete(jobId);
+            AppState.preprocessingJobs?.delete(jobId);
 
             if (type === 'preprocessingComplete') {
                 job.resolve(result);
@@ -455,12 +485,17 @@ function initPreprocessingWorker() {
 }
 
 // Initialize Tesseract OCR worker
-export async function initOCR() {
+export async function initOCR(): Promise<void> {
     try {
         console.log('🤖 Initializing OCR systems...');
 
         // Initialize preprocessing worker first
         initPreprocessingWorker();
+
+        // Check if Tesseract is available
+        if (typeof Tesseract === 'undefined') {
+            throw new Error('Tesseract.js not loaded. Make sure the CDN script is included.');
+        }
 
         // Initialize Tesseract scheduler for robust worker pooling
         const workerCount = Math.min(navigator.hardwareConcurrency || 2, 4); // Max 4 workers
@@ -471,7 +506,7 @@ export async function initOCR() {
         // Add workers to scheduler
         for (let i = 0; i < workerCount; i++) {
             const worker = await Tesseract.createWorker('eng', 1, {
-                logger: ({ status, progress, jobId }) => {
+                logger: ({ status, progress }: { status: string; progress: number; jobId?: string }) => {
                     if (status === 'recognizing text') {
                         const progressEl = document.getElementById('ocr-progress');
                         if (progressEl) {
@@ -495,69 +530,75 @@ export async function initOCR() {
         }
 
         // Keep reference to first worker for legacy compatibility
-        AppState.ocrWorker = AppState.ocrScheduler.workers[0];
+        AppState.ocrWorker = AppState.ocrScheduler.workers[0] ?? null;
 
         console.log('✅ OCR Scheduler ready with robust worker pooling');
     } catch (error) {
         console.error('❌ OCR initialization failed:', error);
+        throw error;
     }
 }
 
+// Check if OCR is initialized and ready
+export function isOCRReady(): boolean {
+    return AppState.ocrScheduler !== null && AppState.ocrScheduler.workers.length > 0;
+}
+
 // Switch between OCR engines
-export async function switchOCREngine(engine) {
+export async function switchOCREngine(engine: 'tesseract' | 'paddle'): Promise<void> {
     console.log(`🔄 Switching to ${engine} OCR engine...`);
     AppState.currentOCREngine = engine;
-    
+
     // Update UI
     const tesseractBtn = document.getElementById('ocr-tesseract');
     const paddleBtn = document.getElementById('ocr-paddle');
     const infoDiv = document.getElementById('ocr-engine-info');
-    
+
     if (engine === 'tesseract') {
-        tesseractBtn.className = 'flex-1 py-3 px-4 rounded-xl font-medium transition-all bg-primary-600 text-white';
-        paddleBtn.className = 'flex-1 py-3 px-4 rounded-xl font-medium transition-all bg-dark-600 hover:bg-dark-500 text-white';
-        infoDiv.innerHTML = '<p>Tesseract.js - Fast, lightweight, good for general text</p>';
-        
+        if (tesseractBtn) tesseractBtn.className = 'flex-1 py-3 px-4 rounded-xl font-medium transition-all bg-primary-600 text-white';
+        if (paddleBtn) paddleBtn.className = 'flex-1 py-3 px-4 rounded-xl font-medium transition-all bg-dark-600 hover:bg-dark-500 text-white';
+        if (infoDiv) infoDiv.innerHTML = '<p>Tesseract.js - Fast, lightweight, good for general text</p>';
+
         // Initialize Tesseract if needed
         if (!AppState.ocrWorker) {
             await initOCR();
         }
     } else {
-        tesseractBtn.className = 'flex-1 py-3 px-4 rounded-xl font-medium transition-all bg-dark-600 hover:bg-dark-500 text-white';
-        paddleBtn.className = 'flex-1 py-3 px-4 rounded-xl font-medium transition-all bg-primary-600 text-white';
-        infoDiv.innerHTML = '<p>PaddleOCR - Higher accuracy, larger download, slower processing</p>';
-        
+        if (tesseractBtn) tesseractBtn.className = 'flex-1 py-3 px-4 rounded-xl font-medium transition-all bg-dark-600 hover:bg-dark-500 text-white';
+        if (paddleBtn) paddleBtn.className = 'flex-1 py-3 px-4 rounded-xl font-medium transition-all bg-primary-600 text-white';
+        if (infoDiv) infoDiv.innerHTML = '<p>PaddleOCR - Higher accuracy, larger download, slower processing</p>';
+
         // Load PaddleOCR dynamically
         await loadPaddleOCR();
     }
 }
 
 // Load PaddleOCR dependencies (ONNX Runtime and OpenCV.js)
-async function loadPaddleOCRDependencies() {
+async function loadPaddleOCRDependencies(): Promise<void> {
     console.log('📦 Loading PaddleOCR dependencies...');
 
     // Load ONNX Runtime Web
-    if (!window.ort) {
+    if (!(window as any).ort) {
         try {
-            await new Promise((resolve, reject) => {
+            await new Promise<void>((resolve, reject) => {
                 const script = document.createElement('script');
                 script.src = 'https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js';
                 script.onload = () => {
                     console.log('✅ ONNX Runtime Web loaded');
                     resolve();
                 };
-                script.onerror = (e) => reject(new Error('Failed to load ONNX Runtime'));
+                script.onerror = () => reject(new Error('Failed to load ONNX Runtime'));
                 document.head.appendChild(script);
             });
         } catch (error) {
-            console.warn('⚠️ Failed to load ONNX Runtime:', error.message);
+            console.warn('⚠️ Failed to load ONNX Runtime:', (error as Error).message);
         }
     }
 
     // Load OpenCV.js
-    if (!window.cv) {
+    if (!(window as any).cv) {
         try {
-            await new Promise((resolve, reject) => {
+            await new Promise<void>((resolve, reject) => {
                 const script = document.createElement('script');
                 script.src = 'https://docs.opencv.org/4.8.0/opencv.js';
                 script.async = true;
@@ -565,24 +606,35 @@ async function loadPaddleOCRDependencies() {
                     console.log('✅ OpenCV.js loaded');
                     resolve();
                 };
-                script.onerror = (e) => reject(new Error('Failed to load OpenCV.js'));
+                script.onerror = () => reject(new Error('Failed to load OpenCV.js'));
                 document.head.appendChild(script);
             });
         } catch (error) {
-            console.warn('⚠️ Failed to load OpenCV.js:', error.message);
+            console.warn('⚠️ Failed to load OpenCV.js:', (error as Error).message);
         }
     }
 }
 
+// PaddleOCR endpoint configuration
+interface PaddleOCREndpoint {
+    name: string;
+    url: string;
+    useImportMap: boolean;
+    type: string;
+    dependencies?: string[];
+    validated: boolean;
+    fallbackUrl?: string;
+}
+
 // Load PaddleOCR with multiple CDN fallbacks and better error handling
-export async function loadPaddleOCR() {
+export async function loadPaddleOCR(): Promise<void> {
     if (AppState.paddleOCRLoaded) {
         console.log('✅ PaddleOCR already loaded.');
         return;
     }
 
     // Validated PaddleOCR endpoints (CDN accessibility confirmed)
-    const paddleOCREndpoints = [
+    const paddleOCREndpoints: PaddleOCREndpoint[] = [
         {
             name: 'eSearch-OCR (PaddleOCR browser wrapper)',
             url: 'https://cdn.jsdelivr.net/npm/esearch-ocr@5.1.5/dist/esearch-ocr.js',
@@ -617,17 +669,17 @@ export async function loadPaddleOCR() {
     // Load dependencies first
     await loadPaddleOCRDependencies();
 
-    let lastError = null;
+    let lastError: Error | null = null;
 
     for (let i = 0; i < paddleOCREndpoints.length; i++) {
-        const endpoint = paddleOCREndpoints[i];
+        const endpoint = paddleOCREndpoints[i]!;
 
         try {
             updateStatus(`Loading PaddleOCR... (${i + 1}/${paddleOCREndpoints.length}) - ${endpoint.name}`, 'bg-yellow-400 animate-pulse');
             console.log(`⏳ Attempting to load PaddleOCR from ${endpoint.name} (${endpoint.type}): ${endpoint.url}`);
 
             // Try dynamic import with current endpoint (with fallback URL support)
-            let ocr;
+            let ocr: any;
             let importUrl = endpoint.url;
 
             try {
@@ -657,7 +709,7 @@ export async function loadPaddleOCR() {
             console.log(`🤖 Initializing PaddleOCR model from ${endpoint.name}... (this may take a moment)`);
 
             // Initialize with enhanced timeout and retry logic
-            const initTimeout = new Promise((_, reject) =>
+            const initTimeout = new Promise<never>((_, reject) =>
                 setTimeout(() => reject(new Error('PaddleOCR init timeout (30s)')), 30000)
             );
 
@@ -671,10 +723,10 @@ export async function loadPaddleOCR() {
                     break; // Success, exit retry loop
                 } catch (initError) {
                     initAttempts++;
-                    console.warn(`⚠️ PaddleOCR init attempt ${initAttempts} failed:`, initError.message);
+                    console.warn(`⚠️ PaddleOCR init attempt ${initAttempts} failed:`, (initError as Error).message);
 
                     if (initAttempts >= maxAttempts) {
-                        throw new Error(`PaddleOCR init failed after ${maxAttempts} attempts: ${initError.message}`);
+                        throw new Error(`PaddleOCR init failed after ${maxAttempts} attempts: ${(initError as Error).message}`);
                     }
 
                     // Wait before retry
@@ -698,25 +750,25 @@ export async function loadPaddleOCR() {
             return; // Success, exit function
 
         } catch (error) {
-            lastError = error;
-            console.warn(`⚠️ ${endpoint.name} failed:`, error.message);
+            lastError = error as Error;
+            console.warn(`⚠️ ${endpoint.name} failed:`, lastError.message);
 
             // Log detailed error information
-            console.warn(`   Error type: ${error.name}`);
-            console.warn(`   Error stack: ${error.stack?.substring(0, 200)}...`);
+            console.warn(`   Error type: ${lastError.name}`);
+            console.warn(`   Error stack: ${lastError.stack?.substring(0, 200)}...`);
 
             // Handle specific browser compatibility issues
-            if (error.message.includes('exports is not defined')) {
+            if (lastError.message.includes('exports is not defined')) {
                 console.warn(`   🔧 Diagnosis: ${endpoint.name} uses Node.js CommonJS modules, incompatible with browser ES modules`);
-            } else if (error.message.includes('fs') && error.message.includes('does not exist')) {
+            } else if (lastError.message.includes('fs') && lastError.message.includes('does not exist')) {
                 console.warn(`   🔧 Diagnosis: ${endpoint.name} requires Node.js file system access, unavailable in browser`);
-            } else if (error.message.includes('require is not defined')) {
+            } else if (lastError.message.includes('require is not defined')) {
                 console.warn(`   🔧 Diagnosis: ${endpoint.name} uses CommonJS require(), not supported in browser ES modules`);
             }
 
             // Continue to next CDN if available
             if (i < paddleOCREndpoints.length - 1) {
-                console.log(`🔄 Trying next CDN: ${paddleOCREndpoints[i + 1].name}...`);
+                console.log(`🔄 Trying next CDN: ${paddleOCREndpoints[i + 1]!.name}...`);
                 continue;
             }
         }
@@ -727,22 +779,24 @@ export async function loadPaddleOCR() {
 
     // Enhanced error reporting with browser compatibility detection
     let errorCategory = 'Unknown error';
-    if (lastError.message.includes('exports is not defined') ||
-        lastError.message.includes('require is not defined') ||
-        (lastError.message.includes('fs') && lastError.message.includes('does not exist'))) {
-        errorCategory = 'Browser compatibility issue';
-        updateStatus('PaddleOCR unavailable: Browser incompatible', 'bg-yellow-400');
-    } else if (lastError.message.includes('NetworkError') || lastError.message.includes('fetch')) {
-        errorCategory = 'Network/CDN error';
-        updateStatus('PaddleOCR unavailable: Network error', 'bg-red-400');
-    } else if (lastError.message.includes('import') || lastError.message.includes('module')) {
-        errorCategory = 'Module loading error';
-        updateStatus('PaddleOCR unavailable: Module error', 'bg-red-400');
-    } else if (lastError.message.includes('init')) {
-        errorCategory = 'Initialization error';
-        updateStatus('PaddleOCR unavailable: Init failed', 'bg-red-400');
-    } else {
-        updateStatus('PaddleOCR unavailable: Unknown error', 'bg-red-400');
+    if (lastError) {
+        if (lastError.message.includes('exports is not defined') ||
+            lastError.message.includes('require is not defined') ||
+            (lastError.message.includes('fs') && lastError.message.includes('does not exist'))) {
+            errorCategory = 'Browser compatibility issue';
+            updateStatus('PaddleOCR unavailable: Browser incompatible', 'bg-yellow-400');
+        } else if (lastError.message.includes('NetworkError') || lastError.message.includes('fetch')) {
+            errorCategory = 'Network/CDN error';
+            updateStatus('PaddleOCR unavailable: Network error', 'bg-red-400');
+        } else if (lastError.message.includes('import') || lastError.message.includes('module')) {
+            errorCategory = 'Module loading error';
+            updateStatus('PaddleOCR unavailable: Module error', 'bg-red-400');
+        } else if (lastError.message.includes('init')) {
+            errorCategory = 'Initialization error';
+            updateStatus('PaddleOCR unavailable: Init failed', 'bg-red-400');
+        } else {
+            updateStatus('PaddleOCR unavailable: Unknown error', 'bg-red-400');
+        }
     }
 
     console.error(`Error category: ${errorCategory}`);
@@ -763,7 +817,7 @@ export async function loadPaddleOCR() {
             paddleBtn.className = 'flex-1 py-3 px-4 rounded-xl font-medium transition-all bg-dark-600 hover:bg-dark-500 text-white opacity-50 cursor-not-allowed';
 
             // Enhanced error information with user guidance
-            const troubleshootingTips = {
+            const troubleshootingTips: Record<string, string> = {
                 'Browser compatibility issue': 'PaddleOCR requires Node.js environment - using Tesseract.js instead',
                 'Network/CDN error': 'Check internet connection and try refreshing',
                 'Module loading error': 'Clear browser cache and reload',
@@ -784,7 +838,7 @@ export async function loadPaddleOCR() {
             `;
 
             // Disable PaddleOCR button with detailed tooltip
-            paddleBtn.disabled = true;
+            (paddleBtn as HTMLButtonElement).disabled = true;
             paddleBtn.title = `PaddleOCR failed to load: ${errorCategory}\nTesseract.js is working as fallback\nClick "Retry PaddleOCR" to try again`;
         }
 
@@ -798,7 +852,7 @@ export async function loadPaddleOCR() {
     localStorage.setItem('paddleOCRFailureInfo', JSON.stringify({
         timestamp: Date.now(),
         errorCategory,
-        errorMessage: lastError.message,
+        errorMessage: lastError?.message,
         attemptedCDNs: paddleOCREndpoints,
         userAgent: navigator.userAgent,
         location: window.location.href
@@ -806,37 +860,42 @@ export async function loadPaddleOCR() {
 }
 
 // Process a video frame for OCR
-export async function processFrame() {
+export async function processFrame(): Promise<void> {
     try {
-        const video = document.getElementById('camera-feed');
-        
+        const video = document.getElementById('camera-feed') as HTMLVideoElement | null;
+        if (!video) {
+            console.error('❌ Camera feed element not found');
+            return;
+        }
+
         // Use reusable canvas objects to prevent memory leaks
         const canvas = reusableCanvases.processing;
         const ctx = canvasContexts.processing;
 
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
-        
+
         if (canvas.width === 0 || canvas.height === 0) return;
 
         // Clear previous frame data
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(video, 0, 0);
 
-        // Apply crop based on video dimensions and crop area  
+        // Apply crop based on video dimensions and crop area
         const cropCanvas = reusableCanvases.crop;
         const cropCtx = canvasContexts.crop;
-        
+
         // Get actual video element dimensions for proper crop calculation
         const videoEl = document.getElementById('camera-feed');
+        if (!videoEl) return;
         const videoRect = videoEl.getBoundingClientRect();
-        
+
         // Calculate crop coordinates based on video's actual dimensions
         const scaleX = canvas.width / videoRect.width;
         const scaleY = canvas.height / videoRect.height;
-        
+
         const cropX = AppState.currentCrop.x * canvas.width;
-        const cropY = AppState.currentCrop.y * canvas.height;  
+        const cropY = AppState.currentCrop.y * canvas.height;
         const cropWidth = AppState.currentCrop.width * canvas.width;
         const cropHeight = AppState.currentCrop.height * canvas.height;
 
@@ -846,7 +905,7 @@ export async function processFrame() {
         // Set crop canvas to exact crop size
         cropCanvas.width = Math.max(cropWidth, 50); // Minimum 50px width
         cropCanvas.height = Math.max(cropHeight, 50); // Minimum 50px height
-        
+
         // Clear previous crop data and draw only the cropped portion
         cropCtx.clearRect(0, 0, cropCanvas.width, cropCanvas.height);
         cropCtx.drawImage(canvas, cropX, cropY, cropWidth, cropHeight, 0, 0, cropCanvas.width, cropCanvas.height);
@@ -855,23 +914,23 @@ export async function processFrame() {
         if (cropCanvas.height > 0 && cropCanvas.height !== CONFIG.OCR_TARGET_HEIGHT) {
             const aspectRatio = cropCanvas.width / cropCanvas.height;
             const scaledWidth = CONFIG.OCR_TARGET_HEIGHT * aspectRatio;
-            
+
             // Use reusable temp canvas instead of creating new one
             const tempCanvas = reusableCanvases.temp;
             const tempCtx = canvasContexts.temp;
             tempCanvas.width = scaledWidth;
             tempCanvas.height = CONFIG.OCR_TARGET_HEIGHT;
-            
+
             // Clear and scale the cropped image to optimal resolution
             tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
             tempCtx.drawImage(cropCanvas, 0, 0, tempCanvas.width, tempCanvas.height);
-            
+
             // Copy scaled image back to cropCanvas
             cropCanvas.width = tempCanvas.width;
             cropCanvas.height = tempCanvas.height;
             cropCtx.clearRect(0, 0, cropCanvas.width, cropCanvas.height);
             cropCtx.drawImage(tempCanvas, 0, 0);
-            
+
             console.log(`📏 Scaled crop to optimal OCR size: ${Math.round(scaledWidth)}×${CONFIG.OCR_TARGET_HEIGHT}px`);
         }
 
@@ -879,7 +938,7 @@ export async function processFrame() {
         const preprocessingStartTime = performance.now();
 
         // Use optimal preprocessing config if available from auto-calibration
-        const preprocessingConfig = AppState.optimalPreprocessingConfig || {
+        const preprocessingConfig: PreprocessingConfig = (AppState as any).optimalPreprocessingConfig || {
             sauvolaK: 0.2,
             sauvolaWindow: 15,
             blurRadius: 0.5,
@@ -901,15 +960,16 @@ export async function processFrame() {
         }
 
         // Show processing state and play processing sound
-        document.getElementById('processing-state').classList.remove('hidden');
+        const processingStateEl = document.getElementById('processing-state');
+        if (processingStateEl) processingStateEl.classList.remove('hidden');
 
         // Play processing start sound
         const { playProcessingSound } = await import('./speech.js');
         playProcessingSound();
 
         const startTime = Date.now();
-        let result;
-        
+        let result: OCRResult;
+
         // Use the selected OCR engine
         if (AppState.currentOCREngine === 'paddle' && AppState.paddleOCRLoaded) {
             console.log('🤖 Using PaddleOCR engine...');
@@ -921,7 +981,7 @@ export async function processFrame() {
                 // Adapt PaddleOCR's result format to match Tesseract's structure for compatibility
                 let ocrText = '';
                 let avgConfidence = 0;
-                
+
                 if (paddleResult && paddleResult.text) {
                     if (Array.isArray(paddleResult.text)) {
                         ocrText = paddleResult.text.join('\n');
@@ -929,7 +989,7 @@ export async function processFrame() {
                         ocrText = paddleResult.text;
                     }
                 }
-                
+
                 // Enhanced confidence estimation for PaddleOCR (JS version lacks native confidence)
                 if (paddleResult && paddleResult.points && paddleResult.points.length > 0) {
                     // Calculate confidence based on detection quality and text characteristics
@@ -947,18 +1007,23 @@ export async function processFrame() {
                 } else {
                     avgConfidence = 10; // Very low confidence for no results
                 }
-                
+
                 result = {
                     data: {
                         text: ocrText,
                         confidence: avgConfidence
                     }
                 };
-                
+
                 console.log('✅ PaddleOCR recognition completed:', { text: ocrText, confidence: avgConfidence });
             } catch (paddleError) {
                 console.error('❌ PaddleOCR recognition failed:', paddleError);
                 updateStatus('PaddleOCR failed, using Tesseract', 'bg-yellow-400');
+
+                // FIXED: Check if scheduler is initialized before using
+                if (!AppState.ocrScheduler) {
+                    throw new Error('OCR scheduler not initialized. Please wait for OCR to initialize.');
+                }
                 result = await AppState.ocrScheduler.addJob('recognize', processedCropCanvas);
             }
 
@@ -968,14 +1033,19 @@ export async function processFrame() {
                 updateStatus('Using Tesseract (Paddle not ready)', 'bg-blue-400');
             }
             console.log('🤖 Using Tesseract.js scheduler...');
+
+            // FIXED: Check if scheduler is initialized before using
+            if (!AppState.ocrScheduler) {
+                throw new Error('OCR scheduler not initialized. Please wait for OCR to initialize.');
+            }
             // Use scheduler for robust worker pooling
             result = await AppState.ocrScheduler.addJob('recognize', processedCropCanvas);
         }
-        
+
         const processingTime = Date.now() - startTime;
 
         // Hide processing state
-        document.getElementById('processing-state').classList.add('hidden');
+        if (processingStateEl) processingStateEl.classList.add('hidden');
 
         const ocrText = result.data.text.trim();
         const ocrConfidence = result.data.confidence;
@@ -983,21 +1053,21 @@ export async function processFrame() {
         // Record performance metrics
         const isSuccessful = ocrConfidence > AppState.settings.sensitivity && ocrText && ocrText.length > 2;
         recordOCRPerformance(processingTime, preprocessingTime, ocrConfidence, isSuccessful);
-        
+
         console.log(`🔍 OCR Result: "${ocrText}" (confidence: ${Math.round(ocrConfidence)}%)`);
-        
+
         // Update debug display with OCR result
         const { updateDebugText } = await import('./debug.js');
         updateDebugText(ocrText, ocrConfidence);
-        
+
         // Enhanced text validation to prevent false positives on blank/empty content
         const text = result.data.text.trim();
-        const hasActualText = text && 
-            text.length > 2 && 
+        const hasActualText = text &&
+            text.length > 2 &&
             /[a-zA-Z0-9]/.test(text) && // Contains at least one alphanumeric character
             text !== AppState.lastText &&
             !isBlankOrNoise(text); // Additional noise filtering
-        
+
         if (ocrConfidence > AppState.settings.sensitivity && hasActualText) {
             const { displayText } = await import('./ui.js');
             displayText(text, result.data.confidence, processingTime);
@@ -1046,7 +1116,7 @@ export async function processFrame() {
                 console.log(`🎯 Confidence ${Math.round(ocrConfidence)}% below threshold ${AppState.settings.sensitivity}%`);
                 updateStatus(`Low confidence: ${Math.round(ocrConfidence)}%`, 'bg-yellow-400');
             }
-            
+
             // Enhanced user feedback for rejected OCR results
             if (ocrConfidence < 20) {
                 updateDebugText('No clear text detected. Try adjusting lighting, focus, or crop area.', ocrConfidence);
@@ -1057,18 +1127,49 @@ export async function processFrame() {
             }
         }
     } catch (error) {
-        document.getElementById('processing-state').classList.add('hidden');
+        const processingStateEl = document.getElementById('processing-state');
+        if (processingStateEl) processingStateEl.classList.add('hidden');
         console.error('❌ OCR processing error:', error);
+        updateStatus(`OCR error: ${(error as Error).message}`, 'bg-red-400');
     }
 }
 
+// Calibration configuration interface
+interface CalibrationConfig {
+    name: string;
+    psm: string;
+    sauvolaK: number;
+    sauvolaWindow: number;
+    blurRadius: number;
+    invert: boolean;
+    enableMorphology?: boolean;
+    enableContrast?: boolean;
+    threshold?: string;
+}
+
+// Calibration result interface
+interface CalibrationResultExtended extends CalibrationConfig {
+    result: string;
+    confidence: number;
+    processingTime: number;
+    score: number;
+}
+
 // Auto-calibration system - finds optimal OCR settings
-export async function runAutoCalibration() {
+export async function runAutoCalibration(): Promise<CalibrationConfig> {
     console.log('🎯 Starting OCR auto-calibration...');
     updateStatus('Running auto-calibration...', 'bg-purple-400 animate-pulse');
 
-    const calibrationResults = [];
-    const testConfigurations = [
+    // FIXED: Check if OCR is initialized before running calibration
+    if (!AppState.ocrScheduler) {
+        const error = new Error('OCR scheduler not initialized. Please ensure OCR is initialized before running calibration.');
+        console.error('❌ Auto-calibration failed:', error.message);
+        updateStatus('OCR not initialized', 'bg-red-400');
+        throw error;
+    }
+
+    const calibrationResults: CalibrationResultExtended[] = [];
+    const testConfigurations: CalibrationConfig[] = [
         // Standard configurations with preprocessing variations
         { name: 'Standard Sauvola', psm: '6', sauvolaK: 0.2, sauvolaWindow: 15, blurRadius: 0.5, invert: false },
         { name: 'Aggressive Sauvola', psm: '6', sauvolaK: 0.1, sauvolaWindow: 25, blurRadius: 0.5, invert: false },
@@ -1086,7 +1187,7 @@ export async function runAutoCalibration() {
         console.log(`📊 Testing ${testConfigurations.length} different configurations...`);
 
         for (let i = 0; i < testConfigurations.length; i++) {
-            const config = testConfigurations[i];
+            const config = testConfigurations[i]!;
             console.log(`🔧 Testing configuration ${i + 1}/${testConfigurations.length}: ${config.name}`);
 
             const startTime = Date.now();
@@ -1138,7 +1239,6 @@ export async function runAutoCalibration() {
         console.log('🏆 Auto-calibration complete! Best configuration:');
         console.log(`   Name: ${bestConfig.name}`);
         console.log(`   PSM: ${bestConfig.psm}`);
-        console.log(`   Threshold: ${bestConfig.threshold}`);
         console.log(`   Score: ${bestConfig.score.toFixed(2)}`);
         console.log(`   Confidence: ${Math.round(bestConfig.confidence)}%`);
         console.log(`   Processing time: ${bestConfig.processingTime}ms`);
@@ -1165,7 +1265,7 @@ export async function runAutoCalibration() {
         }
 
         // CRITICAL: Store optimal preprocessing config in AppState for main processing
-        AppState.optimalPreprocessingConfig = {
+        (AppState as any).optimalPreprocessingConfig = {
             sauvolaK: bestConfig.sauvolaK,
             sauvolaWindow: bestConfig.sauvolaWindow,
             blurRadius: bestConfig.blurRadius,
@@ -1173,14 +1273,15 @@ export async function runAutoCalibration() {
             enableContrast: bestConfig.enableContrast !== false
         };
 
-        console.log('🎯 Stored optimal preprocessing config:', AppState.optimalPreprocessingConfig);
+        console.log('🎯 Stored optimal preprocessing config:', (AppState as any).optimalPreprocessingConfig);
 
         // Update UI settings to reflect optimal values
-        if (bestConfig.threshold !== 'adaptive') {
-            const thresholdSlider = document.getElementById('threshold-slider-modal');
+        if (bestConfig.threshold && bestConfig.threshold !== 'adaptive') {
+            const thresholdSlider = document.getElementById('threshold-slider-modal') as HTMLInputElement | null;
             if (thresholdSlider) {
                 thresholdSlider.value = bestConfig.threshold;
-                document.getElementById('threshold-value-modal').textContent = bestConfig.threshold;
+                const thresholdValue = document.getElementById('threshold-value-modal');
+                if (thresholdValue) thresholdValue.textContent = bestConfig.threshold;
             }
         }
 
@@ -1223,17 +1324,22 @@ export async function runAutoCalibration() {
         }
 
         // Clear optimal config
-        AppState.optimalPreprocessingConfig = null;
+        (AppState as any).optimalPreprocessingConfig = null;
 
         throw error;
     }
 }
 
 // Test a specific OCR configuration using ACTUAL preprocessing pipeline
-async function testConfiguration(config) {
-    const video = document.getElementById('camera-feed');
+async function testConfiguration(config: CalibrationConfig): Promise<{ text: string; confidence: number }> {
+    const video = document.getElementById('camera-feed') as HTMLVideoElement | null;
+    if (!video) {
+        throw new Error('Camera feed not found for calibration');
+    }
+
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Could not get canvas context');
 
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
@@ -1252,6 +1358,8 @@ async function testConfiguration(config) {
 
     const cropCanvas = document.createElement('canvas');
     const cropCtx = cropCanvas.getContext('2d');
+    if (!cropCtx) throw new Error('Could not get crop canvas context');
+
     cropCanvas.width = Math.max(cropWidth, 50);
     cropCanvas.height = Math.max(cropHeight, 50);
 
@@ -1264,6 +1372,8 @@ async function testConfiguration(config) {
 
         const tempCanvas = document.createElement('canvas');
         const tempCtx = tempCanvas.getContext('2d');
+        if (!tempCtx) throw new Error('Could not get temp canvas context');
+
         tempCanvas.width = scaledWidth;
         tempCanvas.height = CONFIG.OCR_TARGET_HEIGHT;
 
@@ -1276,9 +1386,9 @@ async function testConfiguration(config) {
     }
 
     // Use ACTUAL preprocessing pipeline with worker
-    let processedCanvas;
+    let processedCanvas: HTMLCanvasElement;
     try {
-        const preprocessingConfig = {
+        const preprocessingConfig: PreprocessingConfig = {
             sauvolaK: config.sauvolaK || 0.2,
             sauvolaWindow: config.sauvolaWindow || 15,
             blurRadius: config.blurRadius || 0.5,
@@ -1293,6 +1403,11 @@ async function testConfiguration(config) {
         processedCanvas = await advancedImagePreprocessingFallback(cropCanvas);
     }
 
+    // FIXED: Check if scheduler is initialized before using
+    if (!AppState.ocrScheduler) {
+        throw new Error('OCR scheduler not initialized');
+    }
+
     // Run OCR with current configuration using scheduler
     const result = await AppState.ocrScheduler.addJob('recognize', processedCanvas);
 
@@ -1303,7 +1418,7 @@ async function testConfiguration(config) {
 }
 
 // Calculate calibration score based on multiple factors
-function calculateCalibrationScore(text, confidence, processingTime) {
+function calculateCalibrationScore(text: string, confidence: number, processingTime: number): number {
     let score = 0;
 
     // Confidence score (0-100 points)
@@ -1339,7 +1454,7 @@ function calculateCalibrationScore(text, confidence, processingTime) {
 }
 
 // Calculate text quality score for confidence estimation
-function calculateTextQuality(text) {
+function calculateTextQuality(text: string): number {
     if (!text || text.length === 0) return 0;
 
     let score = 60; // Base score
@@ -1381,7 +1496,7 @@ function calculateTextQuality(text) {
 }
 
 // Calculate detection quality score based on bounding box geometry
-function calculateDetectionQuality(points) {
+function calculateDetectionQuality(points: number[][][]): number {
     if (!points || points.length === 0) return 0;
 
     let totalScore = 0;
@@ -1393,9 +1508,9 @@ function calculateDetectionQuality(points) {
         let boxScore = 70; // Base score for detected box
 
         // Calculate bounding box area and aspect ratio
-        const [topLeft, topRight, bottomRight, bottomLeft] = point;
-        const width = Math.abs(topRight[0] - topLeft[0]);
-        const height = Math.abs(bottomLeft[1] - topLeft[1]);
+        const [topLeft, topRight, bottomRight, bottomLeft] = point as [number[], number[], number[], number[]];
+        const width = Math.abs(topRight[0]! - topLeft[0]!);
+        const height = Math.abs(bottomLeft[1]! - topLeft[1]!);
         const area = width * height;
 
         // Reasonable size check
@@ -1414,7 +1529,7 @@ function calculateDetectionQuality(points) {
         }
 
         // Rectangle regularity check (corners should form approximate rectangle)
-        const regularity = calculateRectangleRegularity(point);
+        const regularity = calculateRectangleRegularity(point as [number[], number[], number[], number[]]);
         boxScore += regularity * 10;
 
         totalScore += Math.max(10, Math.min(95, boxScore));
@@ -1425,16 +1540,14 @@ function calculateDetectionQuality(points) {
 }
 
 // Calculate how regular/rectangular a set of 4 points is
-function calculateRectangleRegularity(points) {
-    if (points.length !== 4) return 0;
-
+function calculateRectangleRegularity(points: [number[], number[], number[], number[]]): number {
     const [tl, tr, br, bl] = points;
 
     // Calculate side lengths
-    const topLength = Math.sqrt(Math.pow(tr[0] - tl[0], 2) + Math.pow(tr[1] - tl[1], 2));
-    const rightLength = Math.sqrt(Math.pow(br[0] - tr[0], 2) + Math.pow(br[1] - tr[1], 2));
-    const bottomLength = Math.sqrt(Math.pow(bl[0] - br[0], 2) + Math.pow(bl[1] - br[1], 2));
-    const leftLength = Math.sqrt(Math.pow(tl[0] - bl[0], 2) + Math.pow(tl[1] - bl[1], 2));
+    const topLength = Math.sqrt(Math.pow(tr[0]! - tl[0]!, 2) + Math.pow(tr[1]! - tl[1]!, 2));
+    const rightLength = Math.sqrt(Math.pow(br[0]! - tr[0]!, 2) + Math.pow(br[1]! - tr[1]!, 2));
+    const bottomLength = Math.sqrt(Math.pow(bl[0]! - br[0]!, 2) + Math.pow(bl[1]! - br[1]!, 2));
+    const leftLength = Math.sqrt(Math.pow(tl[0]! - bl[0]!, 2) + Math.pow(tl[1]! - bl[1]!, 2));
 
     // Check if opposite sides are approximately equal
     const horizontalRatio = Math.min(topLength, bottomLength) / Math.max(topLength, bottomLength);
@@ -1445,7 +1558,7 @@ function calculateRectangleRegularity(points) {
 }
 
 // Cleanup preprocessing worker
-export function cleanupPreprocessingWorker() {
+export function cleanupPreprocessingWorker(): void {
     if (preprocessingWorker) {
         preprocessingWorker.terminate();
         preprocessingWorker = null;
@@ -1458,7 +1571,7 @@ export function cleanupPreprocessingWorker() {
 }
 
 // Show user-friendly notification about PaddleOCR fallback
-function showPaddleOCRFallbackNotification(errorCategory) {
+function showPaddleOCRFallbackNotification(errorCategory: string): void {
     const notification = document.createElement('div');
     notification.className = 'fixed top-20 right-4 gaming-panel p-4 rounded-xl z-40 max-w-xs';
     notification.innerHTML = `
@@ -1488,8 +1601,8 @@ function showPaddleOCRFallbackNotification(errorCategory) {
     }, 10000);
 }
 
-// Retry PaddleOCR loading
-async function retryPaddleOCR() {
+// Retry PaddleOCR loading (exposed globally)
+async function retryPaddleOCR(): Promise<void> {
     console.log('🔄 Retrying PaddleOCR loading...');
 
     // Reset PaddleOCR state
@@ -1508,8 +1621,11 @@ async function retryPaddleOCR() {
     }
 }
 
+// Make retryPaddleOCR globally accessible
+(window as any).retryPaddleOCR = retryPaddleOCR;
+
 // Read text from current frame immediately
-export async function readNow() {
+export async function readNow(): Promise<void> {
     if (!AppState.stream || (!AppState.ocrWorker && !AppState.ocrScheduler)) {
         console.warn('⚠️ OCR system not ready');
         updateStatus('OCR system not ready', 'bg-red-400');
@@ -1520,15 +1636,24 @@ export async function readNow() {
 
 // =================== ENHANCED PREPROCESSING FUNCTIONS ===================
 
+// Image statistics interface
+interface ImageStats {
+    avgBrightness: number;
+    contrast: number;
+    isDarkBackground: boolean;
+    darkRatio: number;
+    brightRatio: number;
+}
+
 // Analyze image characteristics to optimize preprocessing
-function analyzeImageCharacteristics(data) {
+function analyzeImageCharacteristics(data: Uint8ClampedArray): ImageStats {
     let totalBrightness = 0;
     let darkPixels = 0;
     let brightPixels = 0;
     const pixelCount = data.length / 4;
 
     for (let i = 0; i < data.length; i += 4) {
-        const brightness = (data[i] + data[i + 1] + data[i + 2]) / 3;
+        const brightness = (data[i]! + data[i + 1]! + data[i + 2]!) / 3;
         totalBrightness += brightness;
 
         if (brightness < 80) darkPixels++;
@@ -1549,13 +1674,13 @@ function analyzeImageCharacteristics(data) {
 }
 
 // Enhanced contrast for white text on dark backgrounds
-function enhanceWhiteTextOnDark(data) {
+function enhanceWhiteTextOnDark(data: Uint8ClampedArray): void {
     // First pass: identify likely text pixels (bright pixels)
     const textThreshold = 120;
     const backgroundThreshold = 80;
 
     for (let i = 0; i < data.length; i += 4) {
-        const brightness = data[i];
+        const brightness = data[i]!;
 
         if (brightness > textThreshold) {
             // Enhance white text - make it brighter

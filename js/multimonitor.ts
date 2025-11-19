@@ -5,9 +5,58 @@
 
 import { AppState } from './config.js';
 import { updateStatus } from './ui.js';
+import { MultiMonitorState } from './types.js';
+
+// Window Management API type declarations
+interface ScreenDetailed {
+    width: number;
+    height: number;
+    left: number;
+    top: number;
+    isPrimary: boolean;
+    label?: string;
+    availWidth?: number;
+    availHeight?: number;
+    availLeft?: number;
+    availTop?: number;
+    devicePixelRatio?: number;
+}
+
+interface ScreenDetails {
+    screens: ScreenDetailed[];
+    currentScreen: ScreenDetailed;
+}
+
+// Extend Window interface for Window Management API
+declare global {
+    interface Window {
+        getScreenDetails(): Promise<ScreenDetails>;
+        executeOverlayAction: (action: string) => void;
+        exitFullscreenOverlay: () => void;
+    }
+}
+
+// Permission name extension for window-management
+interface PermissionDescriptor {
+    name: PermissionName | 'window-management';
+}
+
+// Popup window message data interface
+interface PopupMessageData {
+    action: string;
+}
+
+// Multi-monitor status interface
+interface MultiMonitorStatus {
+    supported: boolean;
+    screensDetected: number;
+    hasSecondaryWindow: boolean;
+    gamingDisplay: string;
+    ocrDisplay: string;
+}
 
 // Multi-monitor state
-let monitorState = {
+let monitorState: MultiMonitorState = {
     screens: [],
     currentScreen: null,
     popupWindow: null,
@@ -17,61 +66,62 @@ let monitorState = {
 };
 
 // Initialize multi-monitor support
-export async function initMultiMonitorSupport() {
-    console.log('🖥️ Initializing Multi-Monitor Support...');
+export async function initMultiMonitorSupport(): Promise<void> {
+    console.log('Initializing Multi-Monitor Support...');
 
     // Check for Screen Capture API support
     if ('getDisplayMedia' in navigator.mediaDevices) {
         monitorState.isMultiMonitorSupported = true;
-        console.log('✅ Screen Capture API available for monitor detection');
+        console.log('Screen Capture API available for monitor detection');
     }
 
     // Check for Window Management API (experimental)
     if ('getScreenDetails' in window) {
         try {
-            const permission = await navigator.permissions.query({ name: 'window-management' });
+            const permission = await navigator.permissions.query({ name: 'window-management' as PermissionName });
             if (permission.state === 'granted' || permission.state === 'prompt') {
                 monitorState.isMultiMonitorSupported = true;
-                console.log('✅ Window Management API available');
+                console.log('Window Management API available');
                 await detectScreens();
             }
         } catch (error) {
-            console.log('⚠️ Window Management API not available:', error.message);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            console.log('Window Management API not available:', errorMessage);
         }
     }
 
     // Fallback: Basic multi-window support
     if (!monitorState.isMultiMonitorSupported) {
-        console.log('📺 Using basic multi-window support for gaming setups');
+        console.log('Using basic multi-window support for gaming setups');
         monitorState.isMultiMonitorSupported = true; // Enable basic support
     }
 
     // Create multi-monitor controls
     createMultiMonitorControls();
 
-    console.log('✅ Multi-Monitor Support initialized');
+    console.log('Multi-Monitor Support initialized');
 }
 
 // Detect available screens (if supported)
-async function detectScreens() {
+async function detectScreens(): Promise<ScreenDetailed[]> {
     try {
         if ('getScreenDetails' in window) {
             const screenDetails = await window.getScreenDetails();
             monitorState.screens = screenDetails.screens;
 
-            console.log(`🖥️ Detected ${monitorState.screens.length} screens:`);
-            monitorState.screens.forEach((screen, index) => {
+            console.log(`Detected ${monitorState.screens.length} screens:`);
+            monitorState.screens.forEach((screen: ScreenDetailed, index: number) => {
                 console.log(`   Screen ${index + 1}: ${screen.width}x${screen.height} at (${screen.left}, ${screen.top})`);
             });
 
             // Identify primary vs secondary displays
-            const primaryScreen = monitorState.screens.find(s => s.isPrimary) || monitorState.screens[0];
-            const secondaryScreens = monitorState.screens.filter(s => !s.isPrimary);
+            const primaryScreen = monitorState.screens.find((s: ScreenDetailed) => s.isPrimary) || monitorState.screens[0];
+            const secondaryScreens = monitorState.screens.filter((s: ScreenDetailed) => !s.isPrimary);
 
             if (secondaryScreens.length > 0) {
                 monitorState.gamingDisplay = primaryScreen;
                 monitorState.ocrDisplay = secondaryScreens[0]; // Use first secondary for OCR
-                console.log('🎮 Gaming setup detected: Primary + Secondary displays');
+                console.log('Gaming setup detected: Primary + Secondary displays');
             }
 
             return monitorState.screens;
@@ -80,16 +130,17 @@ async function detectScreens() {
         console.warn('Screen detection failed:', error);
         return [];
     }
+    return [];
 }
 
 // Create multi-monitor control panel
-function createMultiMonitorControls() {
+function createMultiMonitorControls(): void {
     const controlPanel = document.createElement('div');
     controlPanel.id = 'multimonitor-controls';
     controlPanel.className = 'glass rounded-xl p-4 mt-4 hidden';
 
     controlPanel.innerHTML = `
-        <h4 class="text-md font-medium mb-3 text-gaming-blue">🖥️ Multi-Monitor Gaming Setup</h4>
+        <h4 class="text-md font-medium mb-3 text-gaming-blue">Multi-Monitor Gaming Setup</h4>
 
         <div class="space-y-3">
             <!-- Display Selection -->
@@ -107,10 +158,10 @@ function createMultiMonitorControls() {
                 <label class="block text-sm font-medium mb-2">Gaming Mode</label>
                 <div class="flex gap-2">
                     <button id="gaming-companion" class="flex-1 py-2 px-3 rounded-lg text-xs font-medium bg-gaming-blue text-white">
-                        🎮 Companion
+                        Companion
                     </button>
                     <button id="gaming-overlay" class="flex-1 py-2 px-3 rounded-lg text-xs font-medium bg-dark-600 hover:bg-dark-500 text-white">
-                        👻 Overlay
+                        Overlay
                     </button>
                 </div>
             </div>
@@ -118,10 +169,10 @@ function createMultiMonitorControls() {
             <!-- Window Controls -->
             <div class="grid grid-cols-2 gap-2">
                 <button id="open-secondary" class="btn-gaming py-2 px-3 text-xs rounded-lg">
-                    📺 Open on Secondary
+                    Open on Secondary
                 </button>
                 <button id="always-on-top" class="btn-gaming py-2 px-3 text-xs rounded-lg">
-                    📌 Always on Top
+                    Always on Top
                 </button>
             </div>
 
@@ -149,40 +200,59 @@ function createMultiMonitorControls() {
 }
 
 // Setup multi-monitor event listeners
-function setupMultiMonitorEventListeners() {
+function setupMultiMonitorEventListeners(): void {
     // Display selection
-    document.getElementById('display-select').addEventListener('change', (e) => {
-        const mode = e.target.value;
-        handleDisplayModeChange(mode);
-    });
+    const displaySelect = document.getElementById('display-select') as HTMLSelectElement | null;
+    if (displaySelect) {
+        displaySelect.addEventListener('change', (e: Event) => {
+            const target = e.target as HTMLSelectElement;
+            const mode = target.value;
+            handleDisplayModeChange(mode);
+        });
+    }
 
     // Gaming mode buttons
-    document.getElementById('gaming-companion').addEventListener('click', () => {
-        setGamingMode('companion');
-    });
+    const gamingCompanion = document.getElementById('gaming-companion');
+    if (gamingCompanion) {
+        gamingCompanion.addEventListener('click', () => {
+            setGamingMode('companion');
+        });
+    }
 
-    document.getElementById('gaming-overlay').addEventListener('click', () => {
-        setGamingMode('overlay');
-    });
+    const gamingOverlay = document.getElementById('gaming-overlay');
+    if (gamingOverlay) {
+        gamingOverlay.addEventListener('click', () => {
+            setGamingMode('overlay');
+        });
+    }
 
     // Window controls
-    document.getElementById('open-secondary').addEventListener('click', () => {
-        openOnSecondaryMonitor();
-    });
+    const openSecondary = document.getElementById('open-secondary');
+    if (openSecondary) {
+        openSecondary.addEventListener('click', () => {
+            openOnSecondaryMonitor();
+        });
+    }
 
-    document.getElementById('always-on-top').addEventListener('click', () => {
-        toggleAlwaysOnTop();
-    });
+    const alwaysOnTop = document.getElementById('always-on-top');
+    if (alwaysOnTop) {
+        alwaysOnTop.addEventListener('click', () => {
+            toggleAlwaysOnTop();
+        });
+    }
 
     // Gaming integration toggle
-    document.getElementById('gaming-integration-toggle').addEventListener('click', () => {
-        toggleGamingIntegration();
-    });
+    const gamingIntegrationToggle = document.getElementById('gaming-integration-toggle');
+    if (gamingIntegrationToggle) {
+        gamingIntegrationToggle.addEventListener('click', () => {
+            toggleGamingIntegration();
+        });
+    }
 }
 
 // Handle display mode changes
-async function handleDisplayModeChange(mode) {
-    console.log(`🖥️ Switching to display mode: ${mode}`);
+async function handleDisplayModeChange(mode: string): Promise<void> {
+    console.log(`Switching to display mode: ${mode}`);
 
     switch (mode) {
         case 'current':
@@ -203,9 +273,9 @@ async function handleDisplayModeChange(mode) {
 }
 
 // Open OCR interface on secondary monitor
-async function openOnSecondaryMonitor() {
+async function openOnSecondaryMonitor(): Promise<void> {
     try {
-        console.log('📺 Opening OCR interface on secondary monitor...');
+        console.log('Opening OCR interface on secondary monitor...');
 
         // Calculate optimal popup dimensions
         const width = 800;
@@ -238,16 +308,16 @@ async function openOnSecondaryMonitor() {
         await cloneOCRInterface(popup);
 
         updateStatus('OCR opened on secondary monitor', 'bg-gaming-blue');
-        console.log('✅ Secondary monitor OCR window opened');
+        console.log('Secondary monitor OCR window opened');
 
     } catch (error) {
-        console.error('❌ Failed to open secondary monitor:', error);
+        console.error('Failed to open secondary monitor:', error);
         updateStatus('Secondary monitor failed', 'bg-red-400');
     }
 }
 
 // Clone OCR interface to popup window
-async function cloneOCRInterface(popup) {
+async function cloneOCRInterface(popup: Window): Promise<void> {
     // Create minimal OCR interface for popup
     popup.document.write(`
         <!DOCTYPE html>
@@ -269,18 +339,18 @@ async function cloneOCRInterface(popup) {
         <body class="text-white p-6">
             <div class="glass rounded-2xl p-6 text-center">
                 <h1 class="text-2xl font-bold mb-4 bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
-                    🎮 Gaming OCR Companion
+                    Gaming OCR Companion
                 </h1>
                 <div id="secondary-status" class="text-gaming-cyan mb-4">Ready for gaming!</div>
                 <div class="space-y-3">
                     <button onclick="window.opener.readNow()" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 px-4 rounded-xl">
-                        🔍 Read Text Now (F1)
+                        Read Text Now (F1)
                     </button>
                     <button onclick="window.opener.toggleMonitoring()" class="w-full bg-green-600 hover:bg-green-700 text-white py-3 px-4 rounded-xl">
-                        📹 Toggle Monitoring (F2)
+                        Toggle Monitoring (F2)
                     </button>
                     <button onclick="window.opener.runAutoCalibration()" class="w-full bg-purple-600 hover:bg-purple-700 text-white py-3 px-4 rounded-xl">
-                        🎯 Auto-Calibrate (F3)
+                        Auto-Calibrate (F3)
                     </button>
                 </div>
                 <div class="mt-6 p-4 bg-dark-800 rounded-xl">
@@ -305,29 +375,29 @@ async function cloneOCRInterface(popup) {
     });
 
     // Expose functions to popup
-    popup.readNow = () => {
+    (popup as any).readNow = () => {
         // Send message to main window
         window.postMessage({ action: 'readNow' }, '*');
     };
 
-    popup.toggleMonitoring = () => {
+    (popup as any).toggleMonitoring = () => {
         window.postMessage({ action: 'toggleMonitoring' }, '*');
     };
 
-    popup.runAutoCalibration = () => {
+    (popup as any).runAutoCalibration = () => {
         window.postMessage({ action: 'runAutoCalibration' }, '*');
     };
 
     // Listen for messages from popup
-    window.addEventListener('message', (event) => {
+    window.addEventListener('message', (event: MessageEvent) => {
         if (event.source === popup) {
-            handlePopupMessage(event.data);
+            handlePopupMessage(event.data as PopupMessageData);
         }
     });
 }
 
 // Handle messages from popup window
-async function handlePopupMessage(data) {
+async function handlePopupMessage(data: PopupMessageData): Promise<void> {
     const { action } = data;
 
     try {
@@ -356,7 +426,7 @@ async function handlePopupMessage(data) {
 }
 
 // Update secondary monitor with latest text
-export function updateSecondaryMonitor(text, confidence) {
+export function updateSecondaryMonitor(text: string, confidence: number): void {
     if (monitorState.popupWindow && !monitorState.popupWindow.closed) {
         try {
             const lastTextEl = monitorState.popupWindow.document.getElementById('last-text');
@@ -377,9 +447,9 @@ export function updateSecondaryMonitor(text, confidence) {
 }
 
 // Open fullscreen overlay mode
-async function openFullscreenOverlay() {
+async function openFullscreenOverlay(): Promise<void> {
     try {
-        console.log('🎮 Opening fullscreen OCR overlay...');
+        console.log('Opening fullscreen OCR overlay...');
 
         // Request fullscreen permission
         await document.documentElement.requestFullscreen();
@@ -392,8 +462,8 @@ async function openFullscreenOverlay() {
         overlay.innerHTML = `
             <div class="gaming-panel max-w-4xl w-full mx-4 p-8 rounded-2xl">
                 <div class="text-center mb-8">
-                    <h1 class="text-4xl font-bold text-gaming-cyan mb-4">🎮 Gaming OCR Overlay</h1>
-                    <p class="text-gaming-purple">Press ESC to exit fullscreen • F1-F12 hotkeys active</p>
+                    <h1 class="text-4xl font-bold text-gaming-cyan mb-4">Gaming OCR Overlay</h1>
+                    <p class="text-gaming-purple">Press ESC to exit fullscreen - F1-F12 hotkeys active</p>
                 </div>
 
                 <div class="grid md:grid-cols-3 gap-6">
@@ -401,13 +471,13 @@ async function openFullscreenOverlay() {
                     <div class="space-y-3">
                         <h3 class="text-lg font-semibold text-gaming-blue mb-3">Quick Actions</h3>
                         <button onclick="executeOverlayAction('readNow')" class="w-full btn-primary py-3 rounded-xl">
-                            🔍 Read Text (F1)
+                            Read Text (F1)
                         </button>
                         <button onclick="executeOverlayAction('toggleMonitoring')" class="w-full btn-gaming py-3 rounded-xl">
-                            📹 Monitoring (F2)
+                            Monitoring (F2)
                         </button>
                         <button onclick="executeOverlayAction('autoCalibrate')" class="w-full btn-gaming py-3 rounded-xl">
-                            🎯 Calibrate (F3)
+                            Calibrate (F3)
                         </button>
                     </div>
 
@@ -455,7 +525,7 @@ async function openFullscreenOverlay() {
         document.body.appendChild(overlay);
 
         // Handle ESC key to exit
-        const escapeHandler = (e) => {
+        const escapeHandler = (e: KeyboardEvent) => {
             if (e.key === 'Escape') {
                 exitFullscreenOverlay();
                 document.removeEventListener('keydown', escapeHandler);
@@ -467,18 +537,18 @@ async function openFullscreenOverlay() {
         updateStatus('Fullscreen OCR overlay active', 'bg-gaming-purple');
 
     } catch (error) {
-        console.error('❌ Failed to open fullscreen overlay:', error);
+        console.error('Failed to open fullscreen overlay:', error);
         updateStatus('Fullscreen overlay failed', 'bg-red-400');
     }
 }
 
 // Execute overlay action
-function executeOverlayAction(action) {
+function executeOverlayAction(action: string): void {
     window.postMessage({ action }, '*');
 }
 
 // Exit fullscreen overlay
-function exitFullscreenOverlay() {
+function exitFullscreenOverlay(): void {
     const overlay = document.getElementById('fullscreen-ocr-overlay');
     if (overlay) {
         overlay.remove();
@@ -492,11 +562,16 @@ function exitFullscreenOverlay() {
 }
 
 // Set gaming mode
-function setGamingMode(mode) {
-    console.log(`🎮 Setting gaming mode: ${mode}`);
+function setGamingMode(mode: 'companion' | 'overlay'): void {
+    console.log(`Setting gaming mode: ${mode}`);
 
     const companionBtn = document.getElementById('gaming-companion');
     const overlayBtn = document.getElementById('gaming-overlay');
+
+    if (!companionBtn || !overlayBtn) {
+        console.warn('Gaming mode buttons not found');
+        return;
+    }
 
     if (mode === 'companion') {
         companionBtn.className = 'flex-1 py-2 px-3 rounded-lg text-xs font-medium bg-gaming-blue text-white';
@@ -519,88 +594,98 @@ function setGamingMode(mode) {
 }
 
 // Toggle always on top (limited browser support)
-function toggleAlwaysOnTop() {
+function toggleAlwaysOnTop(): void {
     // This feature has limited browser support
     // For now, provide user guidance
     const message = `
-🖥️ Always on Top Tips:
+Always on Top Tips:
 
 For Gaming Setups:
-• Use secondary monitor popup mode
-• Set window to stay above games manually
-• Consider using browser's picture-in-picture mode
-• Use F11 for fullscreen overlay mode
+- Use secondary monitor popup mode
+- Set window to stay above games manually
+- Consider using browser's picture-in-picture mode
+- Use F11 for fullscreen overlay mode
 
 Browser Support:
-• Chrome: Limited support via --enable-features=WindowPlacement
-• Firefox: Not supported
-• Edge: Limited support
+- Chrome: Limited support via --enable-features=WindowPlacement
+- Firefox: Not supported
+- Edge: Limited support
     `;
 
     alert(message);
-    console.log('📌 Always on top guidance shown');
+    console.log('Always on top guidance shown');
 }
 
 // Toggle gaming integration features
-function toggleGamingIntegration() {
+function toggleGamingIntegration(): void {
     const toggle = document.getElementById('gaming-integration-toggle');
+    if (!toggle) {
+        console.warn('Gaming integration toggle not found');
+        return;
+    }
+
     const isEnabled = toggle.classList.contains('bg-gaming-blue');
+    const toggleSpan = toggle.querySelector('span');
 
     if (isEnabled) {
         toggle.classList.remove('bg-gaming-blue');
         toggle.classList.add('bg-dark-600');
-        toggle.querySelector('span').classList.remove('translate-x-5');
+        if (toggleSpan) {
+            toggleSpan.classList.remove('translate-x-5');
+        }
         updateStatus('Gaming integration disabled', 'bg-gray-400');
     } else {
         toggle.classList.add('bg-gaming-blue');
         toggle.classList.remove('bg-dark-600');
-        toggle.querySelector('span').classList.add('translate-x-5');
+        if (toggleSpan) {
+            toggleSpan.classList.add('translate-x-5');
+        }
         updateStatus('Gaming integration enabled', 'bg-gaming-blue');
     }
 
     const enabled = !isEnabled;
-    localStorage.setItem('gamingIntegrationEnabled', enabled);
-    console.log(`🎮 Gaming integration ${enabled ? 'enabled' : 'disabled'}`);
+    localStorage.setItem('gamingIntegrationEnabled', String(enabled));
+    console.log(`Gaming integration ${enabled ? 'enabled' : 'disabled'}`);
 }
 
 // Close secondary window
-function closeSecondaryWindow() {
+function closeSecondaryWindow(): void {
     if (monitorState.popupWindow && !monitorState.popupWindow.closed) {
         monitorState.popupWindow.close();
         monitorState.popupWindow = null;
         updateStatus('Secondary monitor closed', 'bg-yellow-400');
-        console.log('📺 Secondary monitor window closed');
+        console.log('Secondary monitor window closed');
     }
 }
 
 // Show/hide multi-monitor controls
-export function toggleMultiMonitorControls() {
+export function toggleMultiMonitorControls(): void {
     const controls = document.getElementById('multimonitor-controls');
     if (controls) {
         const isHidden = controls.classList.contains('hidden');
         controls.classList.toggle('hidden', !isHidden);
 
         if (!isHidden) {
-            console.log('🖥️ Multi-monitor controls shown');
+            console.log('Multi-monitor controls shown');
         } else {
-            console.log('🖥️ Multi-monitor controls hidden');
+            console.log('Multi-monitor controls hidden');
         }
     }
 }
 
 // Get multi-monitor status
-export function getMultiMonitorStatus() {
+export function getMultiMonitorStatus(): MultiMonitorStatus {
     return {
         supported: monitorState.isMultiMonitorSupported,
         screensDetected: monitorState.screens.length,
-        hasSecondaryWindow: monitorState.popupWindow && !monitorState.popupWindow.closed,
+        hasSecondaryWindow: monitorState.popupWindow !== null && !monitorState.popupWindow.closed,
         gamingDisplay: monitorState.gamingDisplay ? 'Primary' : 'Unknown',
         ocrDisplay: monitorState.ocrDisplay ? 'Secondary' : 'Primary'
     };
 }
 
 // Cleanup multi-monitor system
-export function cleanupMultiMonitorSystem() {
+export function cleanupMultiMonitorSystem(): void {
     closeSecondaryWindow();
 
     const overlay = document.getElementById('fullscreen-ocr-overlay');
@@ -609,7 +694,7 @@ export function cleanupMultiMonitorSystem() {
     const controls = document.getElementById('multimonitor-controls');
     if (controls) controls.remove();
 
-    console.log('🖥️ Multi-monitor system cleaned up');
+    console.log('Multi-monitor system cleaned up');
 }
 
 // Make functions globally accessible

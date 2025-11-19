@@ -5,9 +5,55 @@
 
 import { AppState } from './config.js';
 import { updateStatus } from './ui.js';
+import type { AppState as AppStateType, UserSettings } from './types.js';
+
+// Extend Window interface for global functions
+declare global {
+    interface Window {
+        toggleHandheldControls: () => void;
+        toggleHotkeyHelp?: () => void;
+    }
+}
+
+// Device type literals
+type DeviceType = 'unknown' | 'steam-deck' | 'rog-ally' | 'legion-go' | 'generic-handheld';
+type OrientationType = 'landscape' | 'portrait' | string;
+
+// Steam Deck state interface
+interface SteamDeckState {
+    isHandheld: boolean;
+    deviceType: DeviceType;
+    orientation: OrientationType;
+    touchSupported: boolean;
+    gamepadConnected: boolean;
+    optimizationsApplied: boolean;
+}
+
+// Handheld info interface
+interface HandheldInfo {
+    isHandheld: boolean;
+    deviceType: DeviceType;
+    deviceName: string;
+    touchSupported: boolean;
+    gamepadConnected: boolean;
+    orientation: OrientationType;
+    optimizationsApplied: boolean;
+    screenSize: {
+        width: number;
+        height: number;
+    };
+}
+
+// Gamepad action types
+type GamepadAction = 'readNow' | 'toggleMonitoring' | 'autoCalibrate' | 'showHistory' | 'showHelp' | 'showPerformance';
+
+// Button mappings interface
+interface ButtonMappings {
+    [key: number]: GamepadAction;
+}
 
 // Steam Deck detection and optimization state
-let steamDeckState = {
+let steamDeckState: SteamDeckState = {
     isHandheld: false,
     deviceType: 'unknown',
     orientation: 'landscape',
@@ -17,7 +63,7 @@ let steamDeckState = {
 };
 
 // Initialize Steam Deck and handheld gaming optimizations
-export function initSteamDeckOptimizations() {
+export function initSteamDeckOptimizations(): void {
     console.log('🎮 Initializing Steam Deck & Gaming Handheld Optimizations...');
 
     // Detect gaming handheld devices
@@ -38,7 +84,7 @@ export function initSteamDeckOptimizations() {
 }
 
 // Detect if running on gaming handheld device
-function detectGamingHandheld() {
+function detectGamingHandheld(): void {
     const userAgent = navigator.userAgent.toLowerCase();
     const screenWidth = screen.width;
     const screenHeight = screen.height;
@@ -83,7 +129,7 @@ function detectGamingHandheld() {
 }
 
 // Apply handheld-specific optimizations
-function applyHandheldOptimizations() {
+function applyHandheldOptimizations(): void {
     console.log('🎮 Applying gaming handheld optimizations...');
 
     // Add handheld-specific CSS
@@ -164,7 +210,7 @@ function applyHandheldOptimizations() {
 }
 
 // Add visual indicator for handheld mode
-function addHandheldIndicator() {
+function addHandheldIndicator(): void {
     const indicator = document.createElement('div');
     indicator.className = 'fixed top-4 left-4 bg-gaming-purple rounded-lg p-2 z-30 text-xs font-medium';
     indicator.innerHTML = `
@@ -184,28 +230,29 @@ function addHandheldIndicator() {
 }
 
 // Get user-friendly device name
-function getDeviceDisplayName() {
-    const names = {
+function getDeviceDisplayName(): string {
+    const names: Record<DeviceType, string> = {
         'steam-deck': 'Steam Deck',
         'rog-ally': 'ROG Ally',
         'legion-go': 'Legion Go',
-        'generic-handheld': 'Gaming Handheld'
+        'generic-handheld': 'Gaming Handheld',
+        'unknown': 'Gaming Device'
     };
 
     return names[steamDeckState.deviceType] || 'Gaming Device';
 }
 
 // Optimize performance for handheld devices
-function optimizeForHandheld() {
+function optimizeForHandheld(): void {
     // Reduce processing interval for better battery life
-    if (AppState.settings.processingInterval < 3000) {
-        AppState.settings.processingInterval = 3000; // 3 seconds for battery optimization
+    if ((AppState as AppStateType).settings.processingInterval < 3000) {
+        (AppState as AppStateType).settings.processingInterval = 3000; // 3 seconds for battery optimization
         console.log('🔋 Processing interval increased for battery optimization');
     }
 
     // Reduce sensitivity for faster processing
-    if (AppState.settings.sensitivity > 70) {
-        AppState.settings.sensitivity = 70; // Balanced for handheld performance
+    if ((AppState as AppStateType).settings.sensitivity > 70) {
+        (AppState as AppStateType).settings.sensitivity = 70; // Balanced for handheld performance
         console.log('⚡ Sensitivity optimized for handheld performance');
     }
 
@@ -214,14 +261,14 @@ function optimizeForHandheld() {
 }
 
 // Setup gamepad support for gaming handhelds
-function setupGamepadSupport() {
+function setupGamepadSupport(): void {
     if (!navigator.getGamepads) {
         console.log('⚠️ Gamepad API not supported');
         return;
     }
 
     // Listen for gamepad connections
-    window.addEventListener('gamepadconnected', (e) => {
+    window.addEventListener('gamepadconnected', (e: GamepadEvent) => {
         steamDeckState.gamepadConnected = true;
         console.log(`🎮 Gamepad connected: ${e.gamepad.id}`);
         updateStatus('Gamepad connected', 'bg-gaming-blue');
@@ -229,7 +276,7 @@ function setupGamepadSupport() {
         setupGamepadControls(e.gamepad);
     });
 
-    window.addEventListener('gamepaddisconnected', (e) => {
+    window.addEventListener('gamepaddisconnected', (e: GamepadEvent) => {
         steamDeckState.gamepadConnected = false;
         console.log(`🎮 Gamepad disconnected: ${e.gamepad.id}`);
         updateStatus('Gamepad disconnected', 'bg-yellow-400');
@@ -248,10 +295,10 @@ function setupGamepadSupport() {
 }
 
 // Setup gamepad controls for OCR functions
-function setupGamepadControls(gamepad) {
-    let lastButtonStates = new Array(gamepad.buttons.length).fill(false);
+function setupGamepadControls(gamepad: Gamepad): void {
+    let lastButtonStates: boolean[] = new Array(gamepad.buttons.length).fill(false);
 
-    const gamepadLoop = () => {
+    const gamepadLoop = (): void => {
         const currentGamepads = navigator.getGamepads();
         const currentGamepad = currentGamepads[gamepad.index];
 
@@ -280,11 +327,11 @@ function setupGamepadControls(gamepad) {
 }
 
 // Handle gamepad button presses
-async function handleGamepadButton(buttonIndex, gamepadId) {
+async function handleGamepadButton(buttonIndex: number, gamepadId: string): Promise<void> {
     console.log(`🎮 Gamepad button ${buttonIndex} pressed on ${gamepadId}`);
 
     // Steam Deck button mappings
-    const steamDeckMappings = {
+    const steamDeckMappings: ButtonMappings = {
         0: 'readNow',        // A button
         1: 'toggleMonitoring', // B button
         2: 'autoCalibrate',  // X button
@@ -294,7 +341,7 @@ async function handleGamepadButton(buttonIndex, gamepadId) {
     };
 
     // Generic gamepad mappings
-    const genericMappings = {
+    const genericMappings: ButtonMappings = {
         0: 'readNow',        // Button 0 (usually A/Cross)
         1: 'toggleMonitoring', // Button 1 (usually B/Circle)
         2: 'autoCalibrate',  // Button 2 (usually X/Square)
@@ -314,7 +361,7 @@ async function handleGamepadButton(buttonIndex, gamepadId) {
 }
 
 // Execute gamepad action
-async function executeGamepadAction(action) {
+async function executeGamepadAction(action: GamepadAction): Promise<void> {
     try {
         switch (action) {
             case 'readNow':
@@ -358,7 +405,7 @@ async function executeGamepadAction(action) {
 }
 
 // Show visual feedback for gamepad actions
-function showGamepadFeedback(buttonIndex, action) {
+function showGamepadFeedback(buttonIndex: number, action: string): void {
     const feedback = document.createElement('div');
     feedback.className = 'fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 gaming-panel p-4 rounded-xl z-50';
     feedback.innerHTML = `
@@ -378,10 +425,10 @@ function showGamepadFeedback(buttonIndex, action) {
 }
 
 // Setup orientation handling for handheld devices
-function setupOrientationHandling() {
+function setupOrientationHandling(): void {
     if (!steamDeckState.isHandheld) return;
 
-    const handleOrientationChange = () => {
+    const handleOrientationChange = (): void => {
         const orientation = screen.orientation?.type ||
                           (window.innerWidth > window.innerHeight ? 'landscape' : 'portrait');
 
@@ -405,7 +452,7 @@ function setupOrientationHandling() {
 }
 
 // Apply orientation-specific optimizations
-function applyOrientationOptimizations(orientation) {
+function applyOrientationOptimizations(orientation: string): void {
     const body = document.body;
 
     if (orientation.includes('landscape')) {
@@ -424,7 +471,7 @@ function applyOrientationOptimizations(orientation) {
 }
 
 // Create handheld-specific UI enhancements
-export function createHandheldUI() {
+export function createHandheldUI(): void {
     if (!steamDeckState.isHandheld) return;
 
     // Add handheld control panel
@@ -477,7 +524,7 @@ export function createHandheldUI() {
 }
 
 // Toggle handheld controls visibility
-function toggleHandheldControls() {
+function toggleHandheldControls(): void {
     const panel = document.getElementById('handheld-controls');
     if (panel) {
         const isVisible = panel.style.opacity !== '0';
@@ -487,13 +534,13 @@ function toggleHandheldControls() {
 }
 
 // Optimize OCR settings for handheld gaming
-export function optimizeForHandheldGaming() {
+export function optimizeForHandheldGaming(): void {
     if (!steamDeckState.isHandheld) return;
 
     console.log('🎮 Optimizing OCR settings for handheld gaming...');
 
     // Battery-optimized settings
-    const handheldSettings = {
+    const handheldSettings: Partial<UserSettings> = {
         processingInterval: 3000, // Longer interval for battery life
         sensitivity: 75, // Higher sensitivity for quicker recognition
         speechRate: 1.2, // Slightly faster speech for gaming
@@ -501,18 +548,19 @@ export function optimizeForHandheldGaming() {
     };
 
     // Apply settings
-    Object.assign(AppState.settings, handheldSettings);
+    Object.assign((AppState as AppStateType).settings, handheldSettings);
 
     // Save optimized settings
-    const { saveSettings } = require('./settings.js');
-    saveSettings();
+    import('./settings.js').then(({ saveSettings }) => {
+        saveSettings();
+    });
 
     updateStatus(`Optimized for ${getDeviceDisplayName()}`, 'bg-gaming-purple');
     console.log('✅ Handheld gaming optimizations applied');
 }
 
 // Handle Steam Deck specific features
-export function handleSteamDeckFeatures() {
+export function handleSteamDeckFeatures(): void {
     if (steamDeckState.deviceType !== 'steam-deck') return;
 
     console.log('🎮 Enabling Steam Deck specific features...');
@@ -533,7 +581,7 @@ export function handleSteamDeckFeatures() {
     if (navigator.hardwareConcurrency >= 8) {
         console.log('🚀 High performance Steam Deck detected');
         // Enable more aggressive OCR settings
-        AppState.settings.processingInterval = 1500; // Faster on powerful Steam Deck
+        (AppState as AppStateType).settings.processingInterval = 1500; // Faster on powerful Steam Deck
     }
 
     // Steam Deck trackpad support (if available)
@@ -541,14 +589,14 @@ export function handleSteamDeckFeatures() {
 }
 
 // Setup trackpad gestures for Steam Deck
-function setupTrackpadGestures() {
+function setupTrackpadGestures(): void {
     const cameraContainer = document.getElementById('camera-container');
     if (!cameraContainer) return;
 
     let gestureStartTime = 0;
     let gestureStartPos = { x: 0, y: 0 };
 
-    cameraContainer.addEventListener('touchstart', (e) => {
+    cameraContainer.addEventListener('touchstart', (e: TouchEvent) => {
         if (e.touches.length === 2) {
             // Two-finger gesture start
             gestureStartTime = Date.now();
@@ -559,7 +607,7 @@ function setupTrackpadGestures() {
         }
     });
 
-    cameraContainer.addEventListener('touchend', (e) => {
+    cameraContainer.addEventListener('touchend', (e: TouchEvent) => {
         const gestureDuration = Date.now() - gestureStartTime;
 
         // Quick two-finger tap for OCR
@@ -573,7 +621,7 @@ function setupTrackpadGestures() {
 }
 
 // Get handheld device information
-export function getHandheldInfo() {
+export function getHandheldInfo(): HandheldInfo {
     return {
         isHandheld: steamDeckState.isHandheld,
         deviceType: steamDeckState.deviceType,
@@ -590,7 +638,7 @@ export function getHandheldInfo() {
 }
 
 // Cleanup handheld optimizations
-export function cleanupHandheldOptimizations() {
+export function cleanupHandheldOptimizations(): void {
     // Remove handheld styles
     const styles = document.getElementById('handheld-optimizations');
     if (styles) styles.remove();
