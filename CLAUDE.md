@@ -10,9 +10,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Commands
 
+### Build (Required)
+- `bun run build`: Build TypeScript to production bundle (minified)
+- `bun run build:dev`: Build TypeScript with sourcemaps for development
+- `bun run serve`: Build and start development server (recommended)
+
 ### Development Server
-- `python3 -m http.server 3000`: Start development server on port 3000 (currently running)
+- `python3 -m http.server 3000`: Start development server on port 3000
 - `node watch.js`: Start file watcher for live reload (runs alongside server)
+- **Note**: Must run `bun run build:dev` first to generate `dist/app.js`
 
 ### Testing
 - `node test.js`: Run basic connectivity and Web API compatibility tests
@@ -29,11 +35,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 This is a **single-page web application** built with vanilla JavaScript and modern Web APIs. The entire application logic is contained in `index.html` (~1500 lines) with embedded CSS and JavaScript.
 
 ### Key Technologies
-- **Frontend**: Pure HTML/CSS/JavaScript (no build system)
+- **Frontend**: TypeScript compiled via Bun to ES modules
 - **Styling**: Tailwind CSS via CDN with custom dark theme and glass morphism
-- **OCR Engine**: Tesseract.js v5.1.1 with WebAssembly acceleration
+- **OCR Engine**: Tesseract.js v6.0.0 with WebAssembly acceleration
 - **Camera**: MediaDevices API with advanced constraints (zoom, focus)
 - **Text-to-Speech**: Web Speech API with voice selection
+- **Build System**: Bun for TypeScript compilation and bundling
 - **Development**: Python HTTP server with Node.js file watcher
 
 ### Core Application Flow
@@ -71,9 +78,11 @@ This is a **single-page web application** built with vanilla JavaScript and mode
 ## Development Patterns
 
 ### File Organization
-- **Single File Architecture**: All code in `index.html` for simplicity and deployment
+- **TypeScript Source**: All application code in `js/*.ts` files
+- **Entry Point**: `js/app.ts` - main application module
+- **Built Output**: `dist/app.js` - compiled bundle loaded by index.html
 - **Embedded Styles**: Custom CSS within `<style>` tags using Tailwind utilities and custom properties
-- **Inline JavaScript**: Application logic embedded in `<script>` tags with modular function organization
+- **Type Definitions**: Shared types in `js/types.ts`, config in `js/config.ts`
 
 ### Modern Web APIs Integration
 - **MediaDevices API**: Advanced camera access with constraint management
