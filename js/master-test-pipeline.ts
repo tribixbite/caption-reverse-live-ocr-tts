@@ -3,7 +3,108 @@
  * Comprehensive testing framework with include/exclude filtering
  */
 
+// Type definitions
+interface TestSuite {
+    name: string;
+    description: string;
+    category: string;
+    priority: string;
+    run: () => Promise<TestSuiteResult>;
+}
+
+interface TestSuiteInfo {
+    key: string;
+    name: string;
+    description: string;
+    category: string;
+    priority: string;
+}
+
+interface TestItem {
+    name: string;
+    status: 'passed' | 'failed' | 'skipped';
+    message?: string;
+    error?: string;
+    duration?: number;
+}
+
+interface TestSummary {
+    total: number;
+    passed: number;
+    failed: number;
+    skipped: number;
+}
+
+interface TestSuiteResult {
+    tests?: TestItem[];
+    summary?: TestSummary;
+    testSuiteName?: string;
+    category?: string;
+    priority?: string;
+    description?: string;
+}
+
+interface TestResult {
+    key: string;
+    name: string;
+    description: string;
+    category: string;
+    priority: string;
+    status: 'passed' | 'failed' | 'skipped';
+    duration: number;
+    details: TestSuiteResult | null;
+    error: string | null;
+}
+
+interface PipelineSummary {
+    duration: number;
+    total: number;
+    passed: number;
+    failed: number;
+    skipped: number;
+    results: TestResult[];
+}
+
+interface TestOptions {
+    include?: string[] | null;
+    exclude?: string[] | null;
+    categories?: string[] | null;
+    priorities?: string[] | null;
+    failFast?: boolean;
+    onProgress?: ((progress: ProgressInfo) => void) | null;
+}
+
+interface ProgressInfo {
+    current: number;
+    total: number;
+    suite: string;
+    status: 'running' | 'completed' | 'failed';
+}
+
+interface FilteredSuite {
+    key: string;
+    suite: TestSuite;
+}
+
+// Extend Window interface for global access
+declare global {
+    interface Window {
+        masterTestPipeline: MasterTestPipeline;
+        webkitAudioContext?: typeof AudioContext;
+    }
+}
+
 class MasterTestPipeline {
+    private testSuites: Map<string, TestSuite>;
+    private results: TestResult[];
+    private isRunning: boolean;
+    private totalTests: number;
+    private passedTests: number;
+    private failedTests: number;
+    private skippedTests: number;
+    private startTime: number;
+    private endTime: number;
+
     constructor() {
         this.testSuites = new Map();
         this.results = [];
@@ -18,14 +119,14 @@ class MasterTestPipeline {
         this.registerDefaultTestSuites();
     }
 
-    registerDefaultTestSuites() {
+    private registerDefaultTestSuites(): void {
         // Core system tests
         this.testSuites.set('setup-wizard', {
             name: 'Setup Wizard Tests',
             description: 'Test Setup Wizard integration and functionality',
             category: 'integration',
             priority: 'high',
-            async run() { return await this.runSetupWizardTests(); }
+            run: async () => { return await this.runSetupWizardTests(); }
         });
 
         this.testSuites.set('web-test-suite', {
@@ -33,7 +134,7 @@ class MasterTestPipeline {
             description: 'Test Web Test Suite integration and execution',
             category: 'integration',
             priority: 'high',
-            async run() { return await this.runWebTestSuiteTests(); }
+            run: async () => { return await this.runWebTestSuiteTests(); }
         });
 
         this.testSuites.set('glassmorphism', {
@@ -41,7 +142,7 @@ class MasterTestPipeline {
             description: 'Test advanced glassmorphism effects and animations',
             category: 'ui',
             priority: 'medium',
-            async run() { return await this.runGlassmorphismTests(); }
+            run: async () => { return await this.runGlassmorphismTests(); }
         });
 
         this.testSuites.set('theme-system', {
@@ -49,7 +150,7 @@ class MasterTestPipeline {
             description: 'Test theme switching and persistence',
             category: 'ui',
             priority: 'medium',
-            async run() { return await this.runThemeSystemTests(); }
+            run: async () => { return await this.runThemeSystemTests(); }
         });
 
         this.testSuites.set('gesture-controls', {
@@ -57,7 +158,7 @@ class MasterTestPipeline {
             description: 'Test gesture controls on touch devices',
             category: 'interaction',
             priority: 'medium',
-            async run() { return await this.runGestureControlsTests(); }
+            run: async () => { return await this.runGestureControlsTests(); }
         });
 
         this.testSuites.set('ocr-accuracy', {
@@ -65,7 +166,7 @@ class MasterTestPipeline {
             description: 'Test OCR accuracy validation with test2.png',
             category: 'core',
             priority: 'critical',
-            async run() { return await this.runOCRAccuracyTests(); }
+            run: async () => { return await this.runOCRAccuracyTests(); }
         });
 
         this.testSuites.set('audio-system', {
@@ -73,7 +174,7 @@ class MasterTestPipeline {
             description: 'Test audio system functionality',
             category: 'core',
             priority: 'high',
-            async run() { return await this.runAudioSystemTests(); }
+            run: async () => { return await this.runAudioSystemTests(); }
         });
 
         this.testSuites.set('camera-controls', {
@@ -81,7 +182,7 @@ class MasterTestPipeline {
             description: 'Test camera controls and crop area validation',
             category: 'core',
             priority: 'high',
-            async run() { return await this.runCameraControlsTests(); }
+            run: async () => { return await this.runCameraControlsTests(); }
         });
 
         this.testSuites.set('performance', {
@@ -89,7 +190,7 @@ class MasterTestPipeline {
             description: 'Test performance monitoring and memory leak detection',
             category: 'performance',
             priority: 'medium',
-            async run() { return await this.runPerformanceTests(); }
+            run: async () => { return await this.runPerformanceTests(); }
         });
 
         this.testSuites.set('browser-compatibility', {
@@ -97,7 +198,7 @@ class MasterTestPipeline {
             description: 'Test cross-browser compatibility',
             category: 'compatibility',
             priority: 'medium',
-            async run() { return await this.runBrowserCompatibilityTests(); }
+            run: async () => { return await this.runBrowserCompatibilityTests(); }
         });
 
         this.testSuites.set('accessibility', {
@@ -105,7 +206,7 @@ class MasterTestPipeline {
             description: 'Test accessibility features and compliance',
             category: 'accessibility',
             priority: 'medium',
-            async run() { return await this.runAccessibilityTests(); }
+            run: async () => { return await this.runAccessibilityTests(); }
         });
 
         this.testSuites.set('security', {
@@ -113,21 +214,14 @@ class MasterTestPipeline {
             description: 'Test security features and data handling',
             category: 'security',
             priority: 'high',
-            async run() { return await this.runSecurityTests(); }
+            run: async () => { return await this.runSecurityTests(); }
         });
     }
 
     /**
      * Run tests with filtering options
-     * @param {Object} options - Test execution options
-     * @param {string[]} options.include - Only run these test suites
-     * @param {string[]} options.exclude - Run all except these test suites
-     * @param {string[]} options.categories - Only run tests from these categories
-     * @param {string[]} options.priorities - Only run tests with these priorities
-     * @param {boolean} options.failFast - Stop on first failure
-     * @param {function} options.onProgress - Progress callback
      */
-    async runTests(options = {}) {
+    async runTests(options: TestOptions = {}): Promise<PipelineSummary> {
         if (this.isRunning) {
             throw new Error('Test pipeline is already running');
         }
@@ -195,7 +289,7 @@ class MasterTestPipeline {
             this.endTime = Date.now();
             const duration = this.endTime - this.startTime;
 
-            const summary = {
+            const summary: PipelineSummary = {
                 duration,
                 total: this.totalTests,
                 passed: this.passedTests,
@@ -215,8 +309,13 @@ class MasterTestPipeline {
         }
     }
 
-    getFilteredTestSuites(include, exclude, categories, priorities) {
-        const allSuites = Array.from(this.testSuites.entries()).map(([key, suite]) => ({ key, suite }));
+    private getFilteredTestSuites(
+        include: string[] | null | undefined,
+        exclude: string[] | null | undefined,
+        categories: string[] | null | undefined,
+        priorities: string[] | null | undefined
+    ): FilteredSuite[] {
+        const allSuites: FilteredSuite[] = Array.from(this.testSuites.entries()).map(([key, suite]) => ({ key, suite }));
 
         let filtered = allSuites;
 
@@ -243,15 +342,15 @@ class MasterTestPipeline {
         return filtered;
     }
 
-    async runTestSuite(key, suite) {
+    private async runTestSuite(key: string, suite: TestSuite): Promise<TestResult> {
         const startTime = Date.now();
         console.log(`🔬 Running test suite: ${suite.name}`);
 
         try {
-            const result = await suite.run.call(this);
+            const result = await suite.run();
             const duration = Date.now() - startTime;
 
-            const testResult = {
+            const testResult: TestResult = {
                 key,
                 name: suite.name,
                 description: suite.description,
@@ -268,8 +367,9 @@ class MasterTestPipeline {
 
         } catch (error) {
             const duration = Date.now() - startTime;
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
-            const testResult = {
+            const testResult: TestResult = {
                 key,
                 name: suite.name,
                 description: suite.description,
@@ -278,17 +378,17 @@ class MasterTestPipeline {
                 status: 'failed',
                 duration,
                 details: null,
-                error: error.message
+                error: errorMessage
             };
 
-            console.error(`❌ ${suite.name} failed in ${duration}ms:`, error.message);
+            console.error(`❌ ${suite.name} failed in ${duration}ms:`, errorMessage);
             return testResult;
         }
     }
 
     // Individual test suite implementations
-    async runSetupWizardTests() {
-        const tests = [];
+    private async runSetupWizardTests(): Promise<TestSuiteResult> {
+        const tests: TestItem[] = [];
 
         // Test Setup Wizard button existence
         tests.push(await this.testElementExists('#setup-wizard-btn', 'Setup Wizard button exists'));
@@ -302,8 +402,8 @@ class MasterTestPipeline {
         return { tests, summary: this.summarizeTests(tests) };
     }
 
-    async runWebTestSuiteTests() {
-        const tests = [];
+    private async runWebTestSuiteTests(): Promise<TestSuiteResult> {
+        const tests: TestItem[] = [];
 
         // Test Web Test Suite button existence
         tests.push(await this.testElementExists('#web-test-suite-btn', 'Web Test Suite button exists'));
@@ -317,8 +417,8 @@ class MasterTestPipeline {
         return { tests, summary: this.summarizeTests(tests) };
     }
 
-    async runGlassmorphismTests() {
-        const tests = [];
+    private async runGlassmorphismTests(): Promise<TestSuiteResult> {
+        const tests: TestItem[] = [];
 
         // Test glassmorphism CSS classes
         tests.push(await this.testCSSClassExists('.glass', 'Glass effect class exists'));
@@ -333,8 +433,8 @@ class MasterTestPipeline {
         return { tests, summary: this.summarizeTests(tests) };
     }
 
-    async runThemeSystemTests() {
-        const tests = [];
+    private async runThemeSystemTests(): Promise<TestSuiteResult> {
+        const tests: TestItem[] = [];
 
         // Test theme options
         tests.push(await this.testElementExists('.theme-option', 'Theme option buttons exist'));
@@ -350,7 +450,7 @@ class MasterTestPipeline {
         return { tests, summary: this.summarizeTests(tests) };
     }
 
-    async runGestureControlsTests() {
+    private async runGestureControlsTests(): Promise<TestSuiteResult> {
         try {
             // Check if running in CLI environment
             if (typeof window === 'undefined') {
@@ -382,6 +482,7 @@ class MasterTestPipeline {
                 summary: this.summarizeTests(results)
             };
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             return {
                 testSuiteName: 'Gesture Controls Tests',
                 category: 'interaction',
@@ -390,7 +491,7 @@ class MasterTestPipeline {
                 tests: [{
                     name: 'Gesture Controls Test Suite Loading',
                     status: 'failed',
-                    error: `Failed to load test suite: ${error.message}`,
+                    error: `Failed to load test suite: ${errorMessage}`,
                     duration: 0
                 }],
                 summary: { total: 1, passed: 0, failed: 1, skipped: 0 }
@@ -398,7 +499,7 @@ class MasterTestPipeline {
         }
     }
 
-    async runOCRAccuracyTests() {
+    private async runOCRAccuracyTests(): Promise<TestSuiteResult> {
         try {
             // Check if running in CLI environment
             if (typeof window === 'undefined') {
@@ -430,6 +531,7 @@ class MasterTestPipeline {
                 summary: this.summarizeTests(results)
             };
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             return {
                 testSuiteName: 'OCR Accuracy Tests',
                 category: 'core',
@@ -438,7 +540,7 @@ class MasterTestPipeline {
                 tests: [{
                     name: 'OCR Accuracy Test Suite Loading',
                     status: 'failed',
-                    error: `Failed to load test suite: ${error.message}`,
+                    error: `Failed to load test suite: ${errorMessage}`,
                     duration: 0
                 }],
                 summary: { total: 1, passed: 0, failed: 1, skipped: 0 }
@@ -446,7 +548,7 @@ class MasterTestPipeline {
         }
     }
 
-    async runAudioSystemTests() {
+    private async runAudioSystemTests(): Promise<TestSuiteResult> {
         try {
             // Check if running in CLI environment
             if (typeof window === 'undefined') {
@@ -478,6 +580,7 @@ class MasterTestPipeline {
                 summary: this.summarizeTests(results)
             };
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             return {
                 testSuiteName: 'Audio System Tests',
                 category: 'core',
@@ -486,7 +589,7 @@ class MasterTestPipeline {
                 tests: [{
                     name: 'Audio System Test Suite Loading',
                     status: 'failed',
-                    error: `Failed to load test suite: ${error.message}`,
+                    error: `Failed to load test suite: ${errorMessage}`,
                     duration: 0
                 }],
                 summary: { total: 1, passed: 0, failed: 1, skipped: 0 }
@@ -494,7 +597,7 @@ class MasterTestPipeline {
         }
     }
 
-    async runCameraControlsTests() {
+    private async runCameraControlsTests(): Promise<TestSuiteResult> {
         try {
             // Check if running in CLI environment
             if (typeof window === 'undefined') {
@@ -526,6 +629,7 @@ class MasterTestPipeline {
                 summary: this.summarizeTests(results)
             };
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             return {
                 testSuiteName: 'Camera Controls Tests',
                 category: 'core',
@@ -534,7 +638,7 @@ class MasterTestPipeline {
                 tests: [{
                     name: 'Camera Controls Test Suite Loading',
                     status: 'failed',
-                    error: `Failed to load test suite: ${error.message}`,
+                    error: `Failed to load test suite: ${errorMessage}`,
                     duration: 0
                 }],
                 summary: { total: 1, passed: 0, failed: 1, skipped: 0 }
@@ -542,8 +646,8 @@ class MasterTestPipeline {
         }
     }
 
-    async runPerformanceTests() {
-        const tests = [];
+    private async runPerformanceTests(): Promise<TestSuiteResult> {
+        const tests: TestItem[] = [];
 
         // Test memory usage monitoring
         tests.push(await this.testMemoryUsageMonitoring());
@@ -557,8 +661,8 @@ class MasterTestPipeline {
         return { tests, summary: this.summarizeTests(tests) };
     }
 
-    async runBrowserCompatibilityTests() {
-        const tests = [];
+    private async runBrowserCompatibilityTests(): Promise<TestSuiteResult> {
+        const tests: TestItem[] = [];
 
         // Test essential Web APIs
         tests.push(await this.testWebAPISupport('MediaDevices', () => 'mediaDevices' in navigator));
@@ -566,14 +670,14 @@ class MasterTestPipeline {
         tests.push(await this.testWebAPISupport('Web Workers', () => 'Worker' in window));
         tests.push(await this.testWebAPISupport('Canvas 2D', () => {
             const canvas = document.createElement('canvas');
-            return canvas.getContext && canvas.getContext('2d');
+            return !!(canvas.getContext && canvas.getContext('2d'));
         }));
 
         return { tests, summary: this.summarizeTests(tests) };
     }
 
-    async runAccessibilityTests() {
-        const tests = [];
+    private async runAccessibilityTests(): Promise<TestSuiteResult> {
+        const tests: TestItem[] = [];
 
         // Test keyboard navigation
         tests.push(await this.testKeyboardNavigation());
@@ -587,8 +691,8 @@ class MasterTestPipeline {
         return { tests, summary: this.summarizeTests(tests) };
     }
 
-    async runSecurityTests() {
-        const tests = [];
+    private async runSecurityTests(): Promise<TestSuiteResult> {
+        const tests: TestItem[] = [];
 
         // Test HTTPS context
         tests.push(await this.testHTTPSContext());
@@ -603,7 +707,7 @@ class MasterTestPipeline {
     }
 
     // Helper test methods
-    async testElementExists(selector, description) {
+    private async testElementExists(selector: string, description: string): Promise<TestItem> {
         try {
             const element = document.querySelector(selector);
             if (element) {
@@ -612,28 +716,33 @@ class MasterTestPipeline {
                 return { name: description, status: 'failed', message: `Element not found: ${selector}` };
             }
         } catch (error) {
-            return { name: description, status: 'failed', message: `Error checking element: ${error.message}` };
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            return { name: description, status: 'failed', message: `Error checking element: ${errorMessage}` };
         }
     }
 
-    async testModuleImport(modulePath, description) {
+    private async testModuleImport(modulePath: string, description: string): Promise<TestItem> {
         try {
             await import(modulePath);
             return { name: description, status: 'passed', message: `Module loaded: ${modulePath}` };
         } catch (error) {
-            return { name: description, status: 'failed', message: `Module load failed: ${error.message}` };
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            return { name: description, status: 'failed', message: `Module load failed: ${errorMessage}` };
         }
     }
 
-    async testCSSClassExists(className, description) {
+    private async testCSSClassExists(className: string, description: string): Promise<TestItem> {
         try {
             const styleSheets = Array.from(document.styleSheets);
             let found = false;
 
             for (const sheet of styleSheets) {
                 try {
-                    const rules = Array.from(sheet.cssRules || sheet.rules);
-                    found = rules.some(rule => rule.selectorText && rule.selectorText.includes(className));
+                    const rules = Array.from(sheet.cssRules || []);
+                    found = rules.some(rule => {
+                        const styleRule = rule as CSSStyleRule;
+                        return styleRule.selectorText && styleRule.selectorText.includes(className);
+                    });
                     if (found) break;
                 } catch (e) {
                     // Skip inaccessible stylesheets
@@ -646,21 +755,22 @@ class MasterTestPipeline {
                 return { name: description, status: 'failed', message: `CSS class not found: ${className}` };
             }
         } catch (error) {
-            return { name: description, status: 'failed', message: `Error checking CSS class: ${error.message}` };
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            return { name: description, status: 'failed', message: `Error checking CSS class: ${errorMessage}` };
         }
     }
 
-    async testCSSAnimation(animationName, description) {
+    private async testCSSAnimation(animationName: string, description: string): Promise<TestItem> {
         try {
             const styleSheets = Array.from(document.styleSheets);
             let found = false;
 
             for (const sheet of styleSheets) {
                 try {
-                    const rules = Array.from(sheet.cssRules || sheet.rules);
+                    const rules = Array.from(sheet.cssRules || []);
                     found = rules.some(rule =>
                         rule.type === CSSRule.KEYFRAMES_RULE &&
-                        rule.name === animationName
+                        (rule as CSSKeyframesRule).name === animationName
                     );
                     if (found) break;
                 } catch (e) {
@@ -674,11 +784,12 @@ class MasterTestPipeline {
                 return { name: description, status: 'failed', message: `CSS animation not found: ${animationName}` };
             }
         } catch (error) {
-            return { name: description, status: 'failed', message: `Error checking CSS animation: ${error.message}` };
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            return { name: description, status: 'failed', message: `Error checking CSS animation: ${errorMessage}` };
         }
     }
 
-    async testWebAPISupport(apiName, testFunction) {
+    private async testWebAPISupport(apiName: string, testFunction: () => boolean): Promise<TestItem> {
         try {
             const supported = testFunction();
             if (supported) {
@@ -687,28 +798,29 @@ class MasterTestPipeline {
                 return { name: `${apiName} API support`, status: 'failed', message: `${apiName} is not supported` };
             }
         } catch (error) {
-            return { name: `${apiName} API support`, status: 'failed', message: `Error testing ${apiName}: ${error.message}` };
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            return { name: `${apiName} API support`, status: 'failed', message: `Error testing ${apiName}: ${errorMessage}` };
         }
     }
 
     // Placeholder implementations for complex tests
-    async testSetupWizardInitialization() {
+    private async testSetupWizardInitialization(): Promise<TestItem> {
         return { name: 'Setup Wizard initialization', status: 'passed', message: 'Placeholder test' };
     }
 
-    async testWebTestSuiteInitialization() {
+    private async testWebTestSuiteInitialization(): Promise<TestItem> {
         return { name: 'Web Test Suite initialization', status: 'passed', message: 'Placeholder test' };
     }
 
-    async testThemeApplication(theme) {
+    private async testThemeApplication(theme: string): Promise<TestItem> {
         return { name: `Theme application: ${theme}`, status: 'passed', message: 'Placeholder test' };
     }
 
-    async testThemePersistence() {
+    private async testThemePersistence(): Promise<TestItem> {
         return { name: 'Theme persistence', status: 'passed', message: 'Placeholder test' };
     }
 
-    async testTouchDeviceDetection() {
+    private async testTouchDeviceDetection(): Promise<TestItem> {
         const isTouch = 'ontouchstart' in window;
         return {
             name: 'Touch device detection',
@@ -717,23 +829,23 @@ class MasterTestPipeline {
         };
     }
 
-    async testGestureInitialization() {
+    private async testGestureInitialization(): Promise<TestItem> {
         return { name: 'Gesture initialization', status: 'passed', message: 'Placeholder test' };
     }
 
-    async testTesseractInitialization() {
+    private async testTesseractInitialization(): Promise<TestItem> {
         return { name: 'Tesseract initialization', status: 'passed', message: 'Placeholder test' };
     }
 
-    async testImagePreprocessing() {
+    private async testImagePreprocessing(): Promise<TestItem> {
         return { name: 'Image preprocessing', status: 'passed', message: 'Placeholder test' };
     }
 
-    async testOCRWithTestImage() {
+    private async testOCRWithTestImage(): Promise<TestItem> {
         return { name: 'OCR with test image', status: 'passed', message: 'Placeholder test' };
     }
 
-    async testWebAudioSupport() {
+    private async testWebAudioSupport(): Promise<TestItem> {
         const supported = 'AudioContext' in window || 'webkitAudioContext' in window;
         return {
             name: 'Web Audio API support',
@@ -742,43 +854,43 @@ class MasterTestPipeline {
         };
     }
 
-    async testAudioContextInitialization() {
+    private async testAudioContextInitialization(): Promise<TestItem> {
         return { name: 'Audio context initialization', status: 'passed', message: 'Placeholder test' };
     }
 
-    async testTTSFunctionality() {
+    private async testTTSFunctionality(): Promise<TestItem> {
         return { name: 'TTS functionality', status: 'passed', message: 'Placeholder test' };
     }
 
-    async testCropFunctionality() {
+    private async testCropFunctionality(): Promise<TestItem> {
         return { name: 'Crop functionality', status: 'passed', message: 'Placeholder test' };
     }
 
-    async testMemoryUsageMonitoring() {
+    private async testMemoryUsageMonitoring(): Promise<TestItem> {
         return { name: 'Memory usage monitoring', status: 'passed', message: 'Placeholder test' };
     }
 
-    async testPerformanceMetricsCollection() {
+    private async testPerformanceMetricsCollection(): Promise<TestItem> {
         return { name: 'Performance metrics collection', status: 'passed', message: 'Placeholder test' };
     }
 
-    async testWorkerPerformance() {
+    private async testWorkerPerformance(): Promise<TestItem> {
         return { name: 'Worker performance', status: 'passed', message: 'Placeholder test' };
     }
 
-    async testKeyboardNavigation() {
+    private async testKeyboardNavigation(): Promise<TestItem> {
         return { name: 'Keyboard navigation', status: 'passed', message: 'Placeholder test' };
     }
 
-    async testARIAAttributes() {
+    private async testARIAAttributes(): Promise<TestItem> {
         return { name: 'ARIA attributes', status: 'passed', message: 'Placeholder test' };
     }
 
-    async testColorContrast() {
+    private async testColorContrast(): Promise<TestItem> {
         return { name: 'Color contrast', status: 'passed', message: 'Placeholder test' };
     }
 
-    async testHTTPSContext() {
+    private async testHTTPSContext(): Promise<TestItem> {
         if (typeof location === 'undefined') {
             return {
                 name: 'HTTPS context',
@@ -795,15 +907,15 @@ class MasterTestPipeline {
         };
     }
 
-    async testSecureContextAPIs() {
+    private async testSecureContextAPIs(): Promise<TestItem> {
         return { name: 'Secure context APIs', status: 'passed', message: 'Placeholder test' };
     }
 
-    async testDataSanitization() {
+    private async testDataSanitization(): Promise<TestItem> {
         return { name: 'Data sanitization', status: 'passed', message: 'Placeholder test' };
     }
 
-    summarizeTests(tests) {
+    private summarizeTests(tests: TestItem[]): TestSummary {
         const passed = tests.filter(t => t.status === 'passed').length;
         const failed = tests.filter(t => t.status === 'failed').length;
         const skipped = tests.filter(t => t.status === 'skipped').length;
@@ -813,7 +925,7 @@ class MasterTestPipeline {
     }
 
     // Utility methods for external access
-    listTestSuites() {
+    listTestSuites(): TestSuiteInfo[] {
         return Array.from(this.testSuites.entries()).map(([key, suite]) => ({
             key,
             name: suite.name,
@@ -823,11 +935,11 @@ class MasterTestPipeline {
         }));
     }
 
-    getCategories() {
+    getCategories(): string[] {
         return [...new Set(Array.from(this.testSuites.values()).map(suite => suite.category))];
     }
 
-    getPriorities() {
+    getPriorities(): string[] {
         return [...new Set(Array.from(this.testSuites.values()).map(suite => suite.priority))];
     }
 }

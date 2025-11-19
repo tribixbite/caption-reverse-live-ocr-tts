@@ -3,7 +3,81 @@
  * Comprehensive testing without external dependencies
  */
 
+// Type definitions
+interface TestResult {
+    name: string;
+    status: 'pass' | 'fail' | 'warning' | 'running';
+    message: string;
+    duration: number | null;
+    details: string | null;
+    timestamp: number;
+}
+
+interface TestSummary {
+    total: number;
+    passed: number;
+    failed: number;
+    warnings: number;
+}
+
+interface TestResults {
+    timestamp: string;
+    tests: TestResult[];
+    summary: TestSummary;
+}
+
+interface ExportedResults extends TestResults {
+    userAgent: string;
+    url: string;
+}
+
+interface BrowserFeature {
+    name: string;
+    test: () => boolean;
+}
+
+interface WebAPI {
+    name: string;
+    test: () => boolean;
+}
+
+// Extend Window interface for global functions and app state
+declare global {
+    interface Window {
+        runAllTests: () => Promise<void>;
+        exportTestResults: () => void;
+        closeTestSuite: () => void;
+        AppState?: {
+            ocrScheduler?: {
+                workers?: unknown[];
+            };
+            currentCrop?: {
+                x: number;
+                y: number;
+                width: number;
+                height: number;
+            };
+        };
+        webkitAudioContext?: typeof AudioContext;
+    }
+
+    // Tesseract global
+    const Tesseract: unknown;
+}
+
+// Extended Performance interface for memory info
+interface PerformanceWithMemory extends Performance {
+    memory?: {
+        usedJSHeapSize: number;
+        totalJSHeapSize: number;
+        jsHeapSizeLimit: number;
+    };
+}
+
 export class WebTestSuite {
+    private results: TestResults;
+    private testContainer: HTMLDivElement | null;
+
     constructor() {
         this.results = {
             timestamp: new Date().toISOString(),
@@ -19,7 +93,7 @@ export class WebTestSuite {
     }
 
     // Initialize test suite UI
-    async initializeTestSuite() {
+    async initializeTestSuite(): Promise<void> {
         console.log('🧪 Initializing Web Test Suite...');
 
         // Create test container
@@ -116,8 +190,8 @@ export class WebTestSuite {
     }
 
     // Add test result to UI
-    addTestResult(testName, status, message, duration = null, details = null) {
-        const test = {
+    addTestResult(testName: string, status: 'pass' | 'fail' | 'warning' | 'running', message: string, duration: number | null = null, details: string | null = null): void {
+        const test: TestResult = {
             name: testName,
             status,
             message,
@@ -143,16 +217,22 @@ export class WebTestSuite {
     }
 
     // Update summary statistics in UI
-    updateSummaryStats() {
-        document.getElementById('total-tests').textContent = this.results.summary.total;
-        document.getElementById('passed-tests').textContent = this.results.summary.passed;
-        document.getElementById('failed-tests').textContent = this.results.summary.failed;
-        document.getElementById('warning-tests').textContent = this.results.summary.warnings;
+    updateSummaryStats(): void {
+        const totalEl = document.getElementById('total-tests');
+        const passedEl = document.getElementById('passed-tests');
+        const failedEl = document.getElementById('failed-tests');
+        const warningEl = document.getElementById('warning-tests');
+
+        if (totalEl) totalEl.textContent = String(this.results.summary.total);
+        if (passedEl) passedEl.textContent = String(this.results.summary.passed);
+        if (failedEl) failedEl.textContent = String(this.results.summary.failed);
+        if (warningEl) warningEl.textContent = String(this.results.summary.warnings);
     }
 
     // Render individual test result
-    renderTestResult(test) {
+    renderTestResult(test: TestResult): void {
         const container = document.getElementById('test-results-container');
+        if (!container) return;
 
         // Clear placeholder if this is the first test
         if (this.results.summary.total === 1) {
@@ -186,7 +266,7 @@ export class WebTestSuite {
     }
 
     // Get CSS classes for test status
-    getTestStatusClasses(status) {
+    getTestStatusClasses(status: string): string {
         switch(status) {
             case 'pass': return 'bg-green-500/10 border-green-500/30';
             case 'fail': return 'bg-red-500/10 border-red-500/30';
@@ -197,7 +277,7 @@ export class WebTestSuite {
     }
 
     // Get CSS classes for status icon
-    getStatusIconClasses(status) {
+    getStatusIconClasses(status: string): string {
         switch(status) {
             case 'pass': return 'bg-green-500 text-white';
             case 'fail': return 'bg-red-500 text-white';
@@ -208,7 +288,7 @@ export class WebTestSuite {
     }
 
     // Get status icon SVG
-    getStatusIcon(status) {
+    getStatusIcon(status: string): string {
         switch(status) {
             case 'pass':
                 return '<svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg>';
@@ -224,14 +304,17 @@ export class WebTestSuite {
     }
 
     // Update progress bar
-    updateProgress(current, total) {
+    updateProgress(current: number, total: number): void {
         const percentage = Math.round((current / total) * 100);
-        document.getElementById('test-progress-bar').style.width = `${percentage}%`;
-        document.getElementById('test-progress-text').textContent = `${current}/${total} tests completed (${percentage}%)`;
+        const progressBar = document.getElementById('test-progress-bar');
+        const progressText = document.getElementById('test-progress-text');
+
+        if (progressBar) progressBar.style.width = `${percentage}%`;
+        if (progressText) progressText.textContent = `${current}/${total} tests completed (${percentage}%)`;
     }
 
     // Run all tests
-    async runAllTests() {
+    async runAllTests(): Promise<void> {
         console.log('🚀 Starting comprehensive test suite...');
 
         // Clear previous results
@@ -241,10 +324,11 @@ export class WebTestSuite {
             summary: { total: 0, passed: 0, failed: 0, warnings: 0 }
         };
 
-        document.getElementById('test-results-container').innerHTML = '';
+        const resultsContainer = document.getElementById('test-results-container');
+        if (resultsContainer) resultsContainer.innerHTML = '';
         this.updateSummaryStats();
 
-        const tests = [
+        const tests: Array<() => Promise<void>> = [
             () => this.testBrowserCompatibility(),
             () => this.testWebAPIs(),
             () => this.testOCRSystem(),
@@ -259,15 +343,20 @@ export class WebTestSuite {
             () => this.testAccessibility()
         ];
 
-        document.getElementById('run-tests-btn').disabled = true;
-        document.getElementById('run-tests-btn').textContent = '🔄 Running Tests...';
+        const runTestsBtn = document.getElementById('run-tests-btn') as HTMLButtonElement | null;
+        if (runTestsBtn) {
+            runTestsBtn.disabled = true;
+            runTestsBtn.textContent = '🔄 Running Tests...';
+        }
 
         for (let i = 0; i < tests.length; i++) {
             this.updateProgress(i, tests.length);
             try {
                 await tests[i]();
             } catch (error) {
-                this.addTestResult(`Test ${i + 1}`, 'fail', `Test execution failed: ${error.message}`, null, error.stack);
+                const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+                const errorStack = error instanceof Error ? error.stack : undefined;
+                this.addTestResult(`Test ${i + 1}`, 'fail', `Test execution failed: ${errorMessage}`, null, errorStack || null);
             }
             // Small delay to prevent UI blocking
             await new Promise(resolve => setTimeout(resolve, 100));
@@ -275,13 +364,16 @@ export class WebTestSuite {
 
         this.updateProgress(tests.length, tests.length);
 
-        document.getElementById('run-tests-btn').disabled = false;
-        document.getElementById('run-tests-btn').textContent = '✅ Tests Complete';
+        if (runTestsBtn) {
+            runTestsBtn.disabled = false;
+            runTestsBtn.textContent = '✅ Tests Complete';
+        }
 
         // Auto-reset button text after 3 seconds
         setTimeout(() => {
-            if (document.getElementById('run-tests-btn')) {
-                document.getElementById('run-tests-btn').textContent = '🚀 Run All Tests';
+            const btn = document.getElementById('run-tests-btn');
+            if (btn) {
+                btn.textContent = '🚀 Run All Tests';
             }
         }, 3000);
 
@@ -289,10 +381,10 @@ export class WebTestSuite {
     }
 
     // Test browser compatibility
-    async testBrowserCompatibility() {
+    async testBrowserCompatibility(): Promise<void> {
         const startTime = performance.now();
 
-        const features = [
+        const features: BrowserFeature[] = [
             { name: 'ES6 Modules', test: () => 'import' in window || typeof document.querySelector === 'function' },
             { name: 'Web Workers', test: () => typeof Worker !== 'undefined' },
             { name: 'Canvas 2D', test: () => {
@@ -302,11 +394,11 @@ export class WebTestSuite {
             { name: 'Local Storage', test: () => typeof Storage !== 'undefined' },
             { name: 'Fetch API', test: () => typeof fetch !== 'undefined' },
             { name: 'Promises', test: () => typeof Promise !== 'undefined' },
-            { name: 'Web Audio API', test: () => typeof AudioContext !== 'undefined' || typeof webkitAudioContext !== 'undefined' }
+            { name: 'Web Audio API', test: () => typeof AudioContext !== 'undefined' || typeof window.webkitAudioContext !== 'undefined' }
         ];
 
         let supported = 0;
-        let unsupported = [];
+        const unsupported: string[] = [];
 
         for (const feature of features) {
             try {
@@ -332,19 +424,19 @@ export class WebTestSuite {
     }
 
     // Test Web APIs availability
-    async testWebAPIs() {
+    async testWebAPIs(): Promise<void> {
         const startTime = performance.now();
 
-        const apis = [
-            { name: 'MediaDevices', test: () => navigator.mediaDevices && navigator.mediaDevices.getUserMedia },
+        const apis: WebAPI[] = [
+            { name: 'MediaDevices', test: () => !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia) },
             { name: 'Speech Synthesis', test: () => 'speechSynthesis' in window },
             { name: 'Geolocation', test: () => 'geolocation' in navigator },
-            { name: 'Clipboard', test: () => navigator.clipboard },
+            { name: 'Clipboard', test: () => !!navigator.clipboard },
             { name: 'Service Worker', test: () => 'serviceWorker' in navigator }
         ];
 
         let available = 0;
-        let missing = [];
+        const missing: string[] = [];
 
         for (const api of apis) {
             try {
@@ -370,7 +462,7 @@ export class WebTestSuite {
     }
 
     // Test OCR system
-    async testOCRSystem() {
+    async testOCRSystem(): Promise<void> {
         const startTime = performance.now();
 
         try {
@@ -382,17 +474,19 @@ export class WebTestSuite {
 
             // Check OCR worker availability
             if (window.AppState && window.AppState.ocrScheduler) {
-                this.addTestResult('OCR System', 'pass', 'Tesseract.js scheduler active', performance.now() - startTime, `Workers: ${window.AppState.ocrScheduler.workers?.length || 0}`);
+                const workerCount = window.AppState.ocrScheduler.workers?.length || 0;
+                this.addTestResult('OCR System', 'pass', 'Tesseract.js scheduler active', performance.now() - startTime, `Workers: ${workerCount}`);
             } else {
                 this.addTestResult('OCR System', 'warning', 'OCR system not initialized', performance.now() - startTime);
             }
         } catch (error) {
-            this.addTestResult('OCR System', 'fail', `OCR test failed: ${error.message}`, performance.now() - startTime);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            this.addTestResult('OCR System', 'fail', `OCR test failed: ${errorMessage}`, performance.now() - startTime);
         }
     }
 
     // Test audio system
-    async testAudioSystem() {
+    async testAudioSystem(): Promise<void> {
         const startTime = performance.now();
 
         try {
@@ -415,12 +509,13 @@ export class WebTestSuite {
 
             this.addTestResult('Audio System', 'pass', 'Audio systems operational', performance.now() - startTime, 'Web Audio API + Speech Synthesis');
         } catch (error) {
-            this.addTestResult('Audio System', 'fail', `Audio test failed: ${error.message}`, performance.now() - startTime);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            this.addTestResult('Audio System', 'fail', `Audio test failed: ${errorMessage}`, performance.now() - startTime);
         }
     }
 
     // Test camera system
-    async testCameraSystem() {
+    async testCameraSystem(): Promise<void> {
         const startTime = performance.now();
 
         try {
@@ -439,12 +534,13 @@ export class WebTestSuite {
                 this.addTestResult('Camera System', 'pass', `Camera API ready (${videoDevices.length} devices)`, performance.now() - startTime);
             }
         } catch (error) {
-            this.addTestResult('Camera System', 'fail', `Camera test failed: ${error.message}`, performance.now() - startTime);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            this.addTestResult('Camera System', 'fail', `Camera test failed: ${errorMessage}`, performance.now() - startTime);
         }
     }
 
     // Test crop functionality
-    async testCropFunctionality() {
+    async testCropFunctionality(): Promise<void> {
         const startTime = performance.now();
 
         try {
@@ -471,12 +567,13 @@ export class WebTestSuite {
                 this.addTestResult('Crop Functionality', 'warning', 'Crop state not initialized', performance.now() - startTime);
             }
         } catch (error) {
-            this.addTestResult('Crop Functionality', 'fail', `Crop test failed: ${error.message}`, performance.now() - startTime);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            this.addTestResult('Crop Functionality', 'fail', `Crop test failed: ${errorMessage}`, performance.now() - startTime);
         }
     }
 
     // Test preprocessing worker
-    async testPreprocessingWorker() {
+    async testPreprocessingWorker(): Promise<void> {
         const startTime = performance.now();
 
         try {
@@ -492,15 +589,17 @@ export class WebTestSuite {
                 testWorker.terminate(); // Clean up immediately
                 this.addTestResult('Preprocessing Worker', 'pass', 'Worker system operational', performance.now() - startTime);
             } catch (workerError) {
-                this.addTestResult('Preprocessing Worker', 'warning', 'Worker file inaccessible', performance.now() - startTime, workerError.message);
+                const errorMessage = workerError instanceof Error ? workerError.message : 'Unknown error';
+                this.addTestResult('Preprocessing Worker', 'warning', 'Worker file inaccessible', performance.now() - startTime, errorMessage);
             }
         } catch (error) {
-            this.addTestResult('Preprocessing Worker', 'fail', `Worker test failed: ${error.message}`, performance.now() - startTime);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            this.addTestResult('Preprocessing Worker', 'fail', `Worker test failed: ${errorMessage}`, performance.now() - startTime);
         }
     }
 
     // Test user interface
-    async testUserInterface() {
+    async testUserInterface(): Promise<void> {
         const startTime = performance.now();
 
         try {
@@ -512,7 +611,7 @@ export class WebTestSuite {
                 'read-now-btn'
             ];
 
-            let missingElements = [];
+            const missingElements: string[] = [];
 
             for (const elementId of criticalElements) {
                 if (!document.getElementById(elementId)) {
@@ -526,12 +625,13 @@ export class WebTestSuite {
                 this.addTestResult('User Interface', 'fail', `${missingElements.length} elements missing`, performance.now() - startTime, `Missing: ${missingElements.join(', ')}`);
             }
         } catch (error) {
-            this.addTestResult('User Interface', 'fail', `UI test failed: ${error.message}`, performance.now() - startTime);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            this.addTestResult('User Interface', 'fail', `UI test failed: ${errorMessage}`, performance.now() - startTime);
         }
     }
 
     // Test performance metrics
-    async testPerformanceMetrics() {
+    async testPerformanceMetrics(): Promise<void> {
         const startTime = performance.now();
 
         try {
@@ -542,12 +642,13 @@ export class WebTestSuite {
             }
 
             // Test memory info if available
-            let memoryInfo = null;
-            if (window.performance.memory) {
+            let memoryInfo: { used: number; total: number; limit: number } | null = null;
+            const perfWithMemory = window.performance as PerformanceWithMemory;
+            if (perfWithMemory.memory) {
                 memoryInfo = {
-                    used: Math.round(window.performance.memory.usedJSHeapSize / 1024 / 1024),
-                    total: Math.round(window.performance.memory.totalJSHeapSize / 1024 / 1024),
-                    limit: Math.round(window.performance.memory.jsHeapSizeLimit / 1024 / 1024)
+                    used: Math.round(perfWithMemory.memory.usedJSHeapSize / 1024 / 1024),
+                    total: Math.round(perfWithMemory.memory.totalJSHeapSize / 1024 / 1024),
+                    limit: Math.round(perfWithMemory.memory.jsHeapSizeLimit / 1024 / 1024)
                 };
             }
 
@@ -555,12 +656,13 @@ export class WebTestSuite {
 
             this.addTestResult('Performance Metrics', 'pass', 'Performance monitoring available', performance.now() - startTime, details);
         } catch (error) {
-            this.addTestResult('Performance Metrics', 'fail', `Performance test failed: ${error.message}`, performance.now() - startTime);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            this.addTestResult('Performance Metrics', 'fail', `Performance test failed: ${errorMessage}`, performance.now() - startTime);
         }
     }
 
     // Test local storage
-    async testLocalStorage() {
+    async testLocalStorage(): Promise<void> {
         const startTime = performance.now();
 
         try {
@@ -585,12 +687,13 @@ export class WebTestSuite {
                 this.addTestResult('Local Storage', 'fail', 'Storage read/write failed', performance.now() - startTime);
             }
         } catch (error) {
-            this.addTestResult('Local Storage', 'fail', `Storage test failed: ${error.message}`, performance.now() - startTime);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            this.addTestResult('Local Storage', 'fail', `Storage test failed: ${errorMessage}`, performance.now() - startTime);
         }
     }
 
     // Test error handling
-    async testErrorHandling() {
+    async testErrorHandling(): Promise<void> {
         const startTime = performance.now();
 
         try {
@@ -598,7 +701,7 @@ export class WebTestSuite {
             const originalError = console.error;
             let errorCaught = false;
 
-            console.error = (...args) => {
+            console.error = (...args: unknown[]) => {
                 errorCaught = true;
                 originalError.apply(console, args);
             };
@@ -607,7 +710,8 @@ export class WebTestSuite {
             try {
                 throw new Error('Test error for error handling validation');
             } catch (testError) {
-                console.error('Test error:', testError.message);
+                const errorMessage = testError instanceof Error ? testError.message : 'Unknown error';
+                console.error('Test error:', errorMessage);
             }
 
             // Restore original console.error
@@ -619,17 +723,18 @@ export class WebTestSuite {
                 this.addTestResult('Error Handling', 'warning', 'Error handling not captured', performance.now() - startTime);
             }
         } catch (error) {
-            this.addTestResult('Error Handling', 'fail', `Error handling test failed: ${error.message}`, performance.now() - startTime);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            this.addTestResult('Error Handling', 'fail', `Error handling test failed: ${errorMessage}`, performance.now() - startTime);
         }
     }
 
     // Test accessibility
-    async testAccessibility() {
+    async testAccessibility(): Promise<void> {
         const startTime = performance.now();
 
         try {
             let accessibilityScore = 0;
-            let issues = [];
+            const issues: string[] = [];
 
             // Check for alt texts on images
             const images = document.querySelectorAll('img');
@@ -678,13 +783,14 @@ export class WebTestSuite {
                 this.addTestResult('Accessibility', 'fail', `Accessibility score: ${accessibilityScore}%`, duration, issues.join(', '));
             }
         } catch (error) {
-            this.addTestResult('Accessibility', 'fail', `Accessibility test failed: ${error.message}`, performance.now() - startTime);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            this.addTestResult('Accessibility', 'fail', `Accessibility test failed: ${errorMessage}`, performance.now() - startTime);
         }
     }
 
     // Export test results
-    exportTestResults() {
-        const data = {
+    exportTestResults(): void {
+        const data: ExportedResults = {
             ...this.results,
             userAgent: navigator.userAgent,
             timestamp: new Date().toISOString(),
@@ -704,7 +810,7 @@ export class WebTestSuite {
     }
 
     // Close test suite
-    close() {
+    close(): void {
         if (this.testContainer) {
             this.testContainer.remove();
             this.testContainer = null;
@@ -713,22 +819,22 @@ export class WebTestSuite {
 }
 
 // Global test suite instance
-let globalTestSuite = null;
+let globalTestSuite: WebTestSuite | null = null;
 
 // Global functions for HTML onclick handlers
-window.runAllTests = async function() {
+window.runAllTests = async function(): Promise<void> {
     if (globalTestSuite) {
         await globalTestSuite.runAllTests();
     }
 };
 
-window.exportTestResults = function() {
+window.exportTestResults = function(): void {
     if (globalTestSuite) {
         globalTestSuite.exportTestResults();
     }
 };
 
-window.closeTestSuite = function() {
+window.closeTestSuite = function(): void {
     if (globalTestSuite) {
         globalTestSuite.close();
         globalTestSuite = null;
@@ -736,7 +842,7 @@ window.closeTestSuite = function() {
 };
 
 // Initialize and start test suite
-export async function startWebTestSuite() {
+export async function startWebTestSuite(): Promise<WebTestSuite> {
     if (globalTestSuite) {
         globalTestSuite.close();
     }

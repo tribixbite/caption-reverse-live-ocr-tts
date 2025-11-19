@@ -3,14 +3,92 @@
  * Provides Node.js-compatible test execution without browser APIs
  */
 
+// Type definitions
+interface TestResultDetails {
+    classExported?: boolean;
+    instanceExported?: boolean;
+    requiredMethods?: number;
+    availableMethods?: number;
+    totalSuites?: number;
+    validStructure?: number;
+    sampleSuites?: string[];
+    categories?: number;
+    priorities?: number;
+    missingCategories?: string[];
+    missingPriorities?: string[];
+    availableCategories?: string[];
+    availablePriorities?: string[];
+    mutualExclusionEnforced?: boolean;
+    filteringOptionsProcessed?: number;
+    filteringResults?: FilteringResult[];
+    optionsParsed?: number;
+    expectedOptions?: number;
+    missingOptions?: string[];
+    sampleOptions?: RunnerOptions;
+}
+
+interface FilteringResult {
+    options: TestOptions;
+    success: boolean;
+    error?: string;
+}
+
+interface TestOptions {
+    include?: string[];
+    exclude?: string[];
+    categories?: string[];
+    priorities?: string[];
+}
+
+interface CLITestResult {
+    name: string;
+    status: 'passed' | 'failed' | 'skipped';
+    duration: number;
+    details?: TestResultDetails;
+    error?: string;
+}
+
+interface MasterTestPipelineInstance {
+    runTests: (options: TestOptions & { include?: string[]; exclude?: string[] }) => Promise<unknown>;
+    listTestSuites: () => TestSuiteInfo[];
+    getCategories: () => string[];
+    getPriorities: () => string[];
+}
+
+interface TestSuiteInfo {
+    key: string;
+    name: string;
+    description: string;
+    category: string;
+    priority: string;
+}
+
+interface RunnerOptions {
+    include?: string[];
+    exclude?: string[];
+    categories?: string[];
+    priorities?: string[];
+    failFast?: boolean;
+    verbose?: boolean;
+    format?: string;
+    output?: string;
+}
+
+interface TestRunner {
+    options: RunnerOptions;
+}
+
 export class CLITestAdapter {
+    name: string;
+    environment: string;
+
     constructor() {
         this.name = 'CLI Test Adapter';
         this.environment = 'Node.js';
     }
 
-    async runCLICompatibleTests() {
-        const results = [];
+    async runCLICompatibleTests(): Promise<CLITestResult[]> {
+        const results: CLITestResult[] = [];
 
         console.log('🖥️  Running CLI-compatible tests...');
 
@@ -32,12 +110,15 @@ export class CLITestAdapter {
         return results;
     }
 
-    async testModuleStructure() {
+    private async testModuleStructure(): Promise<CLITestResult> {
         const startTime = Date.now();
 
         try {
             // Test master test pipeline import
-            const { MasterTestPipeline, masterTestPipeline } = await import('./master-test-pipeline.js');
+            const { MasterTestPipeline, masterTestPipeline } = await import('./master-test-pipeline.js') as {
+                MasterTestPipeline: new () => MasterTestPipelineInstance;
+                masterTestPipeline: MasterTestPipelineInstance;
+            };
 
             if (!MasterTestPipeline) {
                 throw new Error('MasterTestPipeline class not exported');
@@ -48,7 +129,7 @@ export class CLITestAdapter {
             }
 
             // Test basic methods exist
-            const requiredMethods = ['runTests', 'listTestSuites', 'getCategories', 'getPriorities'];
+            const requiredMethods: Array<keyof MasterTestPipelineInstance> = ['runTests', 'listTestSuites', 'getCategories', 'getPriorities'];
             const missingMethods = requiredMethods.filter(method =>
                 typeof masterTestPipeline[method] !== 'function'
             );
@@ -70,20 +151,23 @@ export class CLITestAdapter {
             };
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             return {
                 name: 'Module Structure Validation',
                 status: 'failed',
-                error: error.message,
+                error: errorMessage,
                 duration: Date.now() - startTime
             };
         }
     }
 
-    async testConfigurationStructure() {
+    private async testConfigurationStructure(): Promise<CLITestResult> {
         const startTime = Date.now();
 
         try {
-            const { masterTestPipeline } = await import('./master-test-pipeline.js');
+            const { masterTestPipeline } = await import('./master-test-pipeline.js') as {
+                masterTestPipeline: MasterTestPipelineInstance;
+            };
 
             // Test test suite listing
             const testSuites = masterTestPipeline.listTestSuites();
@@ -97,7 +181,7 @@ export class CLITestAdapter {
             }
 
             // Validate test suite structure
-            const requiredFields = ['key', 'name', 'description', 'category', 'priority'];
+            const requiredFields: Array<keyof TestSuiteInfo> = ['key', 'name', 'description', 'category', 'priority'];
             const invalidSuites = testSuites.filter(suite =>
                 !requiredFields.every(field => field in suite)
             );
@@ -118,20 +202,23 @@ export class CLITestAdapter {
             };
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             return {
                 name: 'Configuration Structure Validation',
                 status: 'failed',
-                error: error.message,
+                error: errorMessage,
                 duration: Date.now() - startTime
             };
         }
     }
 
-    async testSuiteRegistry() {
+    private async testSuiteRegistry(): Promise<CLITestResult> {
         const startTime = Date.now();
 
         try {
-            const { masterTestPipeline } = await import('./master-test-pipeline.js');
+            const { masterTestPipeline } = await import('./master-test-pipeline.js') as {
+                masterTestPipeline: MasterTestPipelineInstance;
+            };
 
             const categories = masterTestPipeline.getCategories();
             const priorities = masterTestPipeline.getPriorities();
@@ -166,20 +253,23 @@ export class CLITestAdapter {
             };
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             return {
                 name: 'Test Suite Registry Validation',
                 status: 'failed',
-                error: error.message,
+                error: errorMessage,
                 duration: Date.now() - startTime
             };
         }
     }
 
-    async testFilteringLogic() {
+    private async testFilteringLogic(): Promise<CLITestResult> {
         const startTime = Date.now();
 
         try {
-            const { masterTestPipeline } = await import('./master-test-pipeline.js');
+            const { masterTestPipeline } = await import('./master-test-pipeline.js') as {
+                masterTestPipeline: MasterTestPipelineInstance;
+            };
 
             // Test include/exclude mutual exclusion
             let errorThrown = false;
@@ -189,7 +279,8 @@ export class CLITestAdapter {
                     exclude: ['test2']
                 });
             } catch (error) {
-                if (error.message.includes('Cannot specify both include and exclude')) {
+                const errorMessage = error instanceof Error ? error.message : '';
+                if (errorMessage.includes('Cannot specify both include and exclude')) {
                     errorThrown = true;
                 }
             }
@@ -199,14 +290,14 @@ export class CLITestAdapter {
             }
 
             // Test valid filtering options
-            const testOptions = [
+            const testOptions: TestOptions[] = [
                 { include: ['ocr-accuracy'] },
                 { exclude: ['performance'] },
                 { categories: ['core'] },
                 { priorities: ['critical'] }
             ];
 
-            const filteringResults = [];
+            const filteringResults: FilteringResult[] = [];
             for (const options of testOptions) {
                 try {
                     // Note: This will fail due to browser dependencies, but we're testing the filtering logic
@@ -214,7 +305,8 @@ export class CLITestAdapter {
                     filteringResults.push({ options, success: true });
                 } catch (error) {
                     // Expected to fail in CLI environment, but filtering logic should be called
-                    filteringResults.push({ options, success: false, error: error.message });
+                    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+                    filteringResults.push({ options, success: false, error: errorMessage });
                 }
             }
 
@@ -230,16 +322,17 @@ export class CLITestAdapter {
             };
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             return {
                 name: 'Filtering Logic Validation',
                 status: 'failed',
-                error: error.message,
+                error: errorMessage,
                 duration: Date.now() - startTime
             };
         }
     }
 
-    async testCLIArgumentParsing() {
+    private async testCLIArgumentParsing(): Promise<CLITestResult> {
         const startTime = Date.now();
 
         try {
@@ -249,7 +342,9 @@ export class CLITestAdapter {
             // Test basic parsing
             process.argv = ['node', 'run-tests.js', '--verbose', '--format', 'json'];
 
-            const { TestRunner } = await import('../run-tests.js');
+            const { TestRunner } = await import('../run-tests.js') as {
+                TestRunner: new () => TestRunner;
+            };
             const runner = new TestRunner();
 
             if (!runner.options) {
@@ -257,7 +352,7 @@ export class CLITestAdapter {
             }
 
             // Test expected options
-            const expectedOptions = ['include', 'exclude', 'categories', 'priorities', 'failFast', 'verbose', 'format', 'output'];
+            const expectedOptions: Array<keyof RunnerOptions> = ['include', 'exclude', 'categories', 'priorities', 'failFast', 'verbose', 'format', 'output'];
             const missingOptions = expectedOptions.filter(opt => !(opt in runner.options));
 
             // Restore original argv
@@ -276,10 +371,11 @@ export class CLITestAdapter {
             };
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             return {
                 name: 'CLI Argument Parsing Validation',
                 status: 'failed',
-                error: error.message,
+                error: errorMessage,
                 duration: Date.now() - startTime
             };
         }
