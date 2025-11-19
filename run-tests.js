@@ -6,7 +6,7 @@
  * Usage: node run-tests.js [options]
  */
 
-import { masterTestPipeline } from './js/master-test-pipeline.js';
+import { masterTestPipeline } from './js/master-test-pipeline.ts';
 
 class TestRunner {
     constructor() {
