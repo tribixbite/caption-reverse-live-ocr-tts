@@ -3,14 +3,67 @@
  * Tests the Web Test Suite functionality and execution
  */
 
+// Test result interface
+interface TestResult {
+    category: string;
+    description: string;
+    status: 'passed' | 'failed';
+    details: string;
+    timestamp: string;
+}
+
+// Test report interface
+interface TestReport {
+    summary: {
+        total: number;
+        passed: number;
+        failed: number;
+        successRate: string | number;
+    };
+    categories: Record<string, { passed: number; failed: number; total: number }>;
+    details: TestResult[];
+}
+
+// Test category interface
+interface TestCategory {
+    name: string;
+    description: string;
+    tests: Array<{
+        name: string;
+        [key: string]: unknown;
+    }>;
+}
+
+// Category result interface
+interface CategoryResult {
+    category: string;
+    passed: number;
+    failed: number;
+    total?: number;
+    [key: string]: unknown;
+}
+
+// WebTestSuite instance interface
+interface WebTestSuiteInstance {
+    testCategories: TestCategory[];
+    results: CategoryResult[];
+    showTestSuite: () => void;
+    runTestCategory: (category: TestCategory | null) => Promise<CategoryResult>;
+    displayResults: () => void;
+    updateProgress: (progress: number) => void;
+}
+
 export class WebTestSuiteTests {
+    private testResults: TestResult[];
+    private mockTestSuite: WebTestSuiteInstance | null;
+
     constructor() {
         this.testResults = [];
         this.mockTestSuite = null;
     }
 
-    async runAllTests() {
-        console.log('🧪 Starting Web Test Suite Tests...');
+    async runAllTests(): Promise<TestReport> {
+        console.log('Starting Web Test Suite Tests...');
         this.testResults = [];
 
         // Test module loading and initialization
@@ -46,7 +99,7 @@ export class WebTestSuiteTests {
         return this.generateTestReport();
     }
 
-    async testModuleLoading() {
+    private async testModuleLoading(): Promise<void> {
         try {
             // Test Web Test Suite module import
             const module = await import('../web-test-suite.js');
@@ -60,16 +113,17 @@ export class WebTestSuiteTests {
                 `WebTestSuite type: ${typeof module.WebTestSuite}`);
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Module Loading', 'WebTestSuite module imports successfully',
-                false, `Import failed: ${error.message}`);
+                false, `Import failed: ${errorMessage}`);
         }
     }
 
-    async testTestSuiteInitialization() {
+    private async testTestSuiteInitialization(): Promise<void> {
         try {
             // Import and create test suite instance
             const { WebTestSuite } = await import('../web-test-suite.js');
-            this.mockTestSuite = new WebTestSuite();
+            this.mockTestSuite = new WebTestSuite() as WebTestSuiteInstance;
 
             this.addResult('Test Suite Initialization', 'WebTestSuite instance creates successfully',
                 this.mockTestSuite !== null,
@@ -77,7 +131,7 @@ export class WebTestSuiteTests {
 
             // Test initial properties
             this.addResult('Initial Properties', 'Test suite has required properties',
-                this.mockTestSuite.testCategories && this.mockTestSuite.results,
+                !!(this.mockTestSuite.testCategories && this.mockTestSuite.results),
                 'testCategories and results properties exist');
 
             // Test test categories structure
@@ -89,12 +143,13 @@ export class WebTestSuiteTests {
                 `Found ${this.mockTestSuite.testCategories?.length || 0} test categories`);
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Test Suite Initialization', 'WebTestSuite instance creates successfully',
-                false, `Initialization failed: ${error.message}`);
+                false, `Initialization failed: ${errorMessage}`);
         }
     }
 
-    async testTestSuiteUI() {
+    private async testTestSuiteUI(): Promise<void> {
         if (!this.mockTestSuite) {
             this.addResult('Test Suite UI', 'UI tests require test suite instance', false, 'No test suite instance available');
             return;
@@ -117,7 +172,7 @@ export class WebTestSuiteTests {
                 const controls = testSuiteModal.querySelector('.test-suite-controls');
 
                 this.addResult('Modal Structure', 'Modal has required structure elements',
-                    header && content && controls,
+                    !!(header && content && controls),
                     `Header: ${!!header}, Content: ${!!content}, Controls: ${!!controls}`);
 
                 // Test test category list
@@ -134,12 +189,13 @@ export class WebTestSuiteTests {
             }
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Test Suite UI', 'UI components render correctly',
-                false, `UI test failed: ${error.message}`);
+                false, `UI test failed: ${errorMessage}`);
         }
     }
 
-    async testTestCategories() {
+    private async testTestCategories(): Promise<void> {
         if (!this.mockTestSuite) return;
 
         try {
@@ -187,12 +243,13 @@ export class WebTestSuiteTests {
             }
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Test Categories', 'Test categories are properly structured',
-                false, `Category test failed: ${error.message}`);
+                false, `Category test failed: ${errorMessage}`);
         }
     }
 
-    async testProgressIndicators() {
+    private async testProgressIndicators(): Promise<void> {
         if (!this.mockTestSuite) return;
 
         try {
@@ -218,12 +275,13 @@ export class WebTestSuiteTests {
                 resultsSummary ? 'Results summary found' : 'Results summary not found');
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Progress Indicators', 'Progress indicators work correctly',
-                false, `Progress test failed: ${error.message}`);
+                false, `Progress test failed: ${errorMessage}`);
         }
     }
 
-    async testBrowserCompatibilityTests() {
+    private async testBrowserCompatibilityTests(): Promise<void> {
         if (!this.mockTestSuite) return;
 
         try {
@@ -256,12 +314,13 @@ export class WebTestSuiteTests {
             }
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Browser Compatibility Tests', 'Browser compatibility tests function correctly',
-                false, `Browser test failed: ${error.message}`);
+                false, `Browser test failed: ${errorMessage}`);
         }
     }
 
-    async testWebAPITests() {
+    private async testWebAPITests(): Promise<void> {
         if (!this.mockTestSuite) return;
 
         try {
@@ -284,12 +343,13 @@ export class WebTestSuiteTests {
             }
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Web API Tests', 'Web API tests function correctly',
-                false, `Web API test failed: ${error.message}`);
+                false, `Web API test failed: ${errorMessage}`);
         }
     }
 
-    async testOCRSystemTests() {
+    private async testOCRSystemTests(): Promise<void> {
         if (!this.mockTestSuite) return;
 
         try {
@@ -308,12 +368,13 @@ export class WebTestSuiteTests {
             }
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('OCR System Tests', 'OCR system tests function correctly',
-                false, `OCR test failed: ${error.message}`);
+                false, `OCR test failed: ${errorMessage}`);
         }
     }
 
-    async testAudioSystemTests() {
+    private async testAudioSystemTests(): Promise<void> {
         if (!this.mockTestSuite) return;
 
         try {
@@ -326,12 +387,13 @@ export class WebTestSuiteTests {
                 audioCategory ? `Found category: ${audioCategory.name}` : 'Category not found');
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Audio System Tests', 'Audio system tests function correctly',
-                false, `Audio test failed: ${error.message}`);
+                false, `Audio test failed: ${errorMessage}`);
         }
     }
 
-    async testCameraSystemTests() {
+    private async testCameraSystemTests(): Promise<void> {
         if (!this.mockTestSuite) return;
 
         try {
@@ -344,12 +406,13 @@ export class WebTestSuiteTests {
                 cameraCategory ? `Found category: ${cameraCategory.name}` : 'Category not found');
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Camera System Tests', 'Camera system tests function correctly',
-                false, `Camera test failed: ${error.message}`);
+                false, `Camera test failed: ${errorMessage}`);
         }
     }
 
-    async testPreprocessingWorkerTests() {
+    private async testPreprocessingWorkerTests(): Promise<void> {
         if (!this.mockTestSuite) return;
 
         try {
@@ -362,12 +425,13 @@ export class WebTestSuiteTests {
                 workerCategory ? `Found category: ${workerCategory.name}` : 'Category not found');
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Preprocessing Worker Tests', 'Preprocessing worker tests function correctly',
-                false, `Worker test failed: ${error.message}`);
+                false, `Worker test failed: ${errorMessage}`);
         }
     }
 
-    async testPerformanceMetricsTests() {
+    private async testPerformanceMetricsTests(): Promise<void> {
         if (!this.mockTestSuite) return;
 
         try {
@@ -380,12 +444,13 @@ export class WebTestSuiteTests {
                 performanceCategory ? `Found category: ${performanceCategory.name}` : 'Category not found');
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Performance Metrics Tests', 'Performance metrics tests function correctly',
-                false, `Performance test failed: ${error.message}`);
+                false, `Performance test failed: ${errorMessage}`);
         }
     }
 
-    async testLocalStorageTests() {
+    private async testLocalStorageTests(): Promise<void> {
         if (!this.mockTestSuite) return;
 
         try {
@@ -398,12 +463,13 @@ export class WebTestSuiteTests {
                 storageCategory ? `Found category: ${storageCategory.name}` : 'Category not found');
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Local Storage Tests', 'Local storage tests function correctly',
-                false, `Storage test failed: ${error.message}`);
+                false, `Storage test failed: ${errorMessage}`);
         }
     }
 
-    async testErrorHandlingTests() {
+    private async testErrorHandlingTests(): Promise<void> {
         if (!this.mockTestSuite) return;
 
         try {
@@ -416,12 +482,13 @@ export class WebTestSuiteTests {
                 errorCategory ? `Found category: ${errorCategory.name}` : 'Category not found');
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Error Handling Tests', 'Error handling tests function correctly',
-                false, `Error test failed: ${error.message}`);
+                false, `Error test failed: ${errorMessage}`);
         }
     }
 
-    async testAccessibilityTests() {
+    private async testAccessibilityTests(): Promise<void> {
         if (!this.mockTestSuite) return;
 
         try {
@@ -434,12 +501,13 @@ export class WebTestSuiteTests {
                 accessibilityCategory ? `Found category: ${accessibilityCategory.name}` : 'Category not found');
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Accessibility Tests', 'Accessibility tests function correctly',
-                false, `Accessibility test failed: ${error.message}`);
+                false, `Accessibility test failed: ${errorMessage}`);
         }
     }
 
-    async testSuiteExecution() {
+    private async testSuiteExecution(): Promise<void> {
         if (!this.mockTestSuite) return;
 
         try {
@@ -465,12 +533,13 @@ export class WebTestSuiteTests {
             }
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Suite Execution', 'Test suite execution works correctly',
-                false, `Execution test failed: ${error.message}`);
+                false, `Execution test failed: ${errorMessage}`);
         }
     }
 
-    async testResultsReporting() {
+    private async testResultsReporting(): Promise<void> {
         if (!this.mockTestSuite) return;
 
         try {
@@ -493,18 +562,19 @@ export class WebTestSuiteTests {
                 const summaryElement = testSuiteModal.querySelector('.results-summary');
                 if (summaryElement) {
                     this.addResult('Results Summary', 'Results summary is shown',
-                        summaryElement.textContent.length > 0,
-                        `Summary content length: ${summaryElement.textContent.length}`);
+                        summaryElement.textContent !== null && summaryElement.textContent.length > 0,
+                        `Summary content length: ${summaryElement.textContent?.length || 0}`);
                 }
             }
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Results Reporting', 'Results reporting works correctly',
-                false, `Reporting test failed: ${error.message}`);
+                false, `Reporting test failed: ${errorMessage}`);
         }
     }
 
-    async testTestFiltering() {
+    private async testTestFiltering(): Promise<void> {
         if (!this.mockTestSuite) return;
 
         try {
@@ -521,12 +591,13 @@ export class WebTestSuiteTests {
                 `Filtered ${coreCategories.length} from ${originalCategories} categories`);
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Test Filtering', 'Test filtering works correctly',
-                false, `Filtering test failed: ${error.message}`);
+                false, `Filtering test failed: ${errorMessage}`);
         }
     }
 
-    async testErrorConditions() {
+    private async testErrorConditions(): Promise<void> {
         if (!this.mockTestSuite) return;
 
         try {
@@ -541,8 +612,9 @@ export class WebTestSuiteTests {
                 this.addResult('Missing DOM Handling', 'Handles missing DOM elements gracefully',
                     true, 'No error thrown for missing elements');
             } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : String(error);
                 this.addResult('Missing DOM Handling', 'Handles missing DOM elements gracefully',
-                    false, `Error with missing DOM: ${error.message}`);
+                    false, `Error with missing DOM: ${errorMessage}`);
             }
 
             // Test invalid test execution
@@ -551,17 +623,19 @@ export class WebTestSuiteTests {
                 this.addResult('Invalid Test Handling', 'Handles invalid test categories',
                     false, 'Should have thrown error for null category');
             } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : String(error);
                 this.addResult('Invalid Test Handling', 'Handles invalid test categories',
-                    true, `Correctly caught error: ${error.message}`);
+                    true, `Correctly caught error: ${errorMessage}`);
             }
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Error Conditions', 'Error conditions handled correctly',
-                false, `Error condition test failed: ${error.message}`);
+                false, `Error condition test failed: ${errorMessage}`);
         }
     }
 
-    async testEdgeCases() {
+    private async testEdgeCases(): Promise<void> {
         if (!this.mockTestSuite) return;
 
         try {
@@ -582,7 +656,7 @@ export class WebTestSuiteTests {
                 try {
                     await this.mockTestSuite.runTestCategory(this.mockTestSuite.testCategories[0]);
                     executionCount++;
-                } catch (error) {
+                } catch {
                     // Expected for rapid execution
                 }
             }
@@ -592,12 +666,13 @@ export class WebTestSuiteTests {
                 `Completed ${executionCount} rapid executions`);
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Edge Cases', 'Edge cases handled correctly',
-                false, `Edge case test failed: ${error.message}`);
+                false, `Edge case test failed: ${errorMessage}`);
         }
     }
 
-    addResult(category, description, passed, details) {
+    private addResult(category: string, description: string, passed: boolean, details: string): void {
         this.testResults.push({
             category,
             description,
@@ -607,12 +682,12 @@ export class WebTestSuiteTests {
         });
     }
 
-    generateTestReport() {
+    private generateTestReport(): TestReport {
         const passed = this.testResults.filter(r => r.status === 'passed').length;
         const failed = this.testResults.filter(r => r.status === 'failed').length;
         const total = this.testResults.length;
 
-        const report = {
+        const report: TestReport = {
             summary: {
                 total,
                 passed,
@@ -623,12 +698,12 @@ export class WebTestSuiteTests {
             details: this.testResults
         };
 
-        console.log(`🧪 Web Test Suite Tests Complete: ${passed}/${total} passed (${report.summary.successRate}%)`);
+        console.log(`Web Test Suite Tests Complete: ${passed}/${total} passed (${report.summary.successRate}%)`);
         return report;
     }
 
-    groupResultsByCategory() {
-        const categories = {};
+    private groupResultsByCategory(): Record<string, { passed: number; failed: number; total: number }> {
+        const categories: Record<string, { passed: number; failed: number; total: number }> = {};
         this.testResults.forEach(result => {
             if (!categories[result.category]) {
                 categories[result.category] = { passed: 0, failed: 0, total: 0 };
@@ -640,7 +715,7 @@ export class WebTestSuiteTests {
     }
 
     // Cleanup method
-    cleanup() {
+    public cleanup(): void {
         const testSuiteModal = document.getElementById('web-test-suite-modal');
         if (testSuiteModal) {
             testSuiteModal.remove();

@@ -3,14 +3,75 @@
  * Tests all aspects of the Setup Wizard functionality
  */
 
+// Test result interface
+interface TestResult {
+    category: string;
+    description: string;
+    status: 'passed' | 'failed';
+    details: string;
+    timestamp: string;
+}
+
+// Test report interface
+interface TestReport {
+    summary: {
+        total: number;
+        passed: number;
+        failed: number;
+        successRate: string | number;
+    };
+    categories: Record<string, { passed: number; failed: number; total: number }>;
+    details: TestResult[];
+}
+
+// Wizard state interface
+interface WizardState {
+    currentStep: number;
+    totalSteps: number;
+    cameraPermission: string;
+    textType?: string;
+    optimizationResults?: {
+        accuracy: number;
+    };
+}
+
+// Wizard data interface
+interface WizardData {
+    textType?: string;
+    optimizationResults?: {
+        accuracy: number;
+    };
+    completedAt?: string;
+    currentStep?: number;
+    inProgress?: boolean;
+}
+
+// SetupWizard instance interface
+interface SetupWizardInstance {
+    wizardState: WizardState;
+    showWizard: () => void;
+    loadWizardStep: (step: number) => void;
+    nextStep: () => void;
+    previousStep: () => void;
+    canProceedToNextStep: () => boolean;
+    validateWizardState: () => boolean;
+    saveWizardData: (data: WizardData) => void;
+    loadWizardData: () => WizardData | null;
+    clearWizardData: () => void;
+    updateNavigationButtons: () => void;
+}
+
 export class SetupWizardTests {
+    private testResults: TestResult[];
+    private mockWizard: SetupWizardInstance | null;
+
     constructor() {
         this.testResults = [];
         this.mockWizard = null;
     }
 
-    async runAllTests() {
-        console.log('🧙 Starting Setup Wizard Tests...');
+    async runAllTests(): Promise<TestReport> {
+        console.log('Starting Setup Wizard Tests...');
         this.testResults = [];
 
         // Test module loading and initialization
@@ -41,7 +102,7 @@ export class SetupWizardTests {
         return this.generateTestReport();
     }
 
-    async testModuleLoading() {
+    private async testModuleLoading(): Promise<void> {
         try {
             // Test Setup Wizard module import
             const module = await import('../setup-wizard.js');
@@ -55,16 +116,17 @@ export class SetupWizardTests {
                 'localStorage and DOM APIs available');
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Module Loading', 'SetupWizard module imports successfully',
-                false, `Import failed: ${error.message}`);
+                false, `Import failed: ${errorMessage}`);
         }
     }
 
-    async testWizardInitialization() {
+    private async testWizardInitialization(): Promise<void> {
         try {
             // Import and create wizard instance
             const { SetupWizard } = await import('../setup-wizard.js');
-            this.mockWizard = new SetupWizard();
+            this.mockWizard = new SetupWizard() as SetupWizardInstance;
 
             this.addResult('Wizard Initialization', 'SetupWizard instance creates successfully',
                 this.mockWizard !== null,
@@ -86,12 +148,13 @@ export class SetupWizardTests {
                 'wizardState contains currentStep, totalSteps, cameraPermission');
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Wizard Initialization', 'SetupWizard instance creates successfully',
-                false, `Initialization failed: ${error.message}`);
+                false, `Initialization failed: ${errorMessage}`);
         }
     }
 
-    async testWizardUI() {
+    private async testWizardUI(): Promise<void> {
         if (!this.mockWizard) {
             this.addResult('Wizard UI', 'UI tests require wizard instance', false, 'No wizard instance available');
             return;
@@ -114,7 +177,7 @@ export class SetupWizardTests {
                 const navigation = wizardModal.querySelector('.wizard-navigation');
 
                 this.addResult('Modal Structure', 'Modal has required structure elements',
-                    header && content && navigation,
+                    !!(header && content && navigation),
                     `Header: ${!!header}, Content: ${!!content}, Navigation: ${!!navigation}`);
 
                 // Test step indicator
@@ -131,12 +194,13 @@ export class SetupWizardTests {
             }
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Wizard UI', 'UI components render correctly',
-                false, `UI test failed: ${error.message}`);
+                false, `UI test failed: ${errorMessage}`);
         }
     }
 
-    async testNavigationControls() {
+    private async testNavigationControls(): Promise<void> {
         try {
             const wizardModal = document.getElementById('setup-wizard-modal');
             if (!wizardModal) {
@@ -145,12 +209,12 @@ export class SetupWizardTests {
             }
 
             // Test navigation buttons
-            const prevBtn = wizardModal.querySelector('#wizard-prev-btn');
-            const nextBtn = wizardModal.querySelector('#wizard-next-btn');
-            const closeBtn = wizardModal.querySelector('#wizard-close-btn');
+            const prevBtn = wizardModal.querySelector('#wizard-prev-btn') as HTMLButtonElement | null;
+            const nextBtn = wizardModal.querySelector('#wizard-next-btn') as HTMLButtonElement | null;
+            const closeBtn = wizardModal.querySelector('#wizard-close-btn') as HTMLButtonElement | null;
 
             this.addResult('Navigation Buttons', 'Navigation buttons are present',
-                prevBtn && nextBtn && closeBtn,
+                !!(prevBtn && nextBtn && closeBtn),
                 `Prev: ${!!prevBtn}, Next: ${!!nextBtn}, Close: ${!!closeBtn}`);
 
             // Test button states on first step
@@ -165,12 +229,13 @@ export class SetupWizardTests {
             }
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Navigation Controls', 'Navigation controls function correctly',
-                false, `Navigation test failed: ${error.message}`);
+                false, `Navigation test failed: ${errorMessage}`);
         }
     }
 
-    async testStepValidation() {
+    private async testStepValidation(): Promise<void> {
         if (!this.mockWizard) {
             this.addResult('Step Validation', 'Step validation requires wizard instance', false, 'No wizard instance');
             return;
@@ -192,17 +257,18 @@ export class SetupWizardTests {
                 const stepDescription = wizardModal.querySelector('.step-description');
 
                 this.addResult('Step Content Structure', 'Step has title and description',
-                    stepTitle && stepDescription,
+                    !!(stepTitle && stepDescription),
                     `Title: ${!!stepTitle}, Description: ${!!stepDescription}`);
             }
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Step Validation', 'Step validation works correctly',
-                false, `Step validation failed: ${error.message}`);
+                false, `Step validation failed: ${errorMessage}`);
         }
     }
 
-    async testWelcomeStep() {
+    private async testWelcomeStep(): Promise<void> {
         if (!this.mockWizard) return;
 
         try {
@@ -215,7 +281,7 @@ export class SetupWizardTests {
                 const featuresGrid = wizardModal.querySelector('.features-grid');
 
                 this.addResult('Welcome Step Content', 'Welcome step has specific content',
-                    welcomeContent || featuresGrid,
+                    !!(welcomeContent || featuresGrid),
                     'Welcome step content structure verified');
 
                 // Test step progression from welcome
@@ -226,12 +292,13 @@ export class SetupWizardTests {
             }
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Welcome Step', 'Welcome step functions correctly',
-                false, `Welcome step test failed: ${error.message}`);
+                false, `Welcome step test failed: ${errorMessage}`);
         }
     }
 
-    async testCameraTestStep() {
+    private async testCameraTestStep(): Promise<void> {
         if (!this.mockWizard) return;
 
         try {
@@ -244,7 +311,7 @@ export class SetupWizardTests {
                 const permissionStatus = wizardModal.querySelector('.permission-status');
 
                 this.addResult('Camera Test Step', 'Camera test step has required elements',
-                    cameraTest || permissionStatus,
+                    !!(cameraTest || permissionStatus),
                     'Camera test elements present');
 
                 // Test camera permission handling
@@ -255,12 +322,13 @@ export class SetupWizardTests {
             }
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Camera Test Step', 'Camera test step functions correctly',
-                false, `Camera test failed: ${error.message}`);
+                false, `Camera test failed: ${errorMessage}`);
         }
     }
 
-    async testTextTypeStep() {
+    private async testTextTypeStep(): Promise<void> {
         if (!this.mockWizard) return;
 
         try {
@@ -277,7 +345,7 @@ export class SetupWizardTests {
 
                 // Test option selection
                 if (textTypeOptions.length > 0) {
-                    const firstOption = textTypeOptions[0];
+                    const firstOption = textTypeOptions[0] as HTMLElement;
                     this.addResult('Text Type Selection', 'Text type options are interactive',
                         firstOption.classList.contains('text-type-option'),
                         'Text type options have correct classes');
@@ -285,12 +353,13 @@ export class SetupWizardTests {
             }
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Text Type Step', 'Text type step functions correctly',
-                false, `Text type test failed: ${error.message}`);
+                false, `Text type test failed: ${errorMessage}`);
         }
     }
 
-    async testOptimizationStep() {
+    private async testOptimizationStep(): Promise<void> {
         if (!this.mockWizard) return;
 
         try {
@@ -303,7 +372,7 @@ export class SetupWizardTests {
                 const calibrationStatus = wizardModal.querySelector('.calibration-status');
 
                 this.addResult('Optimization Step', 'Optimization step has progress indicators',
-                    optimizationProgress || calibrationStatus,
+                    !!(optimizationProgress || calibrationStatus),
                     'Optimization progress elements present');
 
                 // Test auto-calibration trigger
@@ -314,12 +383,13 @@ export class SetupWizardTests {
             }
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Optimization Step', 'Optimization step functions correctly',
-                false, `Optimization test failed: ${error.message}`);
+                false, `Optimization test failed: ${errorMessage}`);
         }
     }
 
-    async testCompletionStep() {
+    private async testCompletionStep(): Promise<void> {
         if (!this.mockWizard) return;
 
         try {
@@ -332,7 +402,7 @@ export class SetupWizardTests {
                 const finishBtn = wizardModal.querySelector('#finish-wizard');
 
                 this.addResult('Completion Step', 'Completion step has summary and finish button',
-                    completionSummary && finishBtn,
+                    !!(completionSummary && finishBtn),
                     `Summary: ${!!completionSummary}, Finish: ${!!finishBtn}`);
 
                 // Test wizard completion
@@ -344,12 +414,13 @@ export class SetupWizardTests {
             }
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Completion Step', 'Completion step functions correctly',
-                false, `Completion test failed: ${error.message}`);
+                false, `Completion test failed: ${errorMessage}`);
         }
     }
 
-    async testWizardFlow() {
+    private async testWizardFlow(): Promise<void> {
         if (!this.mockWizard) return;
 
         try {
@@ -381,12 +452,13 @@ export class SetupWizardTests {
                 'Correctly stays at step 1');
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Wizard Flow', 'Wizard flow navigation works correctly',
-                false, `Flow test failed: ${error.message}`);
+                false, `Flow test failed: ${errorMessage}`);
         }
     }
 
-    async testStateManagement() {
+    private async testStateManagement(): Promise<void> {
         if (!this.mockWizard) return;
 
         try {
@@ -409,17 +481,18 @@ export class SetupWizardTests {
                 `Validation returned: ${isValid}`);
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('State Management', 'State management functions correctly',
-                false, `State test failed: ${error.message}`);
+                false, `State test failed: ${errorMessage}`);
         }
     }
 
-    async testDataPersistence() {
+    private async testDataPersistence(): Promise<void> {
         if (!this.mockWizard) return;
 
         try {
             // Test localStorage integration
-            const testData = {
+            const testData: WizardData = {
                 textType: 'gaming',
                 optimizationResults: { accuracy: 85 },
                 completedAt: new Date().toISOString()
@@ -432,7 +505,7 @@ export class SetupWizardTests {
             const retrievedData = this.mockWizard.loadWizardData();
 
             this.addResult('Data Persistence', 'Wizard data persists to localStorage',
-                retrievedData && retrievedData.textType === 'gaming',
+                retrievedData !== null && retrievedData.textType === 'gaming',
                 `Retrieved data: ${JSON.stringify(retrievedData)}`);
 
             // Test data clearing
@@ -444,12 +517,13 @@ export class SetupWizardTests {
                 'Data cleared successfully');
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Data Persistence', 'Data persistence works correctly',
-                false, `Persistence test failed: ${error.message}`);
+                false, `Persistence test failed: ${errorMessage}`);
         }
     }
 
-    async testErrorHandling() {
+    private async testErrorHandling(): Promise<void> {
         if (!this.mockWizard) return;
 
         try {
@@ -459,8 +533,9 @@ export class SetupWizardTests {
                 this.addResult('Invalid Step Handling', 'Handles invalid step gracefully',
                     false, 'Should have thrown error for invalid step');
             } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : String(error);
                 this.addResult('Invalid Step Handling', 'Handles invalid step gracefully',
-                    true, `Correctly caught error: ${error.message}`);
+                    true, `Correctly caught error: ${errorMessage}`);
             }
 
             // Test missing DOM elements
@@ -474,17 +549,19 @@ export class SetupWizardTests {
                 this.addResult('Missing DOM Handling', 'Handles missing DOM elements',
                     true, 'No error thrown for missing elements');
             } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : String(error);
                 this.addResult('Missing DOM Handling', 'Handles missing DOM elements',
-                    false, `Error with missing DOM: ${error.message}`);
+                    false, `Error with missing DOM: ${errorMessage}`);
             }
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Error Handling', 'Error handling works correctly',
-                false, `Error handling test failed: ${error.message}`);
+                false, `Error handling test failed: ${errorMessage}`);
         }
     }
 
-    async testEdgeCases() {
+    private async testEdgeCases(): Promise<void> {
         if (!this.mockWizard) return;
 
         try {
@@ -505,20 +582,21 @@ export class SetupWizardTests {
 
             // Simulate refresh by creating new wizard instance
             const { SetupWizard } = await import('../setup-wizard.js');
-            const refreshedWizard = new SetupWizard();
+            const refreshedWizard = new SetupWizard() as SetupWizardInstance;
             const restoredData = refreshedWizard.loadWizardData();
 
             this.addResult('Browser Refresh Recovery', 'Recovers state after refresh',
-                restoredData && restoredData.currentStep === beforeRefreshStep,
+                restoredData !== null && restoredData.currentStep === beforeRefreshStep,
                 `Restored step: ${restoredData?.currentStep}`);
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Edge Cases', 'Edge cases handled correctly',
-                false, `Edge case test failed: ${error.message}`);
+                false, `Edge case test failed: ${errorMessage}`);
         }
     }
 
-    addResult(category, description, passed, details) {
+    private addResult(category: string, description: string, passed: boolean, details: string): void {
         this.testResults.push({
             category,
             description,
@@ -528,12 +606,12 @@ export class SetupWizardTests {
         });
     }
 
-    generateTestReport() {
+    private generateTestReport(): TestReport {
         const passed = this.testResults.filter(r => r.status === 'passed').length;
         const failed = this.testResults.filter(r => r.status === 'failed').length;
         const total = this.testResults.length;
 
-        const report = {
+        const report: TestReport = {
             summary: {
                 total,
                 passed,
@@ -544,12 +622,12 @@ export class SetupWizardTests {
             details: this.testResults
         };
 
-        console.log(`🧙 Setup Wizard Tests Complete: ${passed}/${total} passed (${report.summary.successRate}%)`);
+        console.log(`Setup Wizard Tests Complete: ${passed}/${total} passed (${report.summary.successRate}%)`);
         return report;
     }
 
-    groupResultsByCategory() {
-        const categories = {};
+    private groupResultsByCategory(): Record<string, { passed: number; failed: number; total: number }> {
+        const categories: Record<string, { passed: number; failed: number; total: number }> = {};
         this.testResults.forEach(result => {
             if (!categories[result.category]) {
                 categories[result.category] = { passed: 0, failed: 0, total: 0 };
@@ -561,7 +639,7 @@ export class SetupWizardTests {
     }
 
     // Cleanup method
-    cleanup() {
+    public cleanup(): void {
         const wizardModal = document.getElementById('setup-wizard-modal');
         if (wizardModal) {
             wizardModal.remove();

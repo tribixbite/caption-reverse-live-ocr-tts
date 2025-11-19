@@ -4,7 +4,53 @@
  * Focus on critical issues: audio feedback on word recognition
  */
 
+// Test result interface
+interface TestResult {
+    name: string;
+    status: 'passed' | 'failed' | 'skipped';
+    duration: number;
+    error?: string;
+    details?: Record<string, unknown>;
+}
+
+// Performance thresholds interface
+interface PerformanceThresholds {
+    audioInitTime: number;
+    ttsLatency: number;
+    maxMemoryUsage: number;
+}
+
+// Voice info interface
+interface VoiceInfo {
+    name: string;
+    lang: string;
+    default: boolean;
+    localService?: boolean;
+}
+
+// Extend Window interface for webkit and memory APIs
+declare global {
+    interface Window {
+        webkitAudioContext: typeof AudioContext;
+        gc?: () => void;
+    }
+    interface Performance {
+        memory?: {
+            usedJSHeapSize: number;
+            totalJSHeapSize: number;
+            jsHeapSizeLimit: number;
+        };
+    }
+}
+
 export class AudioSystemTests {
+    public name: string;
+    public category: string;
+    public priority: string;
+    public description: string;
+    private performanceThresholds: PerformanceThresholds;
+    private testPhrases: string[];
+
     constructor() {
         this.name = 'Audio System Tests';
         this.category = 'core';
@@ -25,11 +71,11 @@ export class AudioSystemTests {
         ];
     }
 
-    async runTests() {
-        const results = [];
+    async runTests(): Promise<TestResult[]> {
+        const results: TestResult[] = [];
 
         try {
-            console.log('🎵 Starting Audio System Tests...');
+            console.log('Starting Audio System Tests...');
 
             // Test 1: Web Audio API availability and support
             results.push(await this.testWebAudioAPISupport());
@@ -68,10 +114,11 @@ export class AudioSystemTests {
             results.push(await this.testAudioInterruptionHandling());
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             results.push({
                 name: 'Audio System Test Suite',
                 status: 'failed',
-                error: `Test suite failed: ${error.message}`,
+                error: `Test suite failed: ${errorMessage}`,
                 duration: 0
             });
         }
@@ -79,7 +126,7 @@ export class AudioSystemTests {
         return results;
     }
 
-    async testWebAudioAPISupport() {
+    private async testWebAudioAPISupport(): Promise<TestResult> {
         const startTime = Date.now();
 
         try {
@@ -104,16 +151,17 @@ export class AudioSystemTests {
             };
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             return {
                 name: 'Web Audio API Support',
                 status: 'failed',
-                error: error.message,
+                error: errorMessage,
                 duration: Date.now() - startTime
             };
         }
     }
 
-    async testSpeechSynthesisAPISupport() {
+    private async testSpeechSynthesisAPISupport(): Promise<TestResult> {
         const startTime = Date.now();
 
         try {
@@ -146,16 +194,17 @@ export class AudioSystemTests {
             };
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             return {
                 name: 'Speech Synthesis API Support',
                 status: 'failed',
-                error: error.message,
+                error: errorMessage,
                 duration: Date.now() - startTime
             };
         }
     }
 
-    async testAudioContextInitialization() {
+    private async testAudioContextInitialization(): Promise<TestResult> {
         const startTime = Date.now();
 
         try {
@@ -193,16 +242,17 @@ export class AudioSystemTests {
             };
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             return {
                 name: 'Audio Context Initialization',
                 status: 'failed',
-                error: error.message,
+                error: errorMessage,
                 duration: Date.now() - startTime
             };
         }
     }
 
-    async testVoiceEnumeration() {
+    private async testVoiceEnumeration(): Promise<TestResult> {
         const startTime = Date.now();
 
         try {
@@ -213,7 +263,7 @@ export class AudioSystemTests {
 
             // If no voices initially, wait for voiceschanged event
             if (voices.length === 0) {
-                await new Promise((resolve) => {
+                await new Promise<void>((resolve) => {
                     const timeout = setTimeout(() => resolve(), 2000); // 2 second timeout
 
                     synthesis.onvoiceschanged = () => {
@@ -250,16 +300,17 @@ export class AudioSystemTests {
             };
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             return {
                 name: 'Voice Enumeration',
                 status: 'failed',
-                error: error.message,
+                error: errorMessage,
                 duration: Date.now() - startTime
             };
         }
     }
 
-    async testBasicTTSFunctionality() {
+    private async testBasicTTSFunctionality(): Promise<TestResult> {
         const startTime = Date.now();
 
         try {
@@ -277,7 +328,7 @@ export class AudioSystemTests {
             utterance.pitch = 1.0;
 
             // Test speech synthesis (but stop immediately to avoid audio)
-            const speechPromise = new Promise((resolve, reject) => {
+            const speechPromise = new Promise<string>((resolve, reject) => {
                 const timeout = setTimeout(() => {
                     synthesis.cancel();
                     reject(new Error('TTS timeout'));
@@ -314,16 +365,17 @@ export class AudioSystemTests {
             };
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             return {
                 name: 'Basic TTS Functionality',
                 status: 'failed',
-                error: error.message,
+                error: errorMessage,
                 duration: Date.now() - startTime
             };
         }
     }
 
-    async testTTSVoiceConfiguration() {
+    private async testTTSVoiceConfiguration(): Promise<TestResult> {
         const startTime = Date.now();
 
         try {
@@ -332,7 +384,7 @@ export class AudioSystemTests {
 
             if (voices.length === 0) {
                 // Wait for voices to load
-                await new Promise(resolve => {
+                await new Promise<void>(resolve => {
                     const timeout = setTimeout(resolve, 1000);
                     synthesis.onvoiceschanged = () => {
                         clearTimeout(timeout);
@@ -376,16 +428,17 @@ export class AudioSystemTests {
             };
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             return {
                 name: 'TTS Voice Configuration',
                 status: 'failed',
-                error: error.message,
+                error: errorMessage,
                 duration: Date.now() - startTime
             };
         }
     }
 
-    async testTTSPerformance() {
+    private async testTTSPerformance(): Promise<TestResult> {
         const startTime = Date.now();
 
         try {
@@ -396,7 +449,7 @@ export class AudioSystemTests {
                 const utterance = new SpeechSynthesisUtterance(phrase);
                 utterance.volume = 0; // Silent for performance testing
 
-                const speechPromise = new Promise((resolve, reject) => {
+                const speechPromise = new Promise<number>((resolve, reject) => {
                     const timeout = setTimeout(() => {
                         synthesis.cancel();
                         reject(new Error('TTS performance timeout'));
@@ -435,16 +488,17 @@ export class AudioSystemTests {
             };
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             return {
                 name: 'TTS Performance',
                 status: 'failed',
-                error: error.message,
+                error: errorMessage,
                 duration: Date.now() - startTime
             };
         }
     }
 
-    async testAudioStateManagement() {
+    private async testAudioStateManagement(): Promise<TestResult> {
         const startTime = Date.now();
 
         try {
@@ -462,7 +516,7 @@ export class AudioSystemTests {
             let canPause = false;
             let canResume = false;
 
-            const statePromise = new Promise((resolve, reject) => {
+            const statePromise = new Promise<void>((resolve) => {
                 const timeout = setTimeout(() => {
                     synthesis.cancel();
                     resolve();
@@ -508,16 +562,17 @@ export class AudioSystemTests {
             };
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             return {
                 name: 'Audio State Management',
                 status: 'failed',
-                error: error.message,
+                error: errorMessage,
                 duration: Date.now() - startTime
             };
         }
     }
 
-    async testTTSErrorHandling() {
+    private async testTTSErrorHandling(): Promise<TestResult> {
         const startTime = Date.now();
 
         try {
@@ -530,7 +585,7 @@ export class AudioSystemTests {
                 synthesis.speak(emptyUtterance);
                 synthesis.cancel();
                 emptyTextHandled = true;
-            } catch (error) {
+            } catch {
                 emptyTextHandled = true; // Error is acceptable behavior
             }
 
@@ -542,7 +597,7 @@ export class AudioSystemTests {
                 synthesis.speak(longUtterance);
                 synthesis.cancel();
                 longTextHandled = true;
-            } catch (error) {
+            } catch {
                 longTextHandled = true; // Error is acceptable behavior
             }
 
@@ -554,7 +609,7 @@ export class AudioSystemTests {
                 synthesis.speak(utterance);
                 synthesis.cancel();
                 invalidVoiceHandled = true;
-            } catch (error) {
+            } catch {
                 invalidVoiceHandled = true; // Error is acceptable behavior
             }
 
@@ -571,16 +626,17 @@ export class AudioSystemTests {
             };
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             return {
                 name: 'TTS Error Handling',
                 status: 'failed',
-                error: error.message,
+                error: errorMessage,
                 duration: Date.now() - startTime
             };
         }
     }
 
-    async testAudioMemoryManagement() {
+    private async testAudioMemoryManagement(): Promise<TestResult> {
         const startTime = Date.now();
 
         try {
@@ -588,7 +644,7 @@ export class AudioSystemTests {
 
             // Create multiple TTS instances
             const synthesis = window.speechSynthesis;
-            const utterances = [];
+            const utterances: SpeechSynthesisUtterance[] = [];
 
             for (let i = 0; i < 10; i++) {
                 const utterance = new SpeechSynthesisUtterance(`Memory test ${i}`);
@@ -623,26 +679,27 @@ export class AudioSystemTests {
             };
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             return {
                 name: 'Audio Memory Management',
                 status: 'failed',
-                error: error.message,
+                error: errorMessage,
                 duration: Date.now() - startTime
             };
         }
     }
 
-    async testCrossBrowserAudioCompatibility() {
+    private async testCrossBrowserAudioCompatibility(): Promise<TestResult> {
         const startTime = Date.now();
 
         try {
-            const features = {
+            const features: Record<string, boolean> = {
                 audioContext: 'AudioContext' in window,
                 webkitAudioContext: 'webkitAudioContext' in window,
                 speechSynthesis: 'speechSynthesis' in window,
                 speechSynthesisUtterance: 'SpeechSynthesisUtterance' in window,
                 mediaDevices: 'mediaDevices' in navigator,
-                getUserMedia: navigator.mediaDevices && 'getUserMedia' in navigator.mediaDevices
+                getUserMedia: !!(navigator.mediaDevices && 'getUserMedia' in navigator.mediaDevices)
             };
 
             const browserInfo = {
@@ -670,16 +727,17 @@ export class AudioSystemTests {
             };
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             return {
                 name: 'Cross-Browser Audio Compatibility',
                 status: 'failed',
-                error: error.message,
+                error: errorMessage,
                 duration: Date.now() - startTime
             };
         }
     }
 
-    async testAudioInterruptionHandling() {
+    private async testAudioInterruptionHandling(): Promise<TestResult> {
         const startTime = Date.now();
 
         try {
@@ -727,17 +785,18 @@ export class AudioSystemTests {
             };
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             return {
                 name: 'Audio Interruption Handling',
                 status: 'failed',
-                error: error.message,
+                error: errorMessage,
                 duration: Date.now() - startTime
             };
         }
     }
 
     // Helper methods
-    formatBytes(bytes) {
+    private formatBytes(bytes: number): string {
         if (bytes === 0) return '0 Bytes';
         const k = 1024;
         const sizes = ['Bytes', 'KB', 'MB', 'GB'];

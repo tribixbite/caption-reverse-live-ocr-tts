@@ -4,7 +4,80 @@
  * Focus on critical issues: speed, accuracy, crop area respect, text quality
  */
 
+import type { CropArea } from '../types.js';
+
+// Declare Tesseract global types
+declare global {
+    interface Window {
+        Tesseract: {
+            createWorker: (language: string) => Promise<TesseractWorker>;
+        };
+        gc?: () => void;
+    }
+    interface Performance {
+        memory?: {
+            usedJSHeapSize: number;
+            totalJSHeapSize: number;
+            jsHeapSizeLimit: number;
+        };
+    }
+}
+
+// Tesseract worker interface
+interface TesseractWorker {
+    recognize: (image: HTMLImageElement | HTMLCanvasElement | null, options?: TesseractRecognizeOptions) => Promise<TesseractResult>;
+    terminate: () => Promise<void>;
+}
+
+// Tesseract recognize options interface
+interface TesseractRecognizeOptions {
+    tessedit_pageseg_mode?: number;
+}
+
+// Tesseract result interface
+interface TesseractResult {
+    data: {
+        text: string;
+        confidence: number;
+        words?: Array<{
+            text: string;
+            confidence: number;
+        }>;
+    };
+}
+
+// Test result interface
+interface TestResult {
+    name: string;
+    status: 'passed' | 'failed' | 'skipped';
+    duration: number;
+    error?: string;
+    details?: Record<string, unknown>;
+}
+
+// Performance thresholds interface
+interface PerformanceThresholds {
+    maxProcessingTime: number;
+    minConfidence: number;
+    maxMemoryUsage: number;
+}
+
+// PSM result interface
+interface PSMResult {
+    psm: number;
+    textLength: number;
+    confidence: number;
+}
+
 export class OCRAccuracyTests {
+    public name: string;
+    public category: string;
+    public priority: string;
+    public description: string;
+    private testImagePath: string;
+    private expectedTexts: string[];
+    private performanceThresholds: PerformanceThresholds;
+
     constructor() {
         this.name = 'OCR Accuracy Tests';
         this.category = 'core';
@@ -26,11 +99,11 @@ export class OCRAccuracyTests {
         };
     }
 
-    async runTests() {
-        const results = [];
+    async runTests(): Promise<TestResult[]> {
+        const results: TestResult[] = [];
 
         try {
-            console.log('🔍 Starting OCR Accuracy Tests...');
+            console.log('Starting OCR Accuracy Tests...');
 
             // Test 1: Module loading and initialization
             results.push(await this.testOCRModuleLoading());
@@ -63,10 +136,11 @@ export class OCRAccuracyTests {
             results.push(await this.testWhiteTextOnDarkBackground());
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             results.push({
                 name: 'OCR Accuracy Test Suite',
                 status: 'failed',
-                error: `Test suite failed: ${error.message}`,
+                error: `Test suite failed: ${errorMessage}`,
                 duration: 0
             });
         }
@@ -74,14 +148,14 @@ export class OCRAccuracyTests {
         return results;
     }
 
-    async testOCRModuleLoading() {
+    private async testOCRModuleLoading(): Promise<TestResult> {
         const startTime = Date.now();
 
         try {
             // Test Tesseract.js loading (browser environment)
             if (typeof window !== 'undefined') {
                 if (window.Tesseract) {
-                    console.log('✅ Tesseract.js available globally');
+                    console.log('Tesseract.js available globally');
                 } else {
                     throw new Error('Tesseract.js not available globally');
                 }
@@ -99,7 +173,7 @@ export class OCRAccuracyTests {
             }
 
             // Test OCR worker creation
-            const worker = await Tesseract.createWorker('eng');
+            const worker = await window.Tesseract.createWorker('eng');
             if (!worker) {
                 throw new Error('Failed to create Tesseract worker');
             }
@@ -117,16 +191,17 @@ export class OCRAccuracyTests {
             };
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             return {
                 name: 'OCR Module Loading',
                 status: 'failed',
-                error: error.message,
+                error: errorMessage,
                 duration: Date.now() - startTime
             };
         }
     }
 
-    async testImageLoading() {
+    private async testImageLoading(): Promise<TestResult> {
         const startTime = Date.now();
 
         try {
@@ -148,21 +223,22 @@ export class OCRAccuracyTests {
             };
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             return {
                 name: 'Test Image Loading',
                 status: 'failed',
-                error: error.message,
+                error: errorMessage,
                 duration: Date.now() - startTime
             };
         }
     }
 
-    async testBasicOCRProcessing() {
+    private async testBasicOCRProcessing(): Promise<TestResult> {
         const startTime = Date.now();
 
         try {
             const image = await this.loadTestImage();
-            const worker = await Tesseract.createWorker('eng');
+            const worker = await window.Tesseract.createWorker('eng');
 
             const { data } = await worker.recognize(image);
             await worker.terminate();
@@ -191,23 +267,24 @@ export class OCRAccuracyTests {
             };
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             return {
                 name: 'Basic OCR Processing',
                 status: 'failed',
-                error: error.message,
+                error: errorMessage,
                 duration: Date.now() - startTime
             };
         }
     }
 
-    async testCropAreaOCRProcessing() {
+    private async testCropAreaOCRProcessing(): Promise<TestResult> {
         const startTime = Date.now();
 
         try {
             const image = await this.loadTestImage();
 
             // Create crop area (center 50% of image)
-            const cropArea = {
+            const cropArea: CropArea = {
                 x: Math.floor(image.width * 0.25),
                 y: Math.floor(image.height * 0.25),
                 width: Math.floor(image.width * 0.5),
@@ -215,7 +292,7 @@ export class OCRAccuracyTests {
             };
 
             const croppedCanvas = this.cropImage(image, cropArea);
-            const worker = await Tesseract.createWorker('eng');
+            const worker = await window.Tesseract.createWorker('eng');
 
             const { data } = await worker.recognize(croppedCanvas);
             await worker.terminate();
@@ -237,23 +314,24 @@ export class OCRAccuracyTests {
             };
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             return {
                 name: 'Crop Area OCR Processing',
                 status: 'failed',
-                error: error.message,
+                error: errorMessage,
                 duration: Date.now() - startTime
             };
         }
     }
 
-    async testOCRPerformance() {
+    private async testOCRPerformance(): Promise<TestResult> {
         const startTime = Date.now();
 
         try {
             const image = await this.loadTestImage();
             const processingStartTime = Date.now();
 
-            const worker = await Tesseract.createWorker('eng');
+            const worker = await window.Tesseract.createWorker('eng');
             const { data } = await worker.recognize(image);
             const processingTime = Date.now() - processingStartTime;
 
@@ -276,21 +354,22 @@ export class OCRAccuracyTests {
             };
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             return {
                 name: 'OCR Performance Validation',
                 status: 'failed',
-                error: error.message,
+                error: errorMessage,
                 duration: Date.now() - startTime
             };
         }
     }
 
-    async testTextConfidenceValidation() {
+    private async testTextConfidenceValidation(): Promise<TestResult> {
         const startTime = Date.now();
 
         try {
             const image = await this.loadTestImage();
-            const worker = await Tesseract.createWorker('eng');
+            const worker = await window.Tesseract.createWorker('eng');
 
             const { data } = await worker.recognize(image);
             await worker.terminate();
@@ -322,25 +401,26 @@ export class OCRAccuracyTests {
             };
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             return {
                 name: 'Text Confidence Validation',
                 status: 'failed',
-                error: error.message,
+                error: errorMessage,
                 duration: Date.now() - startTime
             };
         }
     }
 
-    async testMemoryUsageAndCleanup() {
+    private async testMemoryUsageAndCleanup(): Promise<TestResult> {
         const startTime = Date.now();
 
         try {
             const initialMemory = performance.memory ? performance.memory.usedJSHeapSize : 0;
 
             // Create multiple workers and process images
-            const workers = [];
+            const workers: TesseractWorker[] = [];
             for (let i = 0; i < 3; i++) {
-                const worker = await Tesseract.createWorker('eng');
+                const worker = await window.Tesseract.createWorker('eng');
                 workers.push(worker);
             }
 
@@ -375,26 +455,27 @@ export class OCRAccuracyTests {
             };
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             return {
                 name: 'Memory Usage and Cleanup',
                 status: 'failed',
-                error: error.message,
+                error: errorMessage,
                 duration: Date.now() - startTime
             };
         }
     }
 
-    async testErrorHandling() {
+    private async testErrorHandling(): Promise<TestResult> {
         const startTime = Date.now();
 
         try {
-            const worker = await Tesseract.createWorker('eng');
+            const worker = await window.Tesseract.createWorker('eng');
 
             // Test with invalid image
             try {
                 await worker.recognize(null);
                 throw new Error('Expected error for null image not thrown');
-            } catch (expectedError) {
+            } catch {
                 // This is expected behavior
             }
 
@@ -406,7 +487,7 @@ export class OCRAccuracyTests {
             try {
                 await worker.recognize(emptyCanvas);
                 // Some implementations might handle this gracefully
-            } catch (expectedError) {
+            } catch {
                 // This is also acceptable behavior
             }
 
@@ -424,27 +505,28 @@ export class OCRAccuracyTests {
             };
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             return {
                 name: 'Error Handling',
                 status: 'failed',
-                error: error.message,
+                error: errorMessage,
                 duration: Date.now() - startTime
             };
         }
     }
 
-    async testMultipleOCREngines() {
+    private async testMultipleOCREngines(): Promise<TestResult> {
         const startTime = Date.now();
 
         try {
             const image = await this.loadTestImage();
-            const results = [];
+            const results: PSMResult[] = [];
 
             // Test Tesseract with different PSM modes
             const psmModes = [6, 7, 8]; // Different page segmentation modes
 
             for (const psm of psmModes) {
-                const worker = await Tesseract.createWorker('eng');
+                const worker = await window.Tesseract.createWorker('eng');
 
                 const { data } = await worker.recognize(image, {
                     tessedit_pageseg_mode: psm
@@ -471,23 +553,24 @@ export class OCRAccuracyTests {
             };
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             return {
                 name: 'Multiple OCR Engines',
                 status: 'failed',
-                error: error.message,
+                error: errorMessage,
                 duration: Date.now() - startTime
             };
         }
     }
 
-    async testWhiteTextOnDarkBackground() {
+    private async testWhiteTextOnDarkBackground(): Promise<TestResult> {
         const startTime = Date.now();
 
         try {
             const image = await this.loadTestImage();
 
             // Test with image preprocessing for white text on dark background
-            const worker = await Tesseract.createWorker('eng');
+            const worker = await window.Tesseract.createWorker('eng');
 
             // Original processing
             const originalResult = await worker.recognize(image);
@@ -518,17 +601,18 @@ export class OCRAccuracyTests {
             };
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             return {
                 name: 'White Text on Dark Background',
                 status: 'failed',
-                error: error.message,
+                error: errorMessage,
                 duration: Date.now() - startTime
             };
         }
     }
 
     // Helper methods
-    async loadTestImage() {
+    private async loadTestImage(): Promise<HTMLImageElement> {
         return new Promise((resolve, reject) => {
             const img = new Image();
             img.crossOrigin = 'anonymous';
@@ -540,9 +624,12 @@ export class OCRAccuracyTests {
         });
     }
 
-    cropImage(image, cropArea) {
+    private cropImage(image: HTMLImageElement, cropArea: CropArea): HTMLCanvasElement {
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
+        if (!ctx) {
+            throw new Error('Failed to get canvas context');
+        }
 
         canvas.width = cropArea.width;
         canvas.height = cropArea.height;
@@ -556,9 +643,12 @@ export class OCRAccuracyTests {
         return canvas;
     }
 
-    invertImageColors(image) {
+    private invertImageColors(image: HTMLImageElement): HTMLCanvasElement {
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
+        if (!ctx) {
+            throw new Error('Failed to get canvas context');
+        }
 
         canvas.width = image.width;
         canvas.height = image.height;
@@ -581,7 +671,7 @@ export class OCRAccuracyTests {
         return canvas;
     }
 
-    formatBytes(bytes) {
+    private formatBytes(bytes: number): string {
         if (bytes === 0) return '0 Bytes';
         const k = 1024;
         const sizes = ['Bytes', 'KB', 'MB', 'GB'];

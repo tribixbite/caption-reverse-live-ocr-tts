@@ -3,15 +3,104 @@
  * Tests touch gesture functionality for gaming handhelds
  */
 
+// Test result interface
+interface TestResult {
+    category: string;
+    description: string;
+    status: 'passed' | 'failed';
+    details: string;
+    timestamp: string;
+}
+
+// Test report interface
+interface TestReport {
+    summary: {
+        total: number;
+        passed: number;
+        failed: number;
+        successRate: string | number;
+    };
+    categories: Record<string, { passed: number; failed: number; total: number }>;
+    details: TestResult[];
+}
+
+// Mock touch event interface
+interface MockTouchEvent {
+    type: string;
+    touches: Array<{ clientX: number; clientY: number }>;
+    changedTouches: Array<{ clientX: number; clientY: number }>;
+    preventDefault: () => void;
+}
+
+// Mock video event interface
+interface MockVideoEvent {
+    target: {
+        getBoundingClientRect: () => { left: number; top: number; width: number; height: number };
+    };
+    touches?: Array<{ clientX: number; clientY: number }>;
+    changedTouches?: Array<{ clientX: number; clientY: number }>;
+}
+
+// Gesture controls interface (for mock)
+interface GestureControlsInstance {
+    touchStartX: number;
+    touchStartY: number;
+    gestureThreshold: number;
+    tapTimeout: number;
+    doubleTapTimeout: number;
+    longPressTimeout: number;
+    longPressTimer: ReturnType<typeof setTimeout> | null;
+    initialPinchDistance: number;
+    cropStartX?: number;
+    cropStartY?: number;
+    touchStartTime?: number;
+    isLongPress: boolean;
+
+    loadGestureSettings: () => void;
+    saveGestureSettings: () => void;
+    handleTouchStart: (event: MockTouchEvent | null) => void;
+    handleTouchMove: (event: MockTouchEvent) => void;
+    handleTouchEnd: (event: MockTouchEvent) => void;
+    handleSingleTap: (touch: { clientX: number; clientY: number }) => void;
+    handleDoubleTap: (touch: { clientX: number; clientY: number }) => void;
+    handleLongPress: (touch: { clientX: number; clientY: number }) => void;
+    handleSwipeLeft: () => void;
+    handleSwipeRight: () => void;
+    handleSwipeUp: () => void;
+    handleSwipeDown: () => void;
+    handleTwoFingerStart: (event: { touches: Array<{ clientX: number; clientY: number }> }) => void;
+    handleTwoFingerMove: (event: { touches: Array<{ clientX: number; clientY: number }> }) => void;
+    getDistance: (touch1: { clientX: number; clientY: number }, touch2: { clientX: number; clientY: number }) => number;
+    adjustCameraSetting: (setting: string, value: number) => void;
+    handleVideoTouchStart: (event: MockVideoEvent) => void;
+    handleVideoTouchEnd: (event: MockVideoEvent) => void;
+    closeSettings: () => void;
+}
+
+// Extend Performance interface for memory API
+declare global {
+    interface Performance {
+        memory?: {
+            usedJSHeapSize: number;
+            totalJSHeapSize: number;
+            jsHeapSizeLimit: number;
+        };
+    }
+}
+
 export class GestureControlsTests {
+    private testResults: TestResult[];
+    private mockGestureControls: GestureControlsInstance | null;
+    private originalTouchSupport: boolean;
+
     constructor() {
         this.testResults = [];
         this.mockGestureControls = null;
         this.originalTouchSupport = 'ontouchstart' in window;
     }
 
-    async runAllTests() {
-        console.log('🎮 Starting Gesture Controls Tests...');
+    async runAllTests(): Promise<TestReport> {
+        console.log('Starting Gesture Controls Tests...');
         this.testResults = [];
 
         // Test module loading and initialization
@@ -55,7 +144,7 @@ export class GestureControlsTests {
         return this.generateTestReport();
     }
 
-    async testModuleLoading() {
+    private async testModuleLoading(): Promise<void> {
         try {
             // Test Gesture Controls module import
             const module = await import('../gesture-controls.js');
@@ -69,16 +158,17 @@ export class GestureControlsTests {
                 `GestureControls: ${typeof module.GestureControls}, initGestureControls: ${typeof module.initGestureControls}`);
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Module Loading', 'GestureControls module imports successfully',
-                false, `Import failed: ${error.message}`);
+                false, `Import failed: ${errorMessage}`);
         }
     }
 
-    async testGestureControlsInitialization() {
+    private async testGestureControlsInitialization(): Promise<void> {
         try {
             // Import and create gesture controls instance
             const { GestureControls } = await import('../gesture-controls.js');
-            this.mockGestureControls = new GestureControls();
+            this.mockGestureControls = new GestureControls() as GestureControlsInstance;
 
             this.addResult('Gesture Controls Initialization', 'GestureControls instance creates successfully',
                 this.mockGestureControls !== null,
@@ -100,12 +190,13 @@ export class GestureControlsTests {
                 `Threshold: ${this.mockGestureControls.gestureThreshold}, Tap timeout: ${this.mockGestureControls.tapTimeout}`);
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Gesture Controls Initialization', 'GestureControls instance creates successfully',
-                false, `Initialization failed: ${error.message}`);
+                false, `Initialization failed: ${errorMessage}`);
         }
     }
 
-    async testTouchDeviceDetection() {
+    private async testTouchDeviceDetection(): Promise<void> {
         try {
             // Test touch support detection
             const touchSupported = 'ontouchstart' in window;
@@ -130,12 +221,13 @@ export class GestureControlsTests {
             }
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Touch Device Detection', 'Touch device detection works correctly',
-                false, `Detection failed: ${error.message}`);
+                false, `Detection failed: ${errorMessage}`);
         }
     }
 
-    async testGestureInitialization() {
+    private async testGestureInitialization(): Promise<void> {
         if (!this.mockGestureControls) return;
 
         try {
@@ -160,12 +252,13 @@ export class GestureControlsTests {
                 true, 'Settings loaded successfully');
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Gesture Initialization', 'Gesture initialization works correctly',
-                false, `Initialization failed: ${error.message}`);
+                false, `Initialization failed: ${errorMessage}`);
         }
     }
 
-    async testTouchEventHandling() {
+    private async testTouchEventHandling(): Promise<void> {
         if (!this.mockGestureControls) return;
 
         try {
@@ -195,12 +288,13 @@ export class GestureControlsTests {
                 true, 'Touch end handled without error');
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Touch Event Handling', 'Touch events are handled correctly',
-                false, `Event handling failed: ${error.message}`);
+                false, `Event handling failed: ${errorMessage}`);
         }
     }
 
-    async testGestureRecognition() {
+    private async testGestureRecognition(): Promise<void> {
         if (!this.mockGestureControls) return;
 
         try {
@@ -220,12 +314,13 @@ export class GestureControlsTests {
                 longPressResult, 'Long press gesture simulated successfully');
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Gesture Recognition', 'Gesture recognition works correctly',
-                false, `Recognition failed: ${error.message}`);
+                false, `Recognition failed: ${errorMessage}`);
         }
     }
 
-    async testGestureThresholds() {
+    private async testGestureThresholds(): Promise<void> {
         if (!this.mockGestureControls) return;
 
         try {
@@ -250,12 +345,13 @@ export class GestureControlsTests {
                 `Long press timeout: ${longPressTimeout}ms`);
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Gesture Thresholds', 'Gesture thresholds are properly configured',
-                false, `Threshold test failed: ${error.message}`);
+                false, `Threshold test failed: ${errorMessage}`);
         }
     }
 
-    async testSingleTapGesture() {
+    private async testSingleTapGesture(): Promise<void> {
         if (!this.mockGestureControls) return;
 
         try {
@@ -273,12 +369,13 @@ export class GestureControlsTests {
                 true, 'Element activation logic present');
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Single Tap Gesture', 'Single tap gesture works correctly',
-                false, `Single tap failed: ${error.message}`);
+                false, `Single tap failed: ${errorMessage}`);
         }
     }
 
-    async testDoubleTapGesture() {
+    private async testDoubleTapGesture(): Promise<void> {
         if (!this.mockGestureControls) return;
 
         try {
@@ -298,12 +395,13 @@ export class GestureControlsTests {
                 `Double tap timeout: ${doubleTapTimeout}ms`);
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Double Tap Gesture', 'Double tap gesture works correctly',
-                false, `Double tap failed: ${error.message}`);
+                false, `Double tap failed: ${errorMessage}`);
         }
     }
 
-    async testLongPressGesture() {
+    private async testLongPressGesture(): Promise<void> {
         if (!this.mockGestureControls) return;
 
         try {
@@ -323,12 +421,13 @@ export class GestureControlsTests {
                 `Vibration API available: ${hasVibration}`);
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Long Press Gesture', 'Long press gesture works correctly',
-                false, `Long press failed: ${error.message}`);
+                false, `Long press failed: ${errorMessage}`);
         }
     }
 
-    async testSwipeGestures() {
+    private async testSwipeGestures(): Promise<void> {
         if (!this.mockGestureControls) return;
 
         try {
@@ -359,12 +458,13 @@ export class GestureControlsTests {
                 `deltaX: ${deltaX}, deltaY: ${deltaY}, horizontal: ${isHorizontal}`);
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Swipe Gestures', 'Swipe gestures work correctly',
-                false, `Swipe test failed: ${error.message}`);
+                false, `Swipe test failed: ${errorMessage}`);
         }
     }
 
-    async testPinchGestures() {
+    private async testPinchGestures(): Promise<void> {
         if (!this.mockGestureControls) return;
 
         try {
@@ -405,12 +505,13 @@ export class GestureControlsTests {
                 `Calculated distance: ${distance.toFixed(2)}px`);
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Pinch Gestures', 'Pinch gestures work correctly',
-                false, `Pinch test failed: ${error.message}`);
+                false, `Pinch test failed: ${errorMessage}`);
         }
     }
 
-    async testCameraControlGestures() {
+    private async testCameraControlGestures(): Promise<void> {
         if (!this.mockGestureControls) return;
 
         try {
@@ -431,17 +532,18 @@ export class GestureControlsTests {
                 focusControl ? 'Focus control element found' : 'Focus control not found');
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Camera Control Gestures', 'Camera control gestures work correctly',
-                false, `Camera gesture test failed: ${error.message}`);
+                false, `Camera gesture test failed: ${errorMessage}`);
         }
     }
 
-    async testCropAreaGestures() {
+    private async testCropAreaGestures(): Promise<void> {
         if (!this.mockGestureControls) return;
 
         try {
             // Test video touch handling for crop area
-            const mockVideoEvent = {
+            const mockVideoEvent: MockVideoEvent = {
                 target: { getBoundingClientRect: () => ({ left: 0, top: 0, width: 640, height: 480 }) },
                 touches: [{ clientX: 320, clientY: 240 }]
             };
@@ -453,7 +555,7 @@ export class GestureControlsTests {
                 `Crop start X: ${this.mockGestureControls.cropStartX}`);
 
             // Test crop area completion
-            const mockVideoEndEvent = {
+            const mockVideoEndEvent: MockVideoEvent = {
                 changedTouches: [{ clientX: 400, clientY: 320 }],
                 target: { getBoundingClientRect: () => ({ left: 0, top: 0, width: 640, height: 480 }) }
             };
@@ -464,12 +566,13 @@ export class GestureControlsTests {
                 true, 'Crop area gesture completed without error');
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Crop Area Gestures', 'Crop area gestures work correctly',
-                false, `Crop gesture test failed: ${error.message}`);
+                false, `Crop gesture test failed: ${errorMessage}`);
         }
     }
 
-    async testUINavigationGestures() {
+    private async testUINavigationGestures(): Promise<void> {
         if (!this.mockGestureControls) return;
 
         try {
@@ -488,12 +591,13 @@ export class GestureControlsTests {
                 `Read Now: ${!!readNowBtn}, Monitor: ${!!monitorToggle}`);
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('UI Navigation Gestures', 'UI navigation gestures work correctly',
-                false, `UI navigation test failed: ${error.message}`);
+                false, `UI navigation test failed: ${errorMessage}`);
         }
     }
 
-    async testGestureSettings() {
+    private async testGestureSettings(): Promise<void> {
         if (!this.mockGestureControls) return;
 
         try {
@@ -523,12 +627,13 @@ export class GestureControlsTests {
                 'All settings within valid ranges');
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Gesture Settings', 'Gesture settings work correctly',
-                false, `Settings test failed: ${error.message}`);
+                false, `Settings test failed: ${errorMessage}`);
         }
     }
 
-    async testSettingsPersistence() {
+    private async testSettingsPersistence(): Promise<void> {
         if (!this.mockGestureControls) return;
 
         try {
@@ -550,12 +655,13 @@ export class GestureControlsTests {
                 `LocalStorage available: ${hasLocalStorage}`);
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Settings Persistence', 'Settings persistence works correctly',
-                false, `Persistence test failed: ${error.message}`);
+                false, `Persistence test failed: ${errorMessage}`);
         }
     }
 
-    async testGestureCustomization() {
+    private async testGestureCustomization(): Promise<void> {
         if (!this.mockGestureControls) return;
 
         try {
@@ -576,12 +682,13 @@ export class GestureControlsTests {
                 `Timeout changed from ${originalTimeout} to 250`);
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Gesture Customization', 'Gesture customization works correctly',
-                false, `Customization test failed: ${error.message}`);
+                false, `Customization test failed: ${errorMessage}`);
         }
     }
 
-    async testGesturePerformance() {
+    private async testGesturePerformance(): Promise<void> {
         if (!this.mockGestureControls) return;
 
         try {
@@ -616,12 +723,13 @@ export class GestureControlsTests {
                 `Memory increase: ${(memoryIncrease / 1024).toFixed(2)}KB`);
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Gesture Performance', 'Gesture performance is optimized',
-                false, `Performance test failed: ${error.message}`);
+                false, `Performance test failed: ${errorMessage}`);
         }
     }
 
-    async testMemoryManagement() {
+    private async testMemoryManagement(): Promise<void> {
         if (!this.mockGestureControls) return;
 
         try {
@@ -639,12 +747,13 @@ export class GestureControlsTests {
                 true, 'Event listener management pattern verified');
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Memory Management', 'Memory management works correctly',
-                false, `Memory management test failed: ${error.message}`);
+                false, `Memory management test failed: ${errorMessage}`);
         }
     }
 
-    async testErrorHandling() {
+    private async testErrorHandling(): Promise<void> {
         if (!this.mockGestureControls) return;
 
         try {
@@ -654,13 +763,17 @@ export class GestureControlsTests {
                 this.addResult('Null Event Handling', 'Handles null touch events gracefully',
                     false, 'Should have thrown error for null event');
             } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : String(error);
                 this.addResult('Null Event Handling', 'Handles null touch events gracefully',
-                    true, `Correctly caught error: ${error.message}`);
+                    true, `Correctly caught error: ${errorMessage}`);
             }
 
             // Test invalid touch coordinates
-            const invalidEvent = {
-                touches: [{ clientX: NaN, clientY: NaN }]
+            const invalidEvent: MockTouchEvent = {
+                type: 'touchstart',
+                touches: [{ clientX: NaN, clientY: NaN }],
+                changedTouches: [{ clientX: NaN, clientY: NaN }],
+                preventDefault: () => {}
             };
 
             try {
@@ -668,40 +781,45 @@ export class GestureControlsTests {
                 this.addResult('Invalid Coordinates', 'Handles invalid coordinates',
                     true, 'Invalid coordinates handled without crash');
             } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : String(error);
                 this.addResult('Invalid Coordinates', 'Handles invalid coordinates',
-                    false, `Error with invalid coordinates: ${error.message}`);
+                    false, `Error with invalid coordinates: ${errorMessage}`);
             }
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Error Handling', 'Error handling works correctly',
-                false, `Error handling test failed: ${error.message}`);
+                false, `Error handling test failed: ${errorMessage}`);
         }
     }
 
-    async testEdgeCases() {
+    private async testEdgeCases(): Promise<void> {
         if (!this.mockGestureControls) return;
 
         try {
             // Test rapid touch events
-            const rapidEvents = [];
+            const rapidEvents: MockTouchEvent[] = [];
             for (let i = 0; i < 10; i++) {
                 rapidEvents.push(this.createMockTouchEvent('touchstart', 100 + i, 100 + i));
             }
 
             rapidEvents.forEach(event => {
-                this.mockGestureControls.handleTouchStart(event);
+                this.mockGestureControls!.handleTouchStart(event);
             });
 
             this.addResult('Rapid Events', 'Handles rapid touch events',
                 true, 'Rapid events handled without error');
 
             // Test multi-touch scenarios
-            const multiTouchEvent = {
+            const multiTouchEvent: MockTouchEvent = {
+                type: 'touchstart',
                 touches: [
                     { clientX: 100, clientY: 100 },
                     { clientX: 200, clientY: 200 },
                     { clientX: 300, clientY: 300 }
-                ]
+                ],
+                changedTouches: [{ clientX: 100, clientY: 100 }],
+                preventDefault: () => {}
             };
 
             this.mockGestureControls.handleTouchStart(multiTouchEvent);
@@ -711,20 +829,26 @@ export class GestureControlsTests {
 
             // Test gesture cancellation
             this.mockGestureControls.isLongPress = true;
-            this.mockGestureControls.handleTouchEnd({ changedTouches: [{ clientX: 100, clientY: 100 }] });
+            this.mockGestureControls.handleTouchEnd({
+                type: 'touchend',
+                touches: [],
+                changedTouches: [{ clientX: 100, clientY: 100 }],
+                preventDefault: () => {}
+            });
 
             this.addResult('Gesture Cancellation', 'Handles gesture cancellation',
                 !this.mockGestureControls.isLongPress,
                 'Long press state reset correctly');
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Edge Cases', 'Edge cases handled correctly',
-                false, `Edge case test failed: ${error.message}`);
+                false, `Edge case test failed: ${errorMessage}`);
         }
     }
 
     // Helper methods
-    createMockTouchEvent(type, x, y) {
+    private createMockTouchEvent(type: string, x: number, y: number): MockTouchEvent {
         return {
             type,
             touches: [{ clientX: x, clientY: y }],
@@ -733,7 +857,9 @@ export class GestureControlsTests {
         };
     }
 
-    simulateGesture(gestureType, startX, startY, endX, endY, duration) {
+    private simulateGesture(gestureType: string, startX: number, startY: number, endX: number, endY: number, duration: number): boolean {
+        if (!this.mockGestureControls) return false;
+
         try {
             const startEvent = this.createMockTouchEvent('touchstart', startX, startY);
             const endEvent = this.createMockTouchEvent('touchend', endX, endY);
@@ -747,12 +873,12 @@ export class GestureControlsTests {
 
             this.mockGestureControls.handleTouchEnd(endEvent);
             return true;
-        } catch (error) {
+        } catch {
             return false;
         }
     }
 
-    addResult(category, description, passed, details) {
+    private addResult(category: string, description: string, passed: boolean, details: string): void {
         this.testResults.push({
             category,
             description,
@@ -762,12 +888,12 @@ export class GestureControlsTests {
         });
     }
 
-    generateTestReport() {
+    private generateTestReport(): TestReport {
         const passed = this.testResults.filter(r => r.status === 'passed').length;
         const failed = this.testResults.filter(r => r.status === 'failed').length;
         const total = this.testResults.length;
 
-        const report = {
+        const report: TestReport = {
             summary: {
                 total,
                 passed,
@@ -778,12 +904,12 @@ export class GestureControlsTests {
             details: this.testResults
         };
 
-        console.log(`🎮 Gesture Controls Tests Complete: ${passed}/${total} passed (${report.summary.successRate}%)`);
+        console.log(`Gesture Controls Tests Complete: ${passed}/${total} passed (${report.summary.successRate}%)`);
         return report;
     }
 
-    groupResultsByCategory() {
-        const categories = {};
+    private groupResultsByCategory(): Record<string, { passed: number; failed: number; total: number }> {
+        const categories: Record<string, { passed: number; failed: number; total: number }> = {};
         this.testResults.forEach(result => {
             if (!categories[result.category]) {
                 categories[result.category] = { passed: 0, failed: 0, total: 0 };
@@ -795,7 +921,7 @@ export class GestureControlsTests {
     }
 
     // Cleanup method
-    cleanup() {
+    public cleanup(): void {
         if (this.mockGestureControls && this.mockGestureControls.longPressTimer) {
             clearTimeout(this.mockGestureControls.longPressTimer);
         }

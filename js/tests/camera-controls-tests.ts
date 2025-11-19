@@ -4,7 +4,102 @@
  * Focus on critical issues: camera access, zoom, focus, crop area respect
  */
 
+import type { CropArea } from '../types.js';
+
+// Test result interface
+interface TestResult {
+    name: string;
+    status: 'passed' | 'failed' | 'skipped';
+    duration: number;
+    error?: string;
+    details?: Record<string, unknown>;
+}
+
+// Performance thresholds interface
+interface PerformanceThresholds {
+    cameraInitTime: number;
+    streamStartTime: number;
+    frameRate: number;
+    resolution: { width: number; height: number };
+}
+
+// Test constraints interface
+interface TestConstraints {
+    video: {
+        width: { min: number; ideal: number; max: number };
+        height: { min: number; ideal: number; max: number };
+        frameRate: { min: number; ideal: number; max: number };
+    };
+}
+
+// Constraint test interface
+interface ConstraintTest {
+    name: string;
+    constraints: MediaStreamConstraints;
+}
+
+// Constraint result interface
+interface ConstraintTestResult {
+    test: string;
+    success: boolean;
+    settings?: {
+        width: number;
+        height: number;
+        frameRate: number;
+    };
+    error?: string;
+}
+
+// Zoom test result interface
+interface ZoomTestResult {
+    requested?: number;
+    actual?: number;
+    success: boolean;
+    error?: string;
+}
+
+// Focus test result interface
+interface FocusTestResult {
+    mode: string;
+    actual?: string;
+    success: boolean;
+    error?: string;
+}
+
+// Crop result interface
+interface CropTestResult {
+    cropArea: CropArea;
+    isValid: boolean;
+    canvasCreated: boolean;
+    hasImageData: boolean;
+    dimensions: {
+        width: number;
+        height: number;
+    };
+}
+
+// Error test result interface
+interface ErrorTestResult {
+    test: string;
+    handled: boolean;
+    error?: string;
+    note?: string;
+}
+
+// Image size interface
+interface ImageSize {
+    width: number;
+    height: number;
+}
+
 export class CameraControlsTests {
+    public name: string;
+    public category: string;
+    public priority: string;
+    public description: string;
+    private performanceThresholds: PerformanceThresholds;
+    private testConstraints: TestConstraints;
+
     constructor() {
         this.name = 'Camera Controls Tests';
         this.category = 'core';
@@ -28,11 +123,11 @@ export class CameraControlsTests {
         };
     }
 
-    async runTests() {
-        const results = [];
+    async runTests(): Promise<TestResult[]> {
+        const results: TestResult[] = [];
 
         try {
-            console.log('📷 Starting Camera Controls Tests...');
+            console.log('Starting Camera Controls Tests...');
 
             // Test 1: MediaDevices API availability and support
             results.push(await this.testMediaDevicesAPISupport());
@@ -71,10 +166,11 @@ export class CameraControlsTests {
             results.push(await this.testCameraErrorHandling());
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             results.push({
                 name: 'Camera Controls Test Suite',
                 status: 'failed',
-                error: `Test suite failed: ${error.message}`,
+                error: `Test suite failed: ${errorMessage}`,
                 duration: 0
             });
         }
@@ -82,7 +178,7 @@ export class CameraControlsTests {
         return results;
     }
 
-    async testMediaDevicesAPISupport() {
+    private async testMediaDevicesAPISupport(): Promise<TestResult> {
         const startTime = Date.now();
 
         try {
@@ -110,28 +206,29 @@ export class CameraControlsTests {
                     enumerateDevices: hasEnumerateDevices,
                     getSupportedConstraints: hasGetSupportedConstraints,
                     supportedConstraints: {
-                        video: supportedConstraints.video || false,
-                        audio: supportedConstraints.audio || false,
-                        width: supportedConstraints.width || false,
-                        height: supportedConstraints.height || false,
-                        frameRate: supportedConstraints.frameRate || false,
-                        zoom: supportedConstraints.zoom || false,
-                        focusMode: supportedConstraints.focusMode || false
+                        video: (supportedConstraints as MediaTrackSupportedConstraints).width || false,
+                        audio: (supportedConstraints as MediaTrackSupportedConstraints).sampleRate || false,
+                        width: (supportedConstraints as MediaTrackSupportedConstraints).width || false,
+                        height: (supportedConstraints as MediaTrackSupportedConstraints).height || false,
+                        frameRate: (supportedConstraints as MediaTrackSupportedConstraints).frameRate || false,
+                        zoom: (supportedConstraints as MediaTrackSupportedConstraints & { zoom?: boolean }).zoom || false,
+                        focusMode: (supportedConstraints as MediaTrackSupportedConstraints & { focusMode?: boolean }).focusMode || false
                     }
                 }
             };
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             return {
                 name: 'MediaDevices API Support',
                 status: 'failed',
-                error: error.message,
+                error: errorMessage,
                 duration: Date.now() - startTime
             };
         }
     }
 
-    async testCameraPermissions() {
+    private async testCameraPermissions(): Promise<TestResult> {
         const startTime = Date.now();
 
         try {
@@ -141,10 +238,10 @@ export class CameraControlsTests {
             // Check if Permissions API is available
             if ('permissions' in navigator) {
                 try {
-                    const permission = await navigator.permissions.query({ name: 'camera' });
+                    const permission = await navigator.permissions.query({ name: 'camera' as PermissionName });
                     permissionState = permission.state;
                     permissionGranted = permission.state === 'granted';
-                } catch (error) {
+                } catch {
                     // Permissions API might not support camera query
                     permissionState = 'api_error';
                 }
@@ -152,7 +249,7 @@ export class CameraControlsTests {
 
             // Test actual camera access (with immediate cleanup)
             let actualAccessGranted = false;
-            let accessError = null;
+            let accessError: string | null = null;
 
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({
@@ -164,7 +261,7 @@ export class CameraControlsTests {
                 // Immediately stop the stream
                 stream.getTracks().forEach(track => track.stop());
             } catch (error) {
-                accessError = error.message;
+                accessError = error instanceof Error ? error.message : String(error);
             }
 
             return {
@@ -183,16 +280,17 @@ export class CameraControlsTests {
             };
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             return {
                 name: 'Camera Permissions',
                 status: 'failed',
-                error: error.message,
+                error: errorMessage,
                 duration: Date.now() - startTime
             };
         }
     }
 
-    async testCameraEnumeration() {
+    private async testCameraEnumeration(): Promise<TestResult> {
         const startTime = Date.now();
 
         try {
@@ -225,16 +323,17 @@ export class CameraControlsTests {
             };
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             return {
                 name: 'Camera Enumeration',
                 status: 'failed',
-                error: error.message,
+                error: errorMessage,
                 duration: Date.now() - startTime
             };
         }
     }
 
-    async testVideoStreamInitialization() {
+    private async testVideoStreamInitialization(): Promise<TestResult> {
         const startTime = Date.now();
 
         try {
@@ -276,27 +375,28 @@ export class CameraControlsTests {
                         width: capabilities.width,
                         height: capabilities.height,
                         frameRate: capabilities.frameRate,
-                        zoom: capabilities.zoom
+                        zoom: (capabilities as MediaTrackCapabilities & { zoom?: { min: number; max: number } }).zoom
                     }
                 }
             };
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             return {
                 name: 'Video Stream Initialization',
                 status: 'failed',
-                error: error.message,
+                error: errorMessage,
                 duration: Date.now() - startTime
             };
         }
     }
 
-    async testCameraConstraints() {
+    private async testCameraConstraints(): Promise<TestResult> {
         const startTime = Date.now();
 
         try {
             // Test different constraint configurations
-            const constraintTests = [
+            const constraintTests: ConstraintTest[] = [
                 {
                     name: 'Basic constraints',
                     constraints: { video: true }
@@ -320,7 +420,7 @@ export class CameraControlsTests {
                 }
             ];
 
-            const results = [];
+            const results: ConstraintTestResult[] = [];
 
             for (const test of constraintTests) {
                 try {
@@ -334,16 +434,17 @@ export class CameraControlsTests {
                         test: test.name,
                         success: true,
                         settings: {
-                            width: settings.width,
-                            height: settings.height,
-                            frameRate: settings.frameRate
+                            width: settings.width || 0,
+                            height: settings.height || 0,
+                            frameRate: settings.frameRate || 0
                         }
                     });
                 } catch (error) {
+                    const errorMessage = error instanceof Error ? error.message : String(error);
                     results.push({
                         test: test.name,
                         success: false,
-                        error: error.message
+                        error: errorMessage
                     });
                 }
             }
@@ -363,33 +464,35 @@ export class CameraControlsTests {
             };
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             return {
                 name: 'Camera Constraints',
                 status: 'failed',
-                error: error.message,
+                error: errorMessage,
                 duration: Date.now() - startTime
             };
         }
     }
 
-    async testCameraZoomControls() {
+    private async testCameraZoomControls(): Promise<TestResult> {
         const startTime = Date.now();
 
         try {
             const stream = await navigator.mediaDevices.getUserMedia({
-                video: { zoom: true }
+                video: { zoom: true } as MediaTrackConstraints
             });
 
             const videoTrack = stream.getVideoTracks()[0];
             const capabilities = videoTrack.getCapabilities ? videoTrack.getCapabilities() : {};
+            const extendedCapabilities = capabilities as MediaTrackCapabilities & { zoom?: { min: number; max: number; step?: number } };
 
             let zoomSupported = false;
-            let zoomRange = null;
-            let zoomTestResults = [];
+            let zoomRange: { min: number; max: number; step?: number } | null = null;
+            const zoomTestResults: ZoomTestResult[] = [];
 
-            if (capabilities.zoom) {
+            if (extendedCapabilities.zoom) {
                 zoomSupported = true;
-                zoomRange = capabilities.zoom;
+                zoomRange = extendedCapabilities.zoom;
 
                 // Test zoom control
                 if (videoTrack.applyConstraints) {
@@ -399,18 +502,20 @@ export class CameraControlsTests {
                         const midZoom = (minZoom + maxZoom) / 2;
 
                         await videoTrack.applyConstraints({
-                            advanced: [{ zoom: midZoom }]
+                            advanced: [{ zoom: midZoom } as MediaTrackConstraintSet]
                         });
 
                         const settings = videoTrack.getSettings();
+                        const extendedSettings = settings as MediaTrackSettings & { zoom?: number };
                         zoomTestResults.push({
                             requested: midZoom,
-                            actual: settings.zoom,
+                            actual: extendedSettings.zoom,
                             success: true
                         });
                     } catch (error) {
+                        const errorMessage = error instanceof Error ? error.message : String(error);
                         zoomTestResults.push({
-                            error: error.message,
+                            error: errorMessage,
                             success: false
                         });
                     }
@@ -429,57 +534,61 @@ export class CameraControlsTests {
                     zoomRange,
                     zoomControlWorks: zoomTestResults.some(r => r.success),
                     testResults: zoomTestResults,
-                    capabilities: capabilities.zoom ? 'available' : 'not_available'
+                    capabilities: extendedCapabilities.zoom ? 'available' : 'not_available'
                 }
             };
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             return {
                 name: 'Camera Zoom Controls',
                 status: 'failed',
-                error: error.message,
+                error: errorMessage,
                 duration: Date.now() - startTime
             };
         }
     }
 
-    async testCameraFocusControls() {
+    private async testCameraFocusControls(): Promise<TestResult> {
         const startTime = Date.now();
 
         try {
             const stream = await navigator.mediaDevices.getUserMedia({
-                video: { focusMode: 'auto' }
+                video: { focusMode: 'auto' } as MediaTrackConstraints
             });
 
             const videoTrack = stream.getVideoTracks()[0];
             const capabilities = videoTrack.getCapabilities ? videoTrack.getCapabilities() : {};
+            const extendedCapabilities = capabilities as MediaTrackCapabilities & { focusMode?: string[] };
 
             let focusSupported = false;
-            let focusModes = [];
-            let focusTestResults = [];
+            let focusModes: string[] = [];
+            const focusTestResults: FocusTestResult[] = [];
 
-            if (capabilities.focusMode) {
+            if (extendedCapabilities.focusMode) {
                 focusSupported = true;
-                focusModes = capabilities.focusMode;
+                focusModes = extendedCapabilities.focusMode;
 
                 // Test focus mode changes
                 if (videoTrack.applyConstraints && focusModes.length > 0) {
                     for (const mode of focusModes) {
                         try {
                             await videoTrack.applyConstraints({
-                                advanced: [{ focusMode: mode }]
+                                advanced: [{ focusMode: mode } as MediaTrackConstraintSet]
                             });
 
                             const settings = videoTrack.getSettings();
+                            const extendedSettings = settings as MediaTrackSettings & { focusMode?: string };
                             focusTestResults.push({
                                 mode,
-                                actual: settings.focusMode,
+                                actual: extendedSettings.focusMode,
                                 success: true
                             });
                         } catch (error) {
+                            const errorMessage = error instanceof Error ? error.message : String(error);
                             focusTestResults.push({
                                 mode,
-                                error: error.message,
+                                error: errorMessage,
                                 success: false
                             });
                         }
@@ -499,21 +608,22 @@ export class CameraControlsTests {
                     availableFocusModes: focusModes,
                     focusControlWorks: focusTestResults.some(r => r.success),
                     testResults: focusTestResults,
-                    capabilities: capabilities.focusMode ? 'available' : 'not_available'
+                    capabilities: extendedCapabilities.focusMode ? 'available' : 'not_available'
                 }
             };
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             return {
                 name: 'Camera Focus Controls',
                 status: 'failed',
-                error: error.message,
+                error: errorMessage,
                 duration: Date.now() - startTime
             };
         }
     }
 
-    async testVideoFeedRendering() {
+    private async testVideoFeedRendering(): Promise<TestResult> {
         const startTime = Date.now();
 
         try {
@@ -534,7 +644,7 @@ export class CameraControlsTests {
             video.srcObject = stream;
 
             // Wait for video to load
-            await new Promise((resolve, reject) => {
+            await new Promise<void>((resolve, reject) => {
                 const timeout = setTimeout(() => reject(new Error('Video load timeout')), 5000);
 
                 video.onloadedmetadata = () => {
@@ -546,6 +656,9 @@ export class CameraControlsTests {
             // Test canvas rendering
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
+            if (!ctx) {
+                throw new Error('Failed to get canvas context');
+            }
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
 
@@ -580,28 +693,29 @@ export class CameraControlsTests {
             };
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             return {
                 name: 'Video Feed Rendering',
                 status: 'failed',
-                error: error.message,
+                error: errorMessage,
                 duration: Date.now() - startTime
             };
         }
     }
 
-    async testCropAreaFunctionality() {
+    private async testCropAreaFunctionality(): Promise<TestResult> {
         const startTime = Date.now();
 
         try {
             // Test crop area calculations
-            const testImage = { width: 1280, height: 720 };
-            const testCropAreas = [
+            const testImage: ImageSize = { width: 1280, height: 720 };
+            const testCropAreas: CropArea[] = [
                 { x: 100, y: 100, width: 200, height: 200 },
                 { x: 0, y: 0, width: 640, height: 360 },
                 { x: 320, y: 180, width: 640, height: 360 }
             ];
 
-            const cropResults = [];
+            const cropResults: CropTestResult[] = [];
 
             for (const cropArea of testCropAreas) {
                 // Validate crop area bounds
@@ -610,6 +724,9 @@ export class CameraControlsTests {
                 // Test crop area canvas operations
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
+                if (!ctx) {
+                    throw new Error('Failed to get canvas context');
+                }
 
                 canvas.width = cropArea.width;
                 canvas.height = cropArea.height;
@@ -650,16 +767,17 @@ export class CameraControlsTests {
             };
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             return {
                 name: 'Crop Area Functionality',
                 status: 'failed',
-                error: error.message,
+                error: errorMessage,
                 duration: Date.now() - startTime
             };
         }
     }
 
-    async testCropAreaPersistence() {
+    private async testCropAreaPersistence(): Promise<TestResult> {
         const startTime = Date.now();
 
         try {
@@ -679,10 +797,11 @@ export class CameraControlsTests {
 
             // Test retrieving crop area
             const retrievedData = localStorage.getItem(storageKey);
-            const parsedData = JSON.parse(retrievedData);
+            const parsedData = retrievedData ? JSON.parse(retrievedData) : null;
 
             // Validate data integrity
-            const dataIntact = parsedData.x === testCropData.x &&
+            const dataIntact = parsedData &&
+                             parsedData.x === testCropData.x &&
                              parsedData.y === testCropData.y &&
                              parsedData.width === testCropData.width &&
                              parsedData.height === testCropData.height;
@@ -695,7 +814,8 @@ export class CameraControlsTests {
             ];
 
             localStorage.setItem('test_multiple_crops', JSON.stringify(multipleCropAreas));
-            const retrievedMultiple = JSON.parse(localStorage.getItem('test_multiple_crops'));
+            const retrievedMultipleStr = localStorage.getItem('test_multiple_crops');
+            const retrievedMultiple = retrievedMultipleStr ? JSON.parse(retrievedMultipleStr) : [];
 
             // Clean up test data
             localStorage.removeItem(storageKey);
@@ -717,16 +837,17 @@ export class CameraControlsTests {
             };
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             return {
                 name: 'Crop Area Persistence',
                 status: 'failed',
-                error: error.message,
+                error: errorMessage,
                 duration: Date.now() - startTime
             };
         }
     }
 
-    async testCameraStreamPerformance() {
+    private async testCameraStreamPerformance(): Promise<TestResult> {
         const startTime = Date.now();
 
         try {
@@ -751,8 +872,8 @@ export class CameraControlsTests {
             document.body.appendChild(video);
 
             // Wait for video to start
-            await new Promise(resolve => {
-                video.onloadedmetadata = resolve;
+            await new Promise<void>(resolve => {
+                video.onloadedmetadata = () => resolve();
             });
 
             // Monitor performance for a short period
@@ -768,9 +889,9 @@ export class CameraControlsTests {
             };
 
             // Check if performance meets thresholds
-            const meetsFrameRate = settings.frameRate >= this.performanceThresholds.frameRate;
-            const meetsResolution = settings.width >= this.performanceThresholds.resolution.width &&
-                                  settings.height >= this.performanceThresholds.resolution.height;
+            const meetsFrameRate = (settings.frameRate || 0) >= this.performanceThresholds.frameRate;
+            const meetsResolution = (settings.width || 0) >= this.performanceThresholds.resolution.width &&
+                                  (settings.height || 0) >= this.performanceThresholds.resolution.height;
 
             // Clean up
             stream.getTracks().forEach(track => track.stop());
@@ -790,20 +911,21 @@ export class CameraControlsTests {
             };
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             return {
                 name: 'Camera Stream Performance',
                 status: 'failed',
-                error: error.message,
+                error: errorMessage,
                 duration: Date.now() - startTime
             };
         }
     }
 
-    async testCameraErrorHandling() {
+    private async testCameraErrorHandling(): Promise<TestResult> {
         const startTime = Date.now();
 
         try {
-            const errorTests = [];
+            const errorTests: ErrorTestResult[] = [];
 
             // Test invalid device ID
             try {
@@ -812,7 +934,8 @@ export class CameraControlsTests {
                 });
                 errorTests.push({ test: 'Invalid device ID', handled: false });
             } catch (error) {
-                errorTests.push({ test: 'Invalid device ID', handled: true, error: error.name });
+                const err = error as Error;
+                errorTests.push({ test: 'Invalid device ID', handled: true, error: err.name });
             }
 
             // Test impossible constraints
@@ -825,7 +948,8 @@ export class CameraControlsTests {
                 });
                 errorTests.push({ test: 'Impossible constraints', handled: false });
             } catch (error) {
-                errorTests.push({ test: 'Impossible constraints', handled: true, error: error.name });
+                const err = error as Error;
+                errorTests.push({ test: 'Impossible constraints', handled: true, error: err.name });
             }
 
             // Test audio-only when video is required
@@ -837,7 +961,8 @@ export class CameraControlsTests {
                 // This might succeed, which is fine
                 errorTests.push({ test: 'Audio-only request', handled: true, note: 'succeeded' });
             } catch (error) {
-                errorTests.push({ test: 'Audio-only request', handled: true, error: error.name });
+                const err = error as Error;
+                errorTests.push({ test: 'Audio-only request', handled: true, error: err.name });
             }
 
             const handledErrors = errorTests.filter(t => t.handled).length;
@@ -856,17 +981,18 @@ export class CameraControlsTests {
             };
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             return {
                 name: 'Camera Error Handling',
                 status: 'failed',
-                error: error.message,
+                error: errorMessage,
                 duration: Date.now() - startTime
             };
         }
     }
 
     // Helper methods
-    validateCropArea(cropArea, imageSize) {
+    private validateCropArea(cropArea: CropArea, imageSize: ImageSize): boolean {
         if (!cropArea || !imageSize) return false;
 
         return cropArea.x >= 0 &&

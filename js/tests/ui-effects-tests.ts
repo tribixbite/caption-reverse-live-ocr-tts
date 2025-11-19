@@ -3,14 +3,38 @@
  * Tests glassmorphism effects, theme system, and visual components
  */
 
+// Test result interface
+interface TestResult {
+    category: string;
+    description: string;
+    status: 'passed' | 'failed';
+    details: string;
+    timestamp: string;
+}
+
+// Test report interface
+interface TestReport {
+    summary: {
+        total: number;
+        passed: number;
+        failed: number;
+        successRate: string | number;
+    };
+    categories: Record<string, { passed: number; failed: number; total: number }>;
+    details: TestResult[];
+}
+
 export class UIEffectsTests {
+    private testResults: TestResult[];
+    private originalTheme: string | null;
+
     constructor() {
         this.testResults = [];
         this.originalTheme = null;
     }
 
-    async runAllTests() {
-        console.log('🎨 Starting UI Effects Tests...');
+    async runAllTests(): Promise<TestReport> {
+        console.log('Starting UI Effects Tests...');
         this.testResults = [];
 
         // Store original theme
@@ -51,7 +75,7 @@ export class UIEffectsTests {
         return this.generateTestReport();
     }
 
-    async testGlassmorphismClasses() {
+    private async testGlassmorphismClasses(): Promise<void> {
         try {
             // Test basic glassmorphism classes exist
             const glassClasses = ['.glass', '.glass-strong', '.glass-gaming', '.glass-cyberpunk'];
@@ -77,12 +101,13 @@ export class UIEffectsTests {
                 hasThemeVariables, 'CSS custom properties available');
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Glassmorphism Classes', 'Glassmorphism CSS classes function correctly',
-                false, `Class test failed: ${error.message}`);
+                false, `Class test failed: ${errorMessage}`);
         }
     }
 
-    async testGlassmorphismAnimations() {
+    private async testGlassmorphismAnimations(): Promise<void> {
         try {
             // Test keyframe animations
             const animations = ['shimmer', 'gaming-pulse', 'glow-pulse', 'rotate', 'float'];
@@ -109,12 +134,13 @@ export class UIEffectsTests {
             document.body.removeChild(testElement);
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Glassmorphism Animations', 'Glassmorphism animations function correctly',
-                false, `Animation test failed: ${error.message}`);
+                false, `Animation test failed: ${errorMessage}`);
         }
     }
 
-    async testGlassmorphismPerformance() {
+    private async testGlassmorphismPerformance(): Promise<void> {
         try {
             // Test for performance-optimized classes
             const hasGPUAccelerated = this.checkCSSClassExists('.gpu-accelerated');
@@ -132,12 +158,13 @@ export class UIEffectsTests {
                 hasMobileOptimizations, 'Mobile media queries present');
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Glassmorphism Performance', 'Performance optimizations work correctly',
-                false, `Performance test failed: ${error.message}`);
+                false, `Performance test failed: ${errorMessage}`);
         }
     }
 
-    async testThemeSystemInitialization() {
+    private async testThemeSystemInitialization(): Promise<void> {
         try {
             // Test theme system integration
             const themeButtons = document.querySelectorAll('.theme-option');
@@ -146,19 +173,20 @@ export class UIEffectsTests {
 
             // Test theme options
             const expectedThemes = ['', 'cyberpunk', 'retro', 'high-contrast'];
-            const actualThemes = Array.from(themeButtons).map(btn => btn.dataset.theme);
+            const actualThemes = Array.from(themeButtons).map(btn => (btn as HTMLElement).dataset.theme || '');
 
             const hasAllThemes = expectedThemes.every(theme => actualThemes.includes(theme));
             this.addResult('Theme Options', 'All expected themes are available',
                 hasAllThemes, `Available themes: ${actualThemes.join(', ')}`);
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Theme System Initialization', 'Theme system initializes correctly',
-                false, `Initialization test failed: ${error.message}`);
+                false, `Initialization test failed: ${errorMessage}`);
         }
     }
 
-    async testThemeApplication() {
+    private async testThemeApplication(): Promise<void> {
         try {
             const themes = ['cyberpunk', 'retro', 'high-contrast', ''];
 
@@ -189,12 +217,13 @@ export class UIEffectsTests {
             }
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Theme Application', 'Theme application works correctly',
-                false, `Application test failed: ${error.message}`);
+                false, `Application test failed: ${errorMessage}`);
         }
     }
 
-    async testThemeVariables() {
+    private async testThemeVariables(): Promise<void> {
         try {
             const themes = ['cyberpunk', 'retro', 'high-contrast'];
 
@@ -212,12 +241,13 @@ export class UIEffectsTests {
             }
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Theme Variables', 'Theme variables update correctly',
-                false, `Variables test failed: ${error.message}`);
+                false, `Variables test failed: ${errorMessage}`);
         }
     }
 
-    async testThemePersistence() {
+    private async testThemePersistence(): Promise<void> {
         try {
             // Test localStorage persistence
             const testTheme = 'cyberpunk';
@@ -234,12 +264,13 @@ export class UIEffectsTests {
             localStorage.removeItem('captnreverse-theme');
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Theme Persistence', 'Theme persistence works correctly',
-                false, `Persistence test failed: ${error.message}`);
+                false, `Persistence test failed: ${errorMessage}`);
         }
     }
 
-    async testThemeTransitions() {
+    private async testThemeTransitions(): Promise<void> {
         try {
             // Test transition class application
             document.documentElement.classList.add('theme-transition');
@@ -260,12 +291,13 @@ export class UIEffectsTests {
                 transitionRemoved, 'theme-transition class removed');
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Theme Transitions', 'Theme transitions work correctly',
-                false, `Transition test failed: ${error.message}`);
+                false, `Transition test failed: ${errorMessage}`);
         }
     }
 
-    async testGamingGlowEffects() {
+    private async testGamingGlowEffects(): Promise<void> {
         try {
             // Test gaming glow classes
             const glowClasses = ['.gaming-glow', '.text-gaming-glow'];
@@ -292,12 +324,13 @@ export class UIEffectsTests {
             document.body.removeChild(testElement);
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Gaming Glow Effects', 'Gaming glow effects function correctly',
-                false, `Glow test failed: ${error.message}`);
+                false, `Glow test failed: ${errorMessage}`);
         }
     }
 
-    async testButtonAnimations() {
+    private async testButtonAnimations(): Promise<void> {
         try {
             // Test button animation classes
             const buttonClasses = ['.btn-primary', '.btn-gaming', '.btn-themed'];
@@ -322,12 +355,13 @@ export class UIEffectsTests {
             document.body.removeChild(testButton);
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Button Animations', 'Button animations function correctly',
-                false, `Button test failed: ${error.message}`);
+                false, `Button test failed: ${errorMessage}`);
         }
     }
 
-    async testStatusIndicators() {
+    private async testStatusIndicators(): Promise<void> {
         try {
             // Test status indicator classes
             const statusClasses = ['.status-pulse', '.status-dot-gaming'];
@@ -344,12 +378,13 @@ export class UIEffectsTests {
                 pulseExists, 'CSS pulse animation');
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Status Indicators', 'Status indicators function correctly',
-                false, `Status test failed: ${error.message}`);
+                false, `Status test failed: ${errorMessage}`);
         }
     }
 
-    async testResponsiveEffects() {
+    private async testResponsiveEffects(): Promise<void> {
         try {
             // Test responsive design media queries
             const mobileQuery = window.matchMedia('(max-width: 768px)');
@@ -362,12 +397,13 @@ export class UIEffectsTests {
                 reducedMotionQuery !== null, 'Reduced motion MediaQueryList available');
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Responsive Effects', 'Responsive effects work correctly',
-                false, `Responsive test failed: ${error.message}`);
+                false, `Responsive test failed: ${errorMessage}`);
         }
     }
 
-    async testAccessibilityCompliance() {
+    private async testAccessibilityCompliance(): Promise<void> {
         try {
             // Test high contrast theme
             document.documentElement.setAttribute('data-theme', 'high-contrast');
@@ -387,12 +423,13 @@ export class UIEffectsTests {
                 `High contrast primary: ${primaryColor}`);
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Accessibility Compliance', 'Accessibility features work correctly',
-                false, `Accessibility test failed: ${error.message}`);
+                false, `Accessibility test failed: ${errorMessage}`);
         }
     }
 
-    async testAnimationPerformance() {
+    private async testAnimationPerformance(): Promise<void> {
         try {
             // Test for will-change properties
             const testElement = document.createElement('div');
@@ -412,12 +449,13 @@ export class UIEffectsTests {
             document.body.removeChild(testElement);
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Animation Performance', 'Animation performance optimizations work',
-                false, `Performance test failed: ${error.message}`);
+                false, `Performance test failed: ${errorMessage}`);
         }
     }
 
-    async testMemoryUsage() {
+    private async testMemoryUsage(): Promise<void> {
         try {
             // Test CSS optimization for memory usage
             const stylesheets = document.styleSheets.length;
@@ -442,33 +480,34 @@ export class UIEffectsTests {
                 !memoryLeak, `Element count change: ${finalElementCount - initialElementCount}`);
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             this.addResult('Memory Usage', 'Memory usage is optimized',
-                false, `Memory test failed: ${error.message}`);
+                false, `Memory test failed: ${errorMessage}`);
         }
     }
 
     // Helper methods
-    checkCSSClassExists(className) {
+    private checkCSSClassExists(className: string): boolean {
         try {
             const styleSheets = Array.from(document.styleSheets);
             for (const sheet of styleSheets) {
                 try {
-                    const rules = Array.from(sheet.cssRules || sheet.rules);
+                    const rules = Array.from(sheet.cssRules || []);
                     const found = rules.some(rule =>
-                        rule.selectorText && rule.selectorText.includes(className)
+                        (rule as CSSStyleRule).selectorText?.includes(className)
                     );
                     if (found) return true;
-                } catch (e) {
+                } catch {
                     // Skip inaccessible stylesheets
                 }
             }
             return false;
-        } catch (error) {
+        } catch {
             return false;
         }
     }
 
-    checkCSSProperty(selector, property) {
+    private checkCSSProperty(selector: string, property: string): boolean {
         try {
             const testElement = document.createElement('div');
             if (selector.includes(':focus')) {
@@ -483,74 +522,73 @@ export class UIEffectsTests {
 
             document.body.removeChild(testElement);
             return hasProperty;
-        } catch (error) {
+        } catch {
             return false;
         }
     }
 
-    checkCSSAnimation(animationName) {
+    private checkCSSAnimation(animationName: string): boolean {
         try {
             const styleSheets = Array.from(document.styleSheets);
             for (const sheet of styleSheets) {
                 try {
-                    const rules = Array.from(sheet.cssRules || sheet.rules);
+                    const rules = Array.from(sheet.cssRules || []);
                     const found = rules.some(rule =>
-                        rule.type === CSSRule.KEYFRAMES_RULE && rule.name === animationName
+                        rule.type === CSSRule.KEYFRAMES_RULE && (rule as CSSKeyframesRule).name === animationName
                     );
                     if (found) return true;
-                } catch (e) {
+                } catch {
                     // Skip inaccessible stylesheets
                 }
             }
             return false;
-        } catch (error) {
+        } catch {
             return false;
         }
     }
 
-    checkCSSMediaQuery(query) {
+    private checkCSSMediaQuery(query: string): boolean {
         try {
             const styleSheets = Array.from(document.styleSheets);
             for (const sheet of styleSheets) {
                 try {
-                    const rules = Array.from(sheet.cssRules || sheet.rules);
+                    const rules = Array.from(sheet.cssRules || []);
                     const found = rules.some(rule =>
                         rule.type === CSSRule.MEDIA_RULE &&
-                        rule.conditionText && rule.conditionText.includes(query)
+                        (rule as CSSMediaRule).conditionText?.includes(query)
                     );
                     if (found) return true;
-                } catch (e) {
+                } catch {
                     // Skip inaccessible stylesheets
                 }
             }
             return false;
-        } catch (error) {
+        } catch {
             return false;
         }
     }
 
-    checkThemeSpecificStyles(theme) {
+    private checkThemeSpecificStyles(theme: string): boolean {
         try {
             const styleSheets = Array.from(document.styleSheets);
             for (const sheet of styleSheets) {
                 try {
-                    const rules = Array.from(sheet.cssRules || sheet.rules);
+                    const rules = Array.from(sheet.cssRules || []);
                     const found = rules.some(rule =>
-                        rule.selectorText &&
-                        rule.selectorText.includes(`[data-theme="${theme}"]`)
+                        (rule as CSSStyleRule).selectorText?.includes(`[data-theme="${theme}"]`)
                     );
                     if (found) return true;
-                } catch (e) {
+                } catch {
                     // Skip inaccessible stylesheets
                 }
             }
             return false;
-        } catch (error) {
+        } catch {
             return false;
         }
     }
 
-    addResult(category, description, passed, details) {
+    private addResult(category: string, description: string, passed: boolean, details: string): void {
         this.testResults.push({
             category,
             description,
@@ -560,12 +598,12 @@ export class UIEffectsTests {
         });
     }
 
-    generateTestReport() {
+    private generateTestReport(): TestReport {
         const passed = this.testResults.filter(r => r.status === 'passed').length;
         const failed = this.testResults.filter(r => r.status === 'failed').length;
         const total = this.testResults.length;
 
-        const report = {
+        const report: TestReport = {
             summary: {
                 total,
                 passed,
@@ -576,12 +614,12 @@ export class UIEffectsTests {
             details: this.testResults
         };
 
-        console.log(`🎨 UI Effects Tests Complete: ${passed}/${total} passed (${report.summary.successRate}%)`);
+        console.log(`UI Effects Tests Complete: ${passed}/${total} passed (${report.summary.successRate}%)`);
         return report;
     }
 
-    groupResultsByCategory() {
-        const categories = {};
+    private groupResultsByCategory(): Record<string, { passed: number; failed: number; total: number }> {
+        const categories: Record<string, { passed: number; failed: number; total: number }> = {};
         this.testResults.forEach(result => {
             if (!categories[result.category]) {
                 categories[result.category] = { passed: 0, failed: 0, total: 0 };
@@ -593,7 +631,7 @@ export class UIEffectsTests {
     }
 
     // Cleanup method
-    cleanup() {
+    public cleanup(): void {
         // Restore original theme
         if (this.originalTheme) {
             document.documentElement.setAttribute('data-theme', this.originalTheme);
